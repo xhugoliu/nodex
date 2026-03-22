@@ -6,10 +6,13 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use crate::model::{
-    ApplyPatchReport, Node, PatchRunRecord, SnapshotRecord, SnapshotState, TreeNode,
+    ApplyPatchReport, Node, NodeSourceChunkRecord, NodeSourceRecord, NodeSummary, PatchRunRecord,
+    SnapshotRecord, SnapshotState, SourceChunkDetail, SourceChunkRecord, SourceDetail,
+    SourceImportReport, SourceRecord, TreeNode,
 };
 use crate::patch::{PatchDocument, PatchOp};
 use crate::project::ProjectPaths;
+use crate::source::{ImportedNode, SourceChunkDraft, load_source_plan};
 
 pub struct Workspace {
     pub paths: ProjectPaths,
@@ -95,6 +98,37 @@ impl Workspace {
                 state_json TEXT NOT NULL,
                 file_name TEXT NOT NULL,
                 created_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sources (
+                id TEXT PRIMARY KEY,
+                original_path TEXT NOT NULL,
+                original_name TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                format TEXT NOT NULL,
+                imported_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS node_sources (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                PRIMARY KEY (node_id, source_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS source_chunks (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                ordinal INTEGER NOT NULL,
+                label TEXT,
+                text TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS node_source_chunks (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                chunk_id TEXT NOT NULL REFERENCES source_chunks(id) ON DELETE CASCADE,
+                PRIMARY KEY (node_id, chunk_id)
             );
             ",
         )?;
@@ -317,6 +351,124 @@ impl Workspace {
         Ok(records)
     }
 
+    pub fn import_source(&mut self, source_path: &Path) -> Result<SourceImportReport> {
+        let source_path = source_path
+            .canonicalize()
+            .with_context(|| format!("failed to resolve source file {}", source_path.display()))?;
+        if !source_path.is_file() {
+            bail!("{} is not a file", source_path.display());
+        }
+
+        let import_plan = load_source_plan(&source_path)?;
+        let source_id = Uuid::new_v4().to_string();
+        let stored_name = build_stored_source_name(&source_id, &source_path);
+        let stored_path = self.paths.sources_dir.join(&stored_name);
+        std::fs::copy(&source_path, &stored_path).with_context(|| {
+            format!(
+                "failed to copy source file from {} to {}",
+                source_path.display(),
+                stored_path.display()
+            )
+        })?;
+
+        let imported_at = timestamp_now();
+        let original_name = source_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .context("source file name is missing or invalid unicode")?
+            .to_string();
+        let root_parent_id = self.root_id()?;
+        let transaction = self.conn.transaction()?;
+        let import_result = (|| -> Result<(String, usize)> {
+            transaction.execute(
+                "INSERT INTO sources (id, original_path, original_name, stored_name, format, imported_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    source_id,
+                    source_path.display().to_string(),
+                    original_name,
+                    stored_name,
+                    import_plan.format,
+                    imported_at
+                ],
+            )?;
+
+            let chunk_ids = insert_source_chunks_tx(&transaction, &source_id, &import_plan.chunks)?;
+            insert_imported_tree_tx(
+                &transaction,
+                &root_parent_id,
+                &source_id,
+                &chunk_ids,
+                &import_plan.root,
+            )
+        })();
+
+        match import_result {
+            Ok((root_node_id, node_count)) => {
+                if let Err(err) = transaction.commit() {
+                    let _ = std::fs::remove_file(&stored_path);
+                    return Err(err.into());
+                }
+                Ok(SourceImportReport {
+                    source_id,
+                    original_name,
+                    stored_name,
+                    root_node_id,
+                    root_title: import_plan.root.title,
+                    node_count,
+                    chunk_count: import_plan.chunks.len(),
+                })
+            }
+            Err(err) => {
+                let _ = std::fs::remove_file(&stored_path);
+                Err(err)
+            }
+        }
+    }
+
+    pub fn list_sources(&self) -> Result<Vec<SourceRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, original_path, original_name, stored_name, format, imported_at
+             FROM sources
+             ORDER BY imported_at DESC, id DESC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(SourceRecord {
+                id: row.get(0)?,
+                original_path: row.get(1)?,
+                original_name: row.get(2)?,
+                stored_name: row.get(3)?,
+                format: row.get(4)?,
+                imported_at: row.get(5)?,
+            })
+        })?;
+
+        let mut sources = Vec::new();
+        for source in rows {
+            sources.push(source?);
+        }
+        Ok(sources)
+    }
+
+    pub fn source_detail(&self, source_id: &str) -> Result<SourceDetail> {
+        let source = self
+            .source_by_id(source_id)?
+            .with_context(|| format!("source {source_id} was not found"))?;
+        let chunks = self.source_chunks_for_source(source_id)?;
+        let mut chunk_details = Vec::with_capacity(chunks.len());
+        for chunk in chunks {
+            let linked_nodes = self.nodes_for_chunk(&chunk.id)?;
+            chunk_details.push(SourceChunkDetail {
+                chunk,
+                linked_nodes,
+            });
+        }
+        Ok(SourceDetail {
+            source,
+            chunks: chunk_details,
+        })
+    }
+
     pub fn save_snapshot(&mut self, label: Option<String>) -> Result<SnapshotRecord> {
         let snapshot_id = Uuid::new_v4().to_string();
         let file_name = format!("{snapshot_id}.json");
@@ -376,6 +528,8 @@ impl Workspace {
         self.save_snapshot(Some(safety_label))?;
 
         let transaction = self.conn.transaction()?;
+        transaction.execute("DELETE FROM source_chunks", [])?;
+        transaction.execute("DELETE FROM sources", [])?;
         transaction.execute("DELETE FROM nodes", [])?;
         transaction.execute("DELETE FROM metadata", [])?;
 
@@ -386,7 +540,7 @@ impl Workspace {
             )?;
         }
 
-        for node in snapshot.nodes {
+        for node in sort_nodes_for_restore(snapshot.nodes)? {
             transaction.execute(
                 "INSERT INTO nodes (id, parent_id, title, body, kind, position, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
@@ -400,6 +554,51 @@ impl Workspace {
                     node.created_at,
                     node.updated_at
                 ],
+            )?;
+        }
+
+        for source in snapshot.sources {
+            transaction.execute(
+                "INSERT INTO sources (id, original_path, original_name, stored_name, format, imported_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    source.id,
+                    source.original_path,
+                    source.original_name,
+                    source.stored_name,
+                    source.format,
+                    source.imported_at
+                ],
+            )?;
+        }
+
+        for chunk in snapshot.source_chunks {
+            transaction.execute(
+                "INSERT INTO source_chunks (id, source_id, ordinal, label, text, start_line, end_line)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    chunk.id,
+                    chunk.source_id,
+                    chunk.ordinal,
+                    chunk.label,
+                    chunk.text,
+                    chunk.start_line,
+                    chunk.end_line
+                ],
+            )?;
+        }
+
+        for node_source in snapshot.node_sources {
+            transaction.execute(
+                "INSERT INTO node_sources (node_id, source_id) VALUES (?1, ?2)",
+                params![node_source.node_id, node_source.source_id],
+            )?;
+        }
+
+        for node_source_chunk in snapshot.node_source_chunks {
+            transaction.execute(
+                "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
+                params![node_source_chunk.node_id, node_source_chunk.chunk_id],
             )?;
         }
 
@@ -443,6 +642,10 @@ impl Workspace {
         Ok(SnapshotState {
             metadata: self.all_metadata()?,
             nodes: self.list_nodes()?,
+            sources: self.list_sources()?,
+            node_sources: self.list_node_sources()?,
+            source_chunks: self.list_source_chunks()?,
+            node_source_chunks: self.list_node_source_chunks()?,
         })
     }
 
@@ -477,6 +680,137 @@ impl Workspace {
             metadata.insert(key, value);
         }
         Ok(metadata)
+    }
+
+    fn list_node_sources(&self) -> Result<Vec<NodeSourceRecord>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT node_id, source_id FROM node_sources ORDER BY source_id, node_id")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(NodeSourceRecord {
+                node_id: row.get(0)?,
+                source_id: row.get(1)?,
+            })
+        })?;
+
+        let mut node_sources = Vec::new();
+        for node_source in rows {
+            node_sources.push(node_source?);
+        }
+        Ok(node_sources)
+    }
+
+    fn source_by_id(&self, source_id: &str) -> Result<Option<SourceRecord>> {
+        self.conn
+            .query_row(
+                "SELECT id, original_path, original_name, stored_name, format, imported_at
+                 FROM sources
+                 WHERE id = ?1",
+                [source_id],
+                |row| {
+                    Ok(SourceRecord {
+                        id: row.get(0)?,
+                        original_path: row.get(1)?,
+                        original_name: row.get(2)?,
+                        stored_name: row.get(3)?,
+                        format: row.get(4)?,
+                        imported_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    fn list_source_chunks(&self) -> Result<Vec<SourceChunkRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, source_id, ordinal, label, text, start_line, end_line
+             FROM source_chunks
+             ORDER BY source_id, ordinal, id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(SourceChunkRecord {
+                id: row.get(0)?,
+                source_id: row.get(1)?,
+                ordinal: row.get(2)?,
+                label: row.get(3)?,
+                text: row.get(4)?,
+                start_line: row.get(5)?,
+                end_line: row.get(6)?,
+            })
+        })?;
+
+        let mut chunks = Vec::new();
+        for chunk in rows {
+            chunks.push(chunk?);
+        }
+        Ok(chunks)
+    }
+
+    fn source_chunks_for_source(&self, source_id: &str) -> Result<Vec<SourceChunkRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, source_id, ordinal, label, text, start_line, end_line
+             FROM source_chunks
+             WHERE source_id = ?1
+             ORDER BY ordinal, id",
+        )?;
+        let rows = stmt.query_map([source_id], |row| {
+            Ok(SourceChunkRecord {
+                id: row.get(0)?,
+                source_id: row.get(1)?,
+                ordinal: row.get(2)?,
+                label: row.get(3)?,
+                text: row.get(4)?,
+                start_line: row.get(5)?,
+                end_line: row.get(6)?,
+            })
+        })?;
+
+        let mut chunks = Vec::new();
+        for chunk in rows {
+            chunks.push(chunk?);
+        }
+        Ok(chunks)
+    }
+
+    fn list_node_source_chunks(&self) -> Result<Vec<NodeSourceChunkRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT node_id, chunk_id FROM node_source_chunks ORDER BY chunk_id, node_id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(NodeSourceChunkRecord {
+                node_id: row.get(0)?,
+                chunk_id: row.get(1)?,
+            })
+        })?;
+
+        let mut chunk_links = Vec::new();
+        for chunk_link in rows {
+            chunk_links.push(chunk_link?);
+        }
+        Ok(chunk_links)
+    }
+
+    fn nodes_for_chunk(&self, chunk_id: &str) -> Result<Vec<NodeSummary>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT nodes.id, nodes.title
+             FROM node_source_chunks
+             JOIN nodes ON nodes.id = node_source_chunks.node_id
+             WHERE node_source_chunks.chunk_id = ?1
+             ORDER BY nodes.title, nodes.id",
+        )?;
+        let rows = stmt.query_map([chunk_id], |row| {
+            Ok(NodeSummary {
+                id: row.get(0)?,
+                title: row.get(1)?,
+            })
+        })?;
+
+        let mut nodes = Vec::new();
+        for node in rows {
+            nodes.push(node?);
+        }
+        Ok(nodes)
     }
 
     fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
@@ -721,6 +1055,75 @@ fn get_node_tx(transaction: &Transaction<'_>, id: &str) -> Result<Option<Node>> 
         .map_err(Into::into)
 }
 
+fn insert_source_chunks_tx(
+    transaction: &Transaction<'_>,
+    source_id: &str,
+    chunks: &[SourceChunkDraft],
+) -> Result<Vec<String>> {
+    let mut chunk_ids = Vec::with_capacity(chunks.len());
+    for (ordinal, chunk) in chunks.iter().enumerate() {
+        let chunk_id = Uuid::new_v4().to_string();
+        transaction.execute(
+            "INSERT INTO source_chunks (id, source_id, ordinal, label, text, start_line, end_line)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                chunk_id,
+                source_id,
+                ordinal as i64,
+                chunk.label,
+                chunk.text,
+                chunk.start_line as i64,
+                chunk.end_line as i64
+            ],
+        )?;
+        chunk_ids.push(chunk_id);
+    }
+    Ok(chunk_ids)
+}
+
+fn insert_imported_tree_tx(
+    transaction: &Transaction<'_>,
+    parent_id: &str,
+    source_id: &str,
+    chunk_ids: &[String],
+    node: &ImportedNode,
+) -> Result<(String, usize)> {
+    let node_id = Uuid::new_v4().to_string();
+    let now = timestamp_now();
+    let position = next_position_tx(transaction, parent_id)?;
+    transaction.execute(
+        "INSERT INTO nodes (id, parent_id, title, body, kind, position, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        params![
+            node_id, parent_id, node.title, node.body, node.kind, position, now
+        ],
+    )?;
+    transaction.execute(
+        "INSERT INTO node_sources (node_id, source_id) VALUES (?1, ?2)",
+        params![node_id, source_id],
+    )?;
+    for chunk_index in &node.chunk_indexes {
+        let chunk_id = chunk_ids.get(*chunk_index).with_context(|| {
+            format!(
+                "chunk index {} was not found while importing source",
+                chunk_index
+            )
+        })?;
+        transaction.execute(
+            "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
+            params![node_id, chunk_id],
+        )?;
+    }
+
+    let mut total_nodes = 1usize;
+    for child in &node.children {
+        let (_, child_count) =
+            insert_imported_tree_tx(transaction, &node_id, source_id, chunk_ids, child)?;
+        total_nodes += child_count;
+    }
+    Ok((node_id, total_nodes))
+}
+
 fn next_position_tx(transaction: &Transaction<'_>, parent_id: &str) -> Result<i64> {
     let next_position: Option<i64> = transaction.query_row(
         "SELECT MAX(position) + 1 FROM nodes WHERE parent_id = ?1",
@@ -758,6 +1161,57 @@ fn normalize_children_tx(transaction: &Transaction<'_>, parent_id: Option<&str>)
         )?;
     }
     Ok(())
+}
+
+fn build_stored_source_name(source_id: &str, source_path: &Path) -> String {
+    match source_path.extension().and_then(|value| value.to_str()) {
+        Some(extension) if !extension.is_empty() => {
+            format!("{source_id}.{}", extension.to_ascii_lowercase())
+        }
+        _ => source_id.to_string(),
+    }
+}
+
+fn sort_nodes_for_restore(nodes: Vec<Node>) -> Result<Vec<Node>> {
+    fn visit(
+        node_id: &str,
+        nodes_by_id: &HashMap<String, Node>,
+        visiting: &mut HashMap<String, bool>,
+        ordered: &mut Vec<Node>,
+    ) -> Result<()> {
+        if ordered.iter().any(|node| node.id == node_id) {
+            return Ok(());
+        }
+        if visiting.get(node_id).copied().unwrap_or(false) {
+            bail!("cycle detected while restoring snapshot around node {node_id}");
+        }
+
+        let node = nodes_by_id
+            .get(node_id)
+            .with_context(|| format!("node {node_id} missing during snapshot restore"))?;
+        visiting.insert(node_id.to_string(), true);
+        if let Some(parent_id) = node.parent_id.as_deref()
+            && nodes_by_id.contains_key(parent_id)
+        {
+            visit(parent_id, nodes_by_id, visiting, ordered)?;
+        }
+        visiting.remove(node_id);
+        ordered.push(node.clone());
+        Ok(())
+    }
+
+    let nodes_by_id = nodes
+        .into_iter()
+        .map(|node| (node.id.clone(), node))
+        .collect::<HashMap<_, _>>();
+    let mut ordered = Vec::new();
+    let mut visiting = HashMap::new();
+    let mut ids = nodes_by_id.keys().cloned().collect::<Vec<_>>();
+    ids.sort();
+    for id in ids {
+        visit(&id, &nodes_by_id, &mut visiting, &mut ordered)?;
+    }
+    Ok(ordered)
 }
 
 fn build_tree(root_id: &str, nodes: Vec<Node>) -> Result<TreeNode> {
@@ -880,6 +1334,51 @@ mod tests {
 
         workspace.restore_snapshot(&snapshot.id)?;
         assert!(workspace.export_outline()?.contains("Problem"));
+        Ok(())
+    }
+
+    #[test]
+    fn import_source_copies_file_and_restores_source_state() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n\n## Next Step\nShip a tiny import MVP.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        assert_eq!(workspace.list_sources()?.len(), 1);
+        assert!(workspace.tree_string()?.contains("Launch Plan"));
+        assert_eq!(import_report.chunk_count, 2);
+        assert_eq!(workspace.list_source_chunks()?.len(), 2);
+        assert_eq!(workspace.list_node_source_chunks()?.len(), 2);
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        assert_eq!(source_detail.chunks.len(), 2);
+        assert_eq!(
+            source_detail.chunks[0].chunk.label.as_deref(),
+            Some("Problem")
+        );
+        assert_eq!(source_detail.chunks[0].linked_nodes.len(), 1);
+        assert_eq!(source_detail.chunks[0].linked_nodes[0].title, "Problem");
+        assert!(
+            workspace
+                .paths
+                .sources_dir
+                .join(&import_report.stored_name)
+                .exists()
+        );
+
+        let snapshot = workspace.save_snapshot(Some("after-import".to_string()))?;
+        let imported_root_id = import_report.root_node_id.clone();
+        workspace.delete_node(imported_root_id)?;
+        assert_eq!(workspace.list_sources()?.len(), 1);
+
+        workspace.restore_snapshot(&snapshot.id)?;
+        assert!(workspace.tree_string()?.contains("Launch Plan"));
+        assert_eq!(workspace.list_sources()?.len(), 1);
+        assert_eq!(workspace.list_source_chunks()?.len(), 2);
+        assert_eq!(workspace.list_node_source_chunks()?.len(), 2);
         Ok(())
     }
 }

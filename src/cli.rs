@@ -27,6 +27,11 @@ pub enum Command {
         #[command(subcommand)]
         command: PatchCommand,
     },
+    /// Import and inspect source files.
+    Source {
+        #[command(subcommand)]
+        command: SourceCommand,
+    },
     /// Save, list, and restore snapshots.
     Snapshot {
         #[command(subcommand)]
@@ -98,6 +103,16 @@ pub enum PatchCommand {
     },
     /// Show applied patch history.
     History,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SourceCommand {
+    /// Import a Markdown or text file into the current workspace.
+    Import { path: PathBuf },
+    /// List imported source files.
+    List,
+    /// Show one imported source with chunks and linked nodes.
+    Show { source_id: String },
 }
 
 #[derive(Debug, Subcommand)]

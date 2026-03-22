@@ -2,6 +2,7 @@ mod cli;
 mod model;
 mod patch;
 mod project;
+mod source;
 mod store;
 
 use std::path::PathBuf;
@@ -11,6 +12,7 @@ use clap::Parser;
 
 use crate::cli::{
     Cli, Command, ExportCommand, ListFormat, NodeCommand, PatchCommand, SnapshotCommand,
+    SourceCommand,
 };
 use crate::patch::PatchDocument;
 use crate::store::{Workspace, format_timestamp};
@@ -105,6 +107,77 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Command::Source { command } => {
+            let mut workspace = Workspace::open_from(&cwd)?;
+            match command {
+                SourceCommand::Import { path } => {
+                    let report = workspace.import_source(&resolve_path(&cwd, &path))?;
+                    println!(
+                        "Imported source {} as {}",
+                        report.original_name, report.source_id
+                    );
+                    println!("stored file: {}", report.stored_name);
+                    println!(
+                        "generated root node: {} [{}]",
+                        report.root_title, report.root_node_id
+                    );
+                    println!("generated nodes: {}", report.node_count);
+                    println!("generated chunks: {}", report.chunk_count);
+                }
+                SourceCommand::List => {
+                    let sources = workspace.list_sources()?;
+                    if sources.is_empty() {
+                        println!("No sources have been imported yet.");
+                    } else {
+                        for source in sources {
+                            println!(
+                                "{}  {}  {}  {}",
+                                source.id,
+                                format_timestamp(source.imported_at),
+                                source.format,
+                                source.original_name
+                            );
+                            println!("  file: {}", source.stored_name);
+                        }
+                    }
+                }
+                SourceCommand::Show { source_id } => {
+                    let detail = workspace.source_detail(&source_id)?;
+                    println!(
+                        "Source: {} [{}]",
+                        detail.source.original_name, detail.source.id
+                    );
+                    println!("format: {}", detail.source.format);
+                    println!("imported: {}", format_timestamp(detail.source.imported_at));
+                    println!("stored file: {}", detail.source.stored_name);
+                    println!("original path: {}", detail.source.original_path);
+                    println!("chunks: {}", detail.chunks.len());
+                    for chunk_detail in detail.chunks {
+                        let chunk = chunk_detail.chunk;
+                        let label = chunk.label.as_deref().unwrap_or("(no label)");
+                        println!(
+                            "- chunk {} [{}-{}] {}",
+                            chunk.ordinal + 1,
+                            chunk.start_line,
+                            chunk.end_line,
+                            label
+                        );
+                        println!("  {}", chunk.text);
+                        if chunk_detail.linked_nodes.is_empty() {
+                            println!("  nodes: (none)");
+                        } else {
+                            let linked_nodes = chunk_detail
+                                .linked_nodes
+                                .into_iter()
+                                .map(|node| format!("{} [{}]", node.title, node.id))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            println!("  nodes: {}", linked_nodes);
+                        }
+                    }
+                }
+            }
+        }
         Command::Snapshot { command } => {
             let mut workspace = Workspace::open_from(&cwd)?;
             match command {
@@ -158,16 +231,20 @@ fn main() -> Result<()> {
 }
 
 fn read_patch(cwd: &std::path::Path, path: &PathBuf) -> Result<PatchDocument> {
-    let absolute_path = if path.is_absolute() {
-        path.clone()
-    } else {
-        cwd.join(path)
-    };
+    let absolute_path = resolve_path(cwd, path);
     let patch_json = std::fs::read_to_string(&absolute_path)
         .with_context(|| format!("failed to read {}", absolute_path.display()))?;
     let patch: PatchDocument = serde_json::from_str(&patch_json)
         .with_context(|| format!("failed to parse {}", absolute_path.display()))?;
     Ok(patch)
+}
+
+fn resolve_path(cwd: &std::path::Path, path: &PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        path.clone()
+    } else {
+        cwd.join(path)
+    }
 }
 
 fn print_patch_preview(patch: &PatchDocument) {

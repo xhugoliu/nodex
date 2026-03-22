@@ -16,6 +16,12 @@ cargo run -- init
 cargo run -- node list
 ```
 
+导入一个 Markdown 或文本文件：
+
+```bash
+cargo run -- source import README.md
+```
+
 预览示例 patch：
 
 ```bash
@@ -92,6 +98,23 @@ nodex patch history
 - `apply` 会把 patch 文件内容归档到 `./.nodex/runs/`
 - `history` 用来查看已经应用过的 patch
 
+### Source 操作
+
+```text
+nodex source import <file>
+nodex source list
+nodex source show <source-id>
+```
+
+说明：
+
+- 当前只支持 `md` / `txt`
+- 导入的原文件会复制到 `./.nodex/sources/`
+- 导入时会生成一个初始节点树
+- 导入时会自动生成基础来源切片，并把生成节点和切片建立关联
+- `source list` 用来查看已经导入的来源文件
+- `source show` 用来查看一个来源的切片和每个切片关联到的节点
+
 ### Snapshot 操作
 
 ```text
@@ -132,8 +155,8 @@ nodex export outline [--output path]
 当前 CLI 还没有实现：
 
 - AI 生成 patch
-- 文档导入
-- 来源与证据管理
+- PDF 导入
+- 来源与证据视图
 
 所以这版 CLI 的定位是：
 
