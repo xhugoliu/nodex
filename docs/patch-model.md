@@ -145,6 +145,12 @@ nodex patch apply <file> --dry-run
 - 根节点是否被非法移动或删除
 - `move_node` 是否会产生环
 
+当前还有一个重要边界：
+
+- 校验是基于 apply 前的工作区状态进行的
+- 不会模拟同一份 patch 里前序 op 带来的临时结果
+- 这意味着后续 op 目前不能引用同一 patch 里刚 `add_node` 出来的新节点
+
 ### 4. 应用
 
 真正应用时：
@@ -166,6 +172,8 @@ nodex patch apply <file> --dry-run
 - 节点拆分
 - 批量重排
 - 跨图引用
+
+此外，当前 multi-op patch 虽然支持多个操作顺序执行，但校验阶段仍然要求每个 op 的目标都已经存在于 apply 前的工作区里。
 
 ## 下一步扩展建议
 

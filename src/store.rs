@@ -1461,6 +1461,7 @@ mod tests {
 
         workspace.restore_snapshot(&snapshot.id)?;
         assert!(workspace.export_outline()?.contains("Problem"));
+        assert_eq!(workspace.patch_history()?.len(), 2);
         Ok(())
     }
 
@@ -1497,6 +1498,16 @@ mod tests {
         );
 
         let snapshot = workspace.save_snapshot(Some("after-import".to_string()))?;
+        let snapshot_path = workspace.paths.snapshots_dir.join(&snapshot.file_name);
+        let snapshot_state: SnapshotState =
+            serde_json::from_str(&std::fs::read_to_string(&snapshot_path)?)?;
+        assert_eq!(snapshot_state.sources.len(), 1);
+        assert_eq!(snapshot_state.node_sources.len(), import_report.node_count);
+        assert_eq!(
+            snapshot_state.source_chunks.len(),
+            import_report.chunk_count
+        );
+        assert_eq!(snapshot_state.node_source_chunks.len(), 2);
         let imported_root_id = import_report.root_node_id.clone();
         workspace.delete_node(imported_root_id)?;
         assert_eq!(workspace.list_sources()?.len(), 1);
@@ -1519,6 +1530,95 @@ mod tests {
             problem_detail.sources[0].chunks[0].label.as_deref(),
             Some("Problem")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn patch_validation_rejects_new_nodes_referenced_by_later_ops() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Build a nested branch in one patch".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("parent".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Parent".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AddNode {
+                    id: Some("child".to_string()),
+                    parent_id: "parent".to_string(),
+                    title: "Child".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+            ],
+        };
+
+        let error = workspace
+            .apply_patch_document(patch, "test", false)
+            .expect_err("patch should be validated against the pre-apply workspace state");
+        assert!(error.to_string().contains("parent parent was not found"));
+        assert_eq!(workspace.list_nodes()?.len(), 1);
+        assert!(workspace.patch_history()?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn failed_patch_apply_rolls_back_database_and_archive() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Introduce a duplicate node id".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("duplicate".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "First".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AddNode {
+                    id: Some("duplicate".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Second".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+            ],
+        };
+
+        workspace
+            .apply_patch_document(patch, "test", false)
+            .expect_err("duplicate ids in one patch should fail during apply");
+
+        assert_eq!(workspace.list_nodes()?.len(), 1);
+        assert!(workspace.patch_history()?.is_empty());
+        assert_eq!(std::fs::read_dir(&workspace.paths.runs_dir)?.count(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn workspace_is_discovered_from_nested_directories() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let workspace = Workspace::init_at(temp_dir.path())?;
+        let nested_dir = temp_dir.path().join("notes").join("drafts").join("today");
+        std::fs::create_dir_all(&nested_dir)?;
+
+        let discovered = Workspace::open_from(&nested_dir)?;
+
+        assert_eq!(discovered.paths.root_dir, workspace.paths.root_dir);
+        assert_eq!(discovered.workspace_name()?, workspace.workspace_name()?);
         Ok(())
     }
 }

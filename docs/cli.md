@@ -129,6 +129,8 @@ nodex snapshot restore <snapshot-id>
 
 - `save` 会把当前完整状态保存到 `./.nodex/snapshots/`
 - `restore` 会在真正恢复前自动保存一份 `auto-before-restore-*` 快照
+- 当前 snapshot 会保存节点树、已导入 source、source chunks 以及基础关联
+- 当前 restore 不会回滚 `patch history`
 
 ### 导出
 

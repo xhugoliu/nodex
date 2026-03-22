@@ -20,7 +20,7 @@
 - `project.db`：SQLite 主数据库
 - `runs/`：归档已经应用过的 patch JSON
 - `snapshots/`：归档快照 JSON
-- `sources/`：预留给后续导入原始资料和切片
+- `sources/`：归档导入过的原始资料文件
 - `exports/`：导出结果
 
 ## 当前数据库表
@@ -180,18 +180,40 @@
 
 ## 当前快照策略
 
-保存快照时，Nodex 会保存两类内容：
+保存快照时，Nodex 会保存这些内容：
 
 - 所有 `metadata`
 - 所有 `nodes`
+- 所有 `sources`
+- 所有 `node_sources`
+- 所有 `source_chunks`
+- 所有 `node_source_chunks`
 
 恢复快照时，会：
 
 1. 先自动保存一个 `auto-before-restore-*` 安全快照
-2. 清空当前 `metadata`、`nodes` 和 `sources`
-3. 用目标快照完整重建状态
+2. 清空当前内容状态相关数据
+3. 用目标快照完整重建 `metadata`、`nodes`、`sources` 以及基础来源关联
 
-所以快照现在是“全量恢复”，不是“三方合并”。
+当前“内容状态相关数据”包括：
+
+- `metadata`
+- `nodes`
+- `sources`
+- `node_sources`
+- `source_chunks`
+- `node_source_chunks`
+
+当前快照没有纳入：
+
+- `patch_runs`
+- 已有 `snapshots` 记录本身
+
+所以快照现在更接近“内容状态快照”：
+
+- 恢复后会回到当时的节点树和 source/chunk/link 关系
+- 不会把 patch history 一起回滚
+- 也不是“三方合并”
 
 ## 未来扩展方向
 
