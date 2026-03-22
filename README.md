@@ -30,6 +30,7 @@ cargo run -- export outline
 - patch-first CLI 内核
 - SQLite 工作区
 - Markdown / TXT source import 与基础来源切片关联
+- source / node 双向查看来源链路
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出

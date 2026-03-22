@@ -74,12 +74,14 @@ nodex node add <title> [--parent root] [--kind topic] [--body ...] [--position N
 nodex node update <id> [--title ...] [--body ...] [--kind ...]
 nodex node move <id> --parent <id> [--position N]
 nodex node delete <id>
+nodex node show <id>
 nodex node list [--format tree|json]
 ```
 
 说明：
 
 - `node add/update/move/delete` 并不是绕过 patch 引擎直接写库，而是走同一套结构化 patch 流程
+- `node show` 用来查看节点详情，以及它反向关联到的来源和切片
 - `node list --format tree` 返回人类可读树
 - `node list --format json` 返回结构化树
 

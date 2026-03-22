@@ -6,9 +6,9 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use crate::model::{
-    ApplyPatchReport, Node, NodeSourceChunkRecord, NodeSourceRecord, NodeSummary, PatchRunRecord,
-    SnapshotRecord, SnapshotState, SourceChunkDetail, SourceChunkRecord, SourceDetail,
-    SourceImportReport, SourceRecord, TreeNode,
+    ApplyPatchReport, Node, NodeDetail, NodeSourceChunkRecord, NodeSourceDetail, NodeSourceRecord,
+    NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState, SourceChunkDetail,
+    SourceChunkRecord, SourceDetail, SourceImportReport, SourceRecord, TreeNode,
 };
 use crate::patch::{PatchDocument, PatchOp};
 use crate::project::ProjectPaths;
@@ -192,6 +192,24 @@ impl Workspace {
 
     pub fn tree_json(&self) -> Result<String> {
         Ok(serde_json::to_string_pretty(&self.tree()?)?)
+    }
+
+    pub fn node_detail(&self, node_id: &str) -> Result<NodeDetail> {
+        let node = self
+            .node_by_id(node_id)?
+            .with_context(|| format!("node {node_id} was not found"))?;
+        let parent = match node.parent_id.as_deref() {
+            Some(parent_id) => self.node_summary_by_id(parent_id)?,
+            None => None,
+        };
+        let children = self.child_summaries(node_id)?;
+        let sources = self.sources_for_node(node_id)?;
+        Ok(NodeDetail {
+            node,
+            parent,
+            children,
+            sources,
+        })
     }
 
     pub fn add_node(
@@ -700,6 +718,56 @@ impl Workspace {
         Ok(node_sources)
     }
 
+    fn node_by_id(&self, node_id: &str) -> Result<Option<Node>> {
+        self.conn
+            .query_row(
+                "SELECT id, parent_id, title, body, kind, position, created_at, updated_at
+                 FROM nodes
+                 WHERE id = ?1",
+                [node_id],
+                read_node,
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    fn node_summary_by_id(&self, node_id: &str) -> Result<Option<NodeSummary>> {
+        self.conn
+            .query_row(
+                "SELECT id, title FROM nodes WHERE id = ?1",
+                [node_id],
+                |row| {
+                    Ok(NodeSummary {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    fn child_summaries(&self, node_id: &str) -> Result<Vec<NodeSummary>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, title
+             FROM nodes
+             WHERE parent_id = ?1
+             ORDER BY position, id",
+        )?;
+        let rows = stmt.query_map([node_id], |row| {
+            Ok(NodeSummary {
+                id: row.get(0)?,
+                title: row.get(1)?,
+            })
+        })?;
+
+        let mut children = Vec::new();
+        for child in rows {
+            children.push(child?);
+        }
+        Ok(children)
+    }
+
     fn source_by_id(&self, source_id: &str) -> Result<Option<SourceRecord>> {
         self.conn
             .query_row(
@@ -811,6 +879,65 @@ impl Workspace {
             nodes.push(node?);
         }
         Ok(nodes)
+    }
+
+    fn sources_for_node(&self, node_id: &str) -> Result<Vec<NodeSourceDetail>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT sources.id, sources.original_path, sources.original_name, sources.stored_name, sources.format, sources.imported_at
+             FROM node_sources
+             JOIN sources ON sources.id = node_sources.source_id
+             WHERE node_sources.node_id = ?1
+             ORDER BY sources.imported_at DESC, sources.id",
+        )?;
+        let rows = stmt.query_map([node_id], |row| {
+            Ok(SourceRecord {
+                id: row.get(0)?,
+                original_path: row.get(1)?,
+                original_name: row.get(2)?,
+                stored_name: row.get(3)?,
+                format: row.get(4)?,
+                imported_at: row.get(5)?,
+            })
+        })?;
+
+        let mut sources = Vec::new();
+        for source in rows {
+            let source = source?;
+            let chunks = self.chunks_for_node_and_source(node_id, &source.id)?;
+            sources.push(NodeSourceDetail { source, chunks });
+        }
+        Ok(sources)
+    }
+
+    fn chunks_for_node_and_source(
+        &self,
+        node_id: &str,
+        source_id: &str,
+    ) -> Result<Vec<SourceChunkRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT source_chunks.id, source_chunks.source_id, source_chunks.ordinal, source_chunks.label, source_chunks.text, source_chunks.start_line, source_chunks.end_line
+             FROM node_source_chunks
+             JOIN source_chunks ON source_chunks.id = node_source_chunks.chunk_id
+             WHERE node_source_chunks.node_id = ?1 AND source_chunks.source_id = ?2
+             ORDER BY source_chunks.ordinal, source_chunks.id",
+        )?;
+        let rows = stmt.query_map(params![node_id, source_id], |row| {
+            Ok(SourceChunkRecord {
+                id: row.get(0)?,
+                source_id: row.get(1)?,
+                ordinal: row.get(2)?,
+                label: row.get(3)?,
+                text: row.get(4)?,
+                start_line: row.get(5)?,
+                end_line: row.get(6)?,
+            })
+        })?;
+
+        let mut chunks = Vec::new();
+        for chunk in rows {
+            chunks.push(chunk?);
+        }
+        Ok(chunks)
     }
 
     fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
@@ -1379,6 +1506,19 @@ mod tests {
         assert_eq!(workspace.list_sources()?.len(), 1);
         assert_eq!(workspace.list_source_chunks()?.len(), 2);
         assert_eq!(workspace.list_node_source_chunks()?.len(), 2);
+
+        let root_detail = workspace.node_detail(&import_report.root_node_id)?;
+        assert_eq!(root_detail.sources.len(), 1);
+        assert!(root_detail.sources[0].chunks.is_empty());
+
+        let problem_id = source_detail.chunks[0].linked_nodes[0].id.clone();
+        let problem_detail = workspace.node_detail(&problem_id)?;
+        assert_eq!(problem_detail.sources.len(), 1);
+        assert_eq!(problem_detail.sources[0].chunks.len(), 1);
+        assert_eq!(
+            problem_detail.sources[0].chunks[0].label.as_deref(),
+            Some("Problem")
+        );
         Ok(())
     }
 }

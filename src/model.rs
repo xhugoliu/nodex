@@ -105,6 +105,20 @@ pub struct NodeSummary {
 }
 
 #[derive(Debug, Clone)]
+pub struct NodeSourceDetail {
+    pub source: SourceRecord,
+    pub chunks: Vec<SourceChunkRecord>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeDetail {
+    pub node: Node,
+    pub parent: Option<NodeSummary>,
+    pub children: Vec<NodeSummary>,
+    pub sources: Vec<NodeSourceDetail>,
+}
+
+#[derive(Debug, Clone)]
 pub struct SourceChunkDetail {
     pub chunk: SourceChunkRecord,
     pub linked_nodes: Vec<NodeSummary>,

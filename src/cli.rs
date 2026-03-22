@@ -78,6 +78,8 @@ pub enum NodeCommand {
     },
     /// Delete a node and its descendants.
     Delete { id: String },
+    /// Show one node with parent, children, and linked sources.
+    Show { id: String },
     /// List the current map.
     List {
         #[arg(long, value_enum, default_value_t = ListFormat::Tree)]

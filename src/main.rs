@@ -65,6 +65,60 @@ fn main() -> Result<()> {
                     let report = workspace.delete_node(id)?;
                     print_patch_report(&report);
                 }
+                NodeCommand::Show { id } => {
+                    let detail = workspace.node_detail(&id)?;
+                    println!("Node: {} [{}]", detail.node.title, detail.node.id);
+                    println!("kind: {}", detail.node.kind);
+                    println!(
+                        "parent: {}",
+                        detail
+                            .parent
+                            .map(|node| format!("{} [{}]", node.title, node.id))
+                            .unwrap_or_else(|| "(none)".to_string())
+                    );
+                    if let Some(body) = detail.node.body {
+                        println!("body: {}", body);
+                    } else {
+                        println!("body: (none)");
+                    }
+                    if detail.children.is_empty() {
+                        println!("children: (none)");
+                    } else {
+                        let children = detail
+                            .children
+                            .into_iter()
+                            .map(|node| format!("{} [{}]", node.title, node.id))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        println!("children: {}", children);
+                    }
+                    if detail.sources.is_empty() {
+                        println!("sources: (none)");
+                    } else {
+                        println!("sources: {}", detail.sources.len());
+                        for source_detail in detail.sources {
+                            println!(
+                                "- {} [{}]",
+                                source_detail.source.original_name, source_detail.source.id
+                            );
+                            if source_detail.chunks.is_empty() {
+                                println!("  chunks: (source-level link only)");
+                            } else {
+                                for chunk in source_detail.chunks {
+                                    let label = chunk.label.as_deref().unwrap_or("(no label)");
+                                    println!(
+                                        "  - chunk {} [{}-{}] {}",
+                                        chunk.ordinal + 1,
+                                        chunk.start_line,
+                                        chunk.end_line,
+                                        label
+                                    );
+                                    println!("    {}", chunk.text);
+                                }
+                            }
+                        }
+                    }
+                }
                 NodeCommand::List { format } => match format {
                     ListFormat::Tree => print!("{}", workspace.tree_string()?),
                     ListFormat::Json => println!("{}", workspace.tree_json()?),
