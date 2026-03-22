@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "summary": "Expand the root topic into three first-level branches",
+  "ops": [
+    {
+      "type": "add_node",
+      "parent_id": "root",
+      "title": "Problem",
+      "kind": "topic",
+      "body": "What are we trying to understand or solve?"
+    },
+    {
+      "type": "add_node",
+      "parent_id": "root",
+      "title": "Evidence",
+      "kind": "evidence",
+      "body": "Facts, references, and source-backed observations."
+    },
+    {
+      "type": "add_node",
+      "parent_id": "root",
+      "title": "Next Step",
+      "kind": "action",
+      "body": "Concrete follow-up actions."
+    }
+  ]
+}
