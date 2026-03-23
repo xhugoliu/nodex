@@ -215,6 +215,7 @@ nodex patch apply <file> --dry-run
 - `attach_source_chunk` 之前是否已经建立对应的 source-level link
 - `detach_source` 之前是否已经移除了该 source 下的 chunk-level link
 - 校验会按 `ops` 顺序模拟 patch 执行后的中间状态
+- 如果校验或应用失败，错误会带上 op 序号和 op 类型，方便定位具体失败步骤
 
 这意味着：
 

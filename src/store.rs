@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
@@ -1037,8 +1037,10 @@ impl Workspace {
             self.list_node_source_chunks()?,
             validation_context,
         );
-        for op in &patch.ops {
-            state.validate_and_apply(op)?;
+        for (index, op) in patch.ops.iter().enumerate() {
+            state
+                .validate_and_apply(op)
+                .map_err(|err| wrap_patch_op_error(index, op, err))?;
         }
         Ok(())
     }
@@ -1542,10 +1544,14 @@ fn get_node_tx(transaction: &Transaction<'_>, id: &str) -> Result<Option<Node>> 
 }
 
 fn apply_patch_ops_tx(transaction: &Transaction<'_>, ops: &[PatchOp]) -> Result<()> {
-    for op in ops {
-        apply_op_transaction(transaction, op)?;
+    for (index, op) in ops.iter().enumerate() {
+        apply_op_transaction(transaction, op).map_err(|err| wrap_patch_op_error(index, op, err))?;
     }
     Ok(())
+}
+
+fn wrap_patch_op_error(index: usize, op: &PatchOp, err: anyhow::Error) -> anyhow::Error {
+    anyhow!("op {} {}: {}", index + 1, op.kind_name(), err)
 }
 
 fn write_patch_archive(paths: &ProjectPaths, patch: &PatchDocument) -> Result<PatchArchive> {
@@ -2123,7 +2129,11 @@ mod tests {
         let error = workspace
             .apply_patch_document(patch, "test", false)
             .expect_err("chunk attachment should require a source-level link first");
-        assert!(error.to_string().contains("attach source"));
+        assert!(
+            error
+                .to_string()
+                .contains("op 2 attach_source_chunk: cannot attach source chunk")
+        );
         assert_eq!(workspace.list_nodes()?.len(), node_count_before);
         assert_eq!(workspace.patch_history()?.len(), patch_history_before);
         Ok(())
@@ -2200,7 +2210,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("detach linked source chunks first")
+                .contains("op 1 detach_source: cannot detach source")
         );
         assert_eq!(workspace.patch_history()?.len(), patch_history_before);
         assert_eq!(workspace.node_detail(&problem_id)?.sources.len(), 1);
@@ -2296,7 +2306,7 @@ mod tests {
         assert!(
             error
                 .to_string()
-                .contains("cannot update node child: node was not found")
+                .contains("op 4 update_node: cannot update node child: node was not found")
         );
         assert_eq!(workspace.list_nodes()?.len(), 1);
         assert!(workspace.patch_history()?.is_empty());
@@ -2331,9 +2341,14 @@ mod tests {
             ],
         };
 
-        workspace
+        let error = workspace
             .apply_patch_document(patch, "test", false)
             .expect_err("duplicate ids in one patch should fail validation");
+        assert!(
+            error
+                .to_string()
+                .contains("op 2 add_node: cannot add node duplicate")
+        );
 
         assert_eq!(workspace.list_nodes()?.len(), 1);
         assert!(workspace.patch_history()?.is_empty());

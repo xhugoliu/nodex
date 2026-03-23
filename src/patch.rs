@@ -78,6 +78,19 @@ impl PatchDocument {
 }
 
 impl PatchOp {
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Self::AddNode { .. } => "add_node",
+            Self::UpdateNode { .. } => "update_node",
+            Self::MoveNode { .. } => "move_node",
+            Self::DeleteNode { .. } => "delete_node",
+            Self::AttachSource { .. } => "attach_source",
+            Self::AttachSourceChunk { .. } => "attach_source_chunk",
+            Self::DetachSource { .. } => "detach_source",
+            Self::DetachSourceChunk { .. } => "detach_source_chunk",
+        }
+    }
+
     pub fn describe(&self) -> String {
         match self {
             Self::AddNode {
