@@ -1193,6 +1193,58 @@ impl SimulatedWorkspaceState {
                     );
                 }
             }
+            PatchOp::DetachSource { node_id, source_id } => {
+                if !self.parent_ids.contains_key(node_id) {
+                    bail!(
+                        "cannot detach source {source_id} from node {node_id}: node was not found"
+                    );
+                }
+                if !self
+                    .node_sources
+                    .contains(&(node_id.clone(), source_id.clone()))
+                {
+                    bail!(
+                        "cannot detach source {source_id} from node {node_id}: link was not found"
+                    );
+                }
+                if self
+                    .node_source_chunks
+                    .iter()
+                    .any(|(current_node_id, chunk_id)| {
+                        current_node_id == node_id
+                            && self
+                                .chunk_source_ids
+                                .get(chunk_id)
+                                .is_some_and(|current_source_id| current_source_id == source_id)
+                    })
+                {
+                    bail!(
+                        "cannot detach source {source_id} from node {node_id}: detach linked source chunks first"
+                    );
+                }
+                self.node_sources
+                    .remove(&(node_id.clone(), source_id.clone()));
+            }
+            PatchOp::DetachSourceChunk { node_id, chunk_id } => {
+                if !self.parent_ids.contains_key(node_id) {
+                    bail!(
+                        "cannot detach source chunk {chunk_id} from node {node_id}: node was not found"
+                    );
+                }
+                if !self.chunk_source_ids.contains_key(chunk_id) {
+                    bail!(
+                        "cannot detach source chunk {chunk_id} from node {node_id}: chunk was not found"
+                    );
+                }
+                if !self
+                    .node_source_chunks
+                    .remove(&(node_id.clone(), chunk_id.clone()))
+                {
+                    bail!(
+                        "cannot detach source chunk {chunk_id} from node {node_id}: link was not found"
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -1371,6 +1423,54 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
                 "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
                 params![node_id, chunk_id],
             )?;
+        }
+        PatchOp::DetachSource { node_id, source_id } => {
+            let chunk_link_exists: Option<i64> = transaction
+                .query_row(
+                    "SELECT 1
+                     FROM node_source_chunks
+                     JOIN source_chunks ON source_chunks.id = node_source_chunks.chunk_id
+                     WHERE node_source_chunks.node_id = ?1 AND source_chunks.source_id = ?2
+                     LIMIT 1",
+                    params![node_id, source_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if chunk_link_exists.is_some() {
+                bail!(
+                    "cannot detach source {source_id} from node {node_id}: detach linked source chunks first"
+                );
+            }
+            let removed = transaction.execute(
+                "DELETE FROM node_sources WHERE node_id = ?1 AND source_id = ?2",
+                params![node_id, source_id],
+            )?;
+            if removed == 0 {
+                bail!("cannot detach source {source_id} from node {node_id}: link was not found");
+            }
+        }
+        PatchOp::DetachSourceChunk { node_id, chunk_id } => {
+            let chunk_exists: Option<i64> = transaction
+                .query_row(
+                    "SELECT 1 FROM source_chunks WHERE id = ?1",
+                    [chunk_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if chunk_exists.is_none() {
+                bail!(
+                    "cannot detach source chunk {chunk_id} from node {node_id}: chunk was not found"
+                );
+            }
+            let removed = transaction.execute(
+                "DELETE FROM node_source_chunks WHERE node_id = ?1 AND chunk_id = ?2",
+                params![node_id, chunk_id],
+            )?;
+            if removed == 0 {
+                bail!(
+                    "cannot detach source chunk {chunk_id} from node {node_id}: link was not found"
+                );
+            }
         }
     }
     Ok(())
@@ -1933,6 +2033,84 @@ mod tests {
         assert!(error.to_string().contains("attach source"));
         assert_eq!(workspace.list_nodes()?.len(), node_count_before);
         assert_eq!(workspace.patch_history()?.len(), patch_history_before);
+        Ok(())
+    }
+
+    #[test]
+    fn patch_can_detach_source_chunk_then_source_from_node() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let problem_id = source_detail.chunks[0].linked_nodes[0].id.clone();
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Detach imported evidence from a node".to_string()),
+            ops: vec![
+                PatchOp::DetachSourceChunk {
+                    node_id: problem_id.clone(),
+                    chunk_id,
+                },
+                PatchOp::DetachSource {
+                    node_id: problem_id.clone(),
+                    source_id: import_report.source_id.clone(),
+                },
+            ],
+        };
+
+        let report = workspace.apply_patch_document(patch, "test", false)?;
+        assert!(report.run_id.is_some());
+
+        let detail = workspace.node_detail(&problem_id)?;
+        assert!(detail.sources.is_empty());
+
+        let refreshed_source = workspace.source_detail(&import_report.source_id)?;
+        assert!(refreshed_source.chunks[0].linked_nodes.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn patch_validation_rejects_detach_source_before_detach_chunk() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let problem_id = source_detail.chunks[0].linked_nodes[0].id.clone();
+        let patch_history_before = workspace.patch_history()?.len();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Detach source too early".to_string()),
+            ops: vec![PatchOp::DetachSource {
+                node_id: problem_id.clone(),
+                source_id: import_report.source_id.clone(),
+            }],
+        };
+
+        let error = workspace
+            .apply_patch_document(patch, "test", false)
+            .expect_err("source detach should require chunk links to be removed first");
+        assert!(
+            error
+                .to_string()
+                .contains("detach linked source chunks first")
+        );
+        assert_eq!(workspace.patch_history()?.len(), patch_history_before);
+        assert_eq!(workspace.node_detail(&problem_id)?.sources.len(), 1);
         Ok(())
     }
 

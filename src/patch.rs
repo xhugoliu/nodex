@@ -50,6 +50,14 @@ pub enum PatchOp {
         node_id: String,
         chunk_id: String,
     },
+    DetachSource {
+        node_id: String,
+        source_id: String,
+    },
+    DetachSourceChunk {
+        node_id: String,
+        chunk_id: String,
+    },
 }
 
 impl PatchDocument {
@@ -127,6 +135,12 @@ impl PatchOp {
             }
             Self::AttachSourceChunk { node_id, chunk_id } => {
                 format!("attach source chunk {chunk_id} to node {node_id}")
+            }
+            Self::DetachSource { node_id, source_id } => {
+                format!("detach source {source_id} from node {node_id}")
+            }
+            Self::DetachSourceChunk { node_id, chunk_id } => {
+                format!("detach source chunk {chunk_id} from node {node_id}")
             }
         }
     }

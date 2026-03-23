@@ -122,7 +122,7 @@
 当前语义比较简单：
 
 - 一次 `source import` 生成的节点都会挂到对应来源上
-- 这种 source-level link 现在既可能来自 `source import`，也可能来自 `attach_source` patch op
+- 这种 source-level link 现在既可能来自 `source import`，也可能来自 `attach_source` / `detach_source` patch op
 
 ### `source_chunks`
 
@@ -156,7 +156,7 @@
 当前语义：
 
 - 导入时，生成的节点会关联到对应的来源切片
-- 这种 chunk-level link 现在既可能来自 `source import`，也可能来自 `attach_source_chunk` patch op
+- 这种 chunk-level link 现在既可能来自 `source import`，也可能来自 `attach_source_chunk` / `detach_source_chunk` patch op
 - 这是一版“基础切片关联”，还不是完整的证据系统
 
 ## 当前节点类型
