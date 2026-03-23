@@ -100,6 +100,7 @@ nodex patch history
 - `apply` 会把 patch 文件内容归档到 `./.nodex/runs/`
 - `history` 用来查看已经应用过的 patch
 - multi-op patch 会按顺序基于前序 op 的结果继续校验和执行，所以后续 op 可以引用同一 patch 里新建出来的节点
+- 当前 patch 除了节点结构编辑，也支持 `attach_source` 和 `attach_source_chunk` 这类基础来源关联操作
 
 ### Source 操作
 

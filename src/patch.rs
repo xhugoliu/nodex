@@ -42,6 +42,14 @@ pub enum PatchOp {
     DeleteNode {
         id: String,
     },
+    AttachSource {
+        node_id: String,
+        source_id: String,
+    },
+    AttachSourceChunk {
+        node_id: String,
+        chunk_id: String,
+    },
 }
 
 impl PatchDocument {
@@ -114,6 +122,12 @@ impl PatchOp {
                 None => format!("move node {id} under {parent_id}"),
             },
             Self::DeleteNode { id } => format!("delete node {id}"),
+            Self::AttachSource { node_id, source_id } => {
+                format!("attach source {source_id} to node {node_id}")
+            }
+            Self::AttachSourceChunk { node_id, chunk_id } => {
+                format!("attach source chunk {chunk_id} to node {node_id}")
+            }
         }
     }
 

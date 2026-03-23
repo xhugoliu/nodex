@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -362,10 +362,14 @@ impl Workspace {
             .context("source file name is missing or invalid unicode")?
             .to_string();
         let root_parent_id = self.root_id()?;
-        let import_patch = build_source_import_patch(&root_parent_id, &original_name, &import_plan);
-        let patch = self.prepare_patch_document(import_patch.patch)?;
-
         let source_id = Uuid::new_v4().to_string();
+        let import_patch =
+            build_source_import_patch(&root_parent_id, &original_name, &source_id, &import_plan)?;
+        let patch = self.prepare_patch_document_with_context(
+            import_patch.patch,
+            import_patch.validation_context,
+        )?;
+
         let stored_name = build_stored_source_name(&source_id, &source_path);
         let stored_path = self.paths.sources_dir.join(&stored_name);
         std::fs::copy(&source_path, &stored_path).with_context(|| {
@@ -399,14 +403,13 @@ impl Workspace {
                 ],
             )?;
 
-            let chunk_ids = insert_source_chunks_tx(&transaction, &source_id, &import_plan.chunks)?;
-            apply_patch_ops_tx(&transaction, &patch.ops)?;
-            link_imported_nodes_tx(
+            insert_source_chunks_tx(
                 &transaction,
                 &source_id,
-                &chunk_ids,
-                &import_patch.node_links,
+                &import_patch.chunk_ids,
+                &import_plan.chunks,
             )?;
+            apply_patch_ops_tx(&transaction, &patch.ops)?;
             insert_patch_run_tx(
                 &transaction,
                 &archive,
@@ -961,6 +964,14 @@ impl Workspace {
     }
 
     fn prepare_patch_document(&self, patch: PatchDocument) -> Result<PatchDocument> {
+        self.prepare_patch_document_with_context(patch, PatchValidationContext::default())
+    }
+
+    fn prepare_patch_document_with_context(
+        &self,
+        patch: PatchDocument,
+        validation_context: PatchValidationContext,
+    ) -> Result<PatchDocument> {
         if patch.version != 1 {
             bail!("unsupported patch version {}; expected 1", patch.version);
         }
@@ -969,23 +980,45 @@ impl Workspace {
         }
 
         let patch = patch.resolved();
-        self.validate_patch(&patch)?;
+        self.validate_patch(&patch, &validation_context)?;
         Ok(patch)
     }
 
-    fn validate_patch(&self, patch: &PatchDocument) -> Result<()> {
+    fn validate_patch(
+        &self,
+        patch: &PatchDocument,
+        validation_context: &PatchValidationContext,
+    ) -> Result<()> {
         let root_id = self.root_id()?;
-        let mut tree = SimulatedTree::from_nodes(root_id, self.list_nodes()?);
+        let mut state = SimulatedWorkspaceState::from_workspace(
+            root_id,
+            self.list_nodes()?,
+            self.list_sources()?,
+            self.list_source_chunks()?,
+            self.list_node_sources()?,
+            self.list_node_source_chunks()?,
+            validation_context,
+        );
         for op in &patch.ops {
-            tree.validate_and_apply(op)?;
+            state.validate_and_apply(op)?;
         }
         Ok(())
     }
 }
 
-struct SimulatedTree {
+#[derive(Default)]
+struct PatchValidationContext {
+    source_ids: HashSet<String>,
+    chunk_source_ids: HashMap<String, String>,
+}
+
+struct SimulatedWorkspaceState {
     root_id: String,
     parent_ids: HashMap<String, Option<String>>,
+    source_ids: HashSet<String>,
+    chunk_source_ids: HashMap<String, String>,
+    node_sources: HashSet<(String, String)>,
+    node_source_chunks: HashSet<(String, String)>,
 }
 
 struct PatchArchive {
@@ -1000,23 +1033,56 @@ struct SourceImportPatch {
     patch: PatchDocument,
     root_node_id: String,
     node_count: usize,
-    node_links: Vec<SourceImportNodeLink>,
+    chunk_ids: Vec<String>,
+    validation_context: PatchValidationContext,
 }
 
-struct SourceImportNodeLink {
-    node_id: String,
-    chunk_indexes: Vec<usize>,
-}
-
-impl SimulatedTree {
-    fn from_nodes(root_id: String, nodes: Vec<Node>) -> Self {
+impl SimulatedWorkspaceState {
+    fn from_workspace(
+        root_id: String,
+        nodes: Vec<Node>,
+        sources: Vec<SourceRecord>,
+        source_chunks: Vec<SourceChunkRecord>,
+        node_sources: Vec<NodeSourceRecord>,
+        node_source_chunks: Vec<NodeSourceChunkRecord>,
+        validation_context: &PatchValidationContext,
+    ) -> Self {
         let parent_ids = nodes
             .into_iter()
             .map(|node| (node.id, node.parent_id))
             .collect::<HashMap<_, _>>();
+        let mut source_ids = sources
+            .into_iter()
+            .map(|source| source.id)
+            .collect::<HashSet<_>>();
+        source_ids.extend(validation_context.source_ids.iter().cloned());
+
+        let mut chunk_source_ids = source_chunks
+            .into_iter()
+            .map(|chunk| (chunk.id, chunk.source_id))
+            .collect::<HashMap<_, _>>();
+        chunk_source_ids.extend(
+            validation_context
+                .chunk_source_ids
+                .iter()
+                .map(|(chunk_id, source_id)| (chunk_id.clone(), source_id.clone())),
+        );
+
+        let node_sources = node_sources
+            .into_iter()
+            .map(|link| (link.node_id, link.source_id))
+            .collect::<HashSet<_>>();
+        let node_source_chunks = node_source_chunks
+            .into_iter()
+            .map(|link| (link.node_id, link.chunk_id))
+            .collect::<HashSet<_>>();
         Self {
             root_id,
             parent_ids,
+            source_ids,
+            chunk_source_ids,
+            node_sources,
+            node_source_chunks,
         }
     }
 
@@ -1081,6 +1147,52 @@ impl SimulatedTree {
                 }
                 self.delete_subtree(id);
             }
+            PatchOp::AttachSource { node_id, source_id } => {
+                if !self.parent_ids.contains_key(node_id) {
+                    bail!("cannot attach source {source_id} to node {node_id}: node was not found");
+                }
+                if !self.source_ids.contains(source_id) {
+                    bail!(
+                        "cannot attach source {source_id} to node {node_id}: source was not found"
+                    );
+                }
+                if !self
+                    .node_sources
+                    .insert((node_id.clone(), source_id.clone()))
+                {
+                    bail!(
+                        "cannot attach source {source_id} to node {node_id}: link already exists"
+                    );
+                }
+            }
+            PatchOp::AttachSourceChunk { node_id, chunk_id } => {
+                if !self.parent_ids.contains_key(node_id) {
+                    bail!(
+                        "cannot attach source chunk {chunk_id} to node {node_id}: node was not found"
+                    );
+                }
+                let source_id = self.chunk_source_ids.get(chunk_id).with_context(|| {
+                    format!(
+                        "cannot attach source chunk {chunk_id} to node {node_id}: chunk was not found"
+                    )
+                })?;
+                if !self
+                    .node_sources
+                    .contains(&(node_id.clone(), source_id.clone()))
+                {
+                    bail!(
+                        "cannot attach source chunk {chunk_id} to node {node_id}: attach source {source_id} first"
+                    );
+                }
+                if !self
+                    .node_source_chunks
+                    .insert((node_id.clone(), chunk_id.clone()))
+                {
+                    bail!(
+                        "cannot attach source chunk {chunk_id} to node {node_id}: link already exists"
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -1115,6 +1227,10 @@ impl SimulatedTree {
 
         for node_id in to_remove {
             self.parent_ids.remove(&node_id);
+            self.node_sources
+                .retain(|(current_node_id, _)| current_node_id != &node_id);
+            self.node_source_chunks
+                .retain(|(current_node_id, _)| current_node_id != &node_id);
         }
     }
 }
@@ -1224,6 +1340,38 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
             transaction.execute("DELETE FROM nodes WHERE id = ?1", [id])?;
             normalize_children_tx(transaction, Some(old_parent.as_str()))?;
         }
+        PatchOp::AttachSource { node_id, source_id } => {
+            transaction.execute(
+                "INSERT INTO node_sources (node_id, source_id) VALUES (?1, ?2)",
+                params![node_id, source_id],
+            )?;
+        }
+        PatchOp::AttachSourceChunk { node_id, chunk_id } => {
+            let source_id: String = transaction
+                .query_row(
+                    "SELECT source_id FROM source_chunks WHERE id = ?1",
+                    [chunk_id],
+                    |row| row.get(0),
+                )
+                .optional()?
+                .with_context(|| format!("source chunk {chunk_id} was not found"))?;
+            let source_link_exists: Option<i64> = transaction
+                .query_row(
+                    "SELECT 1 FROM node_sources WHERE node_id = ?1 AND source_id = ?2",
+                    params![node_id, source_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if source_link_exists.is_none() {
+                bail!(
+                    "cannot attach source chunk {chunk_id} to node {node_id}: attach source {source_id} first"
+                );
+            }
+            transaction.execute(
+                "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
+                params![node_id, chunk_id],
+            )?;
+        }
     }
     Ok(())
 }
@@ -1287,11 +1435,20 @@ fn insert_patch_run_tx(
 fn insert_source_chunks_tx(
     transaction: &Transaction<'_>,
     source_id: &str,
+    chunk_ids: &[String],
     chunks: &[SourceChunkDraft],
-) -> Result<Vec<String>> {
-    let mut chunk_ids = Vec::with_capacity(chunks.len());
+) -> Result<()> {
+    if chunk_ids.len() != chunks.len() {
+        bail!(
+            "source import generated {} chunk ids for {} chunks",
+            chunk_ids.len(),
+            chunks.len()
+        );
+    }
     for (ordinal, chunk) in chunks.iter().enumerate() {
-        let chunk_id = Uuid::new_v4().to_string();
+        let chunk_id = chunk_ids
+            .get(ordinal)
+            .context("chunk id was missing while importing source")?;
         transaction.execute(
             "INSERT INTO source_chunks (id, source_id, ordinal, label, text, start_line, end_line)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -1305,34 +1462,6 @@ fn insert_source_chunks_tx(
                 chunk.end_line as i64
             ],
         )?;
-        chunk_ids.push(chunk_id);
-    }
-    Ok(chunk_ids)
-}
-
-fn link_imported_nodes_tx(
-    transaction: &Transaction<'_>,
-    source_id: &str,
-    chunk_ids: &[String],
-    node_links: &[SourceImportNodeLink],
-) -> Result<()> {
-    for node_link in node_links {
-        transaction.execute(
-            "INSERT INTO node_sources (node_id, source_id) VALUES (?1, ?2)",
-            params![node_link.node_id, source_id],
-        )?;
-        for chunk_index in &node_link.chunk_indexes {
-            let chunk_id = chunk_ids.get(*chunk_index).with_context(|| {
-                format!(
-                    "chunk index {} was not found while importing source",
-                    chunk_index
-                )
-            })?;
-            transaction.execute(
-                "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
-                params![node_link.node_id, chunk_id],
-            )?;
-        }
     }
     Ok(())
 }
@@ -1340,14 +1469,23 @@ fn link_imported_nodes_tx(
 fn build_source_import_patch(
     root_parent_id: &str,
     original_name: &str,
+    source_id: &str,
     import_plan: &crate::source::SourceImportPlan,
-) -> SourceImportPatch {
+) -> Result<SourceImportPatch> {
+    let chunk_ids = import_plan
+        .chunks
+        .iter()
+        .map(|_| Uuid::new_v4().to_string())
+        .collect::<Vec<_>>();
+
     fn visit_imported_node(
         node: &ImportedNode,
         parent_id: &str,
+        source_id: &str,
+        chunk_ids: &[String],
         ops: &mut Vec<PatchOp>,
-        node_links: &mut Vec<SourceImportNodeLink>,
-    ) -> String {
+        node_count: &mut usize,
+    ) -> Result<String> {
         let node_id = Uuid::new_v4().to_string();
         ops.push(PatchOp::AddNode {
             id: Some(node_id.clone()),
@@ -1357,31 +1495,60 @@ fn build_source_import_patch(
             body: node.body.clone(),
             position: None,
         });
-        node_links.push(SourceImportNodeLink {
+        ops.push(PatchOp::AttachSource {
             node_id: node_id.clone(),
-            chunk_indexes: node.chunk_indexes.clone(),
+            source_id: source_id.to_string(),
         });
-        for child in &node.children {
-            visit_imported_node(child, &node_id, ops, node_links);
+        for chunk_index in &node.chunk_indexes {
+            let chunk_id = chunk_ids.get(*chunk_index).with_context(|| {
+                format!(
+                    "chunk index {} was not found while building source import patch",
+                    chunk_index
+                )
+            })?;
+            ops.push(PatchOp::AttachSourceChunk {
+                node_id: node_id.clone(),
+                chunk_id: chunk_id.clone(),
+            });
         }
-        node_id
+        *node_count += 1;
+        for child in &node.children {
+            visit_imported_node(child, &node_id, source_id, chunk_ids, ops, node_count)?;
+        }
+        Ok(node_id)
     }
 
     let mut ops = Vec::new();
-    let mut node_links = Vec::new();
-    let root_node_id =
-        visit_imported_node(&import_plan.root, root_parent_id, &mut ops, &mut node_links);
+    let mut node_count = 0usize;
+    let root_node_id = visit_imported_node(
+        &import_plan.root,
+        root_parent_id,
+        source_id,
+        &chunk_ids,
+        &mut ops,
+        &mut node_count,
+    )?;
 
-    SourceImportPatch {
+    let validation_context = PatchValidationContext {
+        source_ids: std::iter::once(source_id.to_string()).collect(),
+        chunk_source_ids: chunk_ids
+            .iter()
+            .cloned()
+            .map(|chunk_id| (chunk_id, source_id.to_string()))
+            .collect(),
+    };
+
+    Ok(SourceImportPatch {
         patch: PatchDocument {
             version: 1,
             summary: Some(format!("Import source \"{original_name}\"")),
             ops,
         },
         root_node_id,
-        node_count: node_links.len(),
-        node_links,
-    }
+        node_count,
+        chunk_ids,
+        validation_context,
+    })
 }
 
 fn next_position_tx(transaction: &Transaction<'_>, parent_id: &str) -> Result<i64> {
@@ -1671,6 +1838,101 @@ mod tests {
             problem_detail.sources[0].chunks[0].label.as_deref(),
             Some("Problem")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn patch_can_attach_existing_source_and_chunk_to_new_node() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Attach imported evidence to a new node".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AttachSource {
+                    node_id: "idea".to_string(),
+                    source_id: import_report.source_id.clone(),
+                },
+                PatchOp::AttachSourceChunk {
+                    node_id: "idea".to_string(),
+                    chunk_id,
+                },
+            ],
+        };
+
+        let report = workspace.apply_patch_document(patch, "test", false)?;
+        assert!(report.run_id.is_some());
+
+        let detail = workspace.node_detail("idea")?;
+        assert_eq!(detail.sources.len(), 1);
+        assert_eq!(detail.sources[0].source.id, import_report.source_id);
+        assert_eq!(detail.sources[0].chunks.len(), 1);
+        assert_eq!(
+            detail.sources[0].chunks[0].label.as_deref(),
+            Some("Problem")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn patch_validation_requires_source_link_before_chunk_link() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+        let node_count_before = workspace.list_nodes()?.len();
+        let patch_history_before = workspace.patch_history()?.len();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Attach chunk without source link".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AttachSourceChunk {
+                    node_id: "idea".to_string(),
+                    chunk_id,
+                },
+            ],
+        };
+
+        let error = workspace
+            .apply_patch_document(patch, "test", false)
+            .expect_err("chunk attachment should require a source-level link first");
+        assert!(error.to_string().contains("attach source"));
+        assert_eq!(workspace.list_nodes()?.len(), node_count_before);
+        assert_eq!(workspace.patch_history()?.len(), patch_history_before);
         Ok(())
     }
 
