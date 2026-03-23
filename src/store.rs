@@ -2218,6 +2218,160 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_restore_recovers_attached_source_links_without_rewinding_patch_history()
+    -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        workspace.apply_patch_document(
+            PatchDocument {
+                version: 1,
+                summary: Some("Attach evidence to idea".to_string()),
+                ops: vec![
+                    PatchOp::AddNode {
+                        id: Some("idea".to_string()),
+                        parent_id: "root".to_string(),
+                        title: "Idea".to_string(),
+                        kind: Some("topic".to_string()),
+                        body: None,
+                        position: None,
+                    },
+                    PatchOp::AttachSource {
+                        node_id: "idea".to_string(),
+                        source_id: import_report.source_id.clone(),
+                    },
+                    PatchOp::AttachSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_id.clone(),
+                    },
+                ],
+            },
+            "test",
+            false,
+        )?;
+
+        let snapshot = workspace.save_snapshot(Some("with-attached-evidence".to_string()))?;
+        assert_eq!(workspace.patch_history()?.len(), 2);
+        assert_eq!(workspace.node_detail("idea")?.sources.len(), 1);
+
+        workspace.apply_patch_document(
+            PatchDocument {
+                version: 1,
+                summary: Some("Detach evidence from idea".to_string()),
+                ops: vec![
+                    PatchOp::DetachSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_id.clone(),
+                    },
+                    PatchOp::DetachSource {
+                        node_id: "idea".to_string(),
+                        source_id: import_report.source_id.clone(),
+                    },
+                ],
+            },
+            "test",
+            false,
+        )?;
+
+        assert!(workspace.node_detail("idea")?.sources.is_empty());
+        assert_eq!(workspace.patch_history()?.len(), 3);
+
+        workspace.restore_snapshot(&snapshot.id)?;
+
+        let restored_idea = workspace.node_detail("idea")?;
+        assert_eq!(restored_idea.sources.len(), 1);
+        assert_eq!(restored_idea.sources[0].source.id, import_report.source_id);
+        assert_eq!(restored_idea.sources[0].chunks.len(), 1);
+        assert_eq!(restored_idea.sources[0].chunks[0].id, chunk_id);
+
+        let restored_source = workspace.source_detail(&import_report.source_id)?;
+        let linked_titles = restored_source.chunks[0]
+            .linked_nodes
+            .iter()
+            .map(|node| node.title.clone())
+            .collect::<Vec<_>>();
+        assert!(linked_titles.contains(&"Idea".to_string()));
+        assert!(linked_titles.contains(&"Problem".to_string()));
+        assert_eq!(workspace.patch_history()?.len(), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn restoring_snapshot_after_detach_recovers_removed_source_links_but_keeps_later_patch_history()
+    -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let imported_problem_id = source_detail.chunks[0].linked_nodes[0].id.clone();
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        workspace.apply_patch_document(
+            PatchDocument {
+                version: 1,
+                summary: Some("Detach imported problem evidence".to_string()),
+                ops: vec![
+                    PatchOp::DetachSourceChunk {
+                        node_id: imported_problem_id.clone(),
+                        chunk_id: chunk_id.clone(),
+                    },
+                    PatchOp::DetachSource {
+                        node_id: imported_problem_id.clone(),
+                        source_id: import_report.source_id.clone(),
+                    },
+                ],
+            },
+            "test",
+            false,
+        )?;
+
+        let detached_snapshot = workspace.save_snapshot(Some("after-detach".to_string()))?;
+        assert!(
+            workspace
+                .node_detail(&imported_problem_id)?
+                .sources
+                .is_empty()
+        );
+        assert_eq!(workspace.patch_history()?.len(), 2);
+
+        workspace.add_node(
+            "Later".to_string(),
+            "root".to_string(),
+            "topic".to_string(),
+            None,
+            None,
+        )?;
+        assert_eq!(workspace.patch_history()?.len(), 3);
+
+        workspace.restore_snapshot(&detached_snapshot.id)?;
+
+        assert!(
+            workspace
+                .node_detail(&imported_problem_id)?
+                .sources
+                .is_empty()
+        );
+        assert!(!workspace.tree_string()?.contains("Later"));
+        assert_eq!(workspace.patch_history()?.len(), 3);
+        Ok(())
+    }
+
+    #[test]
     fn patch_validation_allows_new_nodes_referenced_by_later_ops() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
