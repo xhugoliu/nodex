@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::patch::PatchDocument;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Node {
     pub id: String,
@@ -96,6 +98,12 @@ pub struct SourceImportReport {
     pub root_title: String,
     pub node_count: usize,
     pub chunk_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceImportPreview {
+    pub report: SourceImportReport,
+    pub patch: PatchDocument,
 }
 
 #[derive(Debug, Clone)]

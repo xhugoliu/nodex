@@ -184,6 +184,7 @@ patch 可以来自：
 - 手写 JSON
 - CLI convenience commands，例如 `nodex node add`
 - CLI 内部生成的结构化计划，例如 `nodex source import` 创建初始节点树
+  当前也可以通过 `source import --dry-run` 或 `--emit-patch` 先预览这份 patch
 - 未来的 AI 结构化输出
 
 ### 2. 预览

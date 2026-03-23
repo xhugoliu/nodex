@@ -8,7 +8,8 @@ use uuid::Uuid;
 use crate::model::{
     ApplyPatchReport, Node, NodeDetail, NodeSourceChunkRecord, NodeSourceDetail, NodeSourceRecord,
     NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState, SourceChunkDetail,
-    SourceChunkRecord, SourceDetail, SourceImportReport, SourceRecord, TreeNode,
+    SourceChunkRecord, SourceDetail, SourceImportPreview, SourceImportReport, SourceRecord,
+    TreeNode,
 };
 use crate::patch::{PatchDocument, PatchOp};
 use crate::project::ProjectPaths;
@@ -348,39 +349,17 @@ impl Workspace {
     }
 
     pub fn import_source(&mut self, source_path: &Path) -> Result<SourceImportReport> {
-        let source_path = source_path
-            .canonicalize()
-            .with_context(|| format!("failed to resolve source file {}", source_path.display()))?;
-        if !source_path.is_file() {
-            bail!("{} is not a file", source_path.display());
-        }
-
-        let import_plan = load_source_plan(&source_path)?;
-        let original_name = source_path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .context("source file name is missing or invalid unicode")?
-            .to_string();
-        let root_parent_id = self.root_id()?;
-        let source_id = Uuid::new_v4().to_string();
-        let import_patch =
-            build_source_import_patch(&root_parent_id, &original_name, &source_id, &import_plan)?;
-        let patch = self.prepare_patch_document_with_context(
-            import_patch.patch,
-            import_patch.validation_context,
-        )?;
-
-        let stored_name = build_stored_source_name(&source_id, &source_path);
-        let stored_path = self.paths.sources_dir.join(&stored_name);
-        std::fs::copy(&source_path, &stored_path).with_context(|| {
+        let prepared = self.prepare_source_import(source_path)?;
+        let stored_path = self.paths.sources_dir.join(&prepared.stored_name);
+        std::fs::copy(&prepared.source_path, &stored_path).with_context(|| {
             format!(
                 "failed to copy source file from {} to {}",
-                source_path.display(),
+                prepared.source_path.display(),
                 stored_path.display()
             )
         })?;
 
-        let archive = match write_patch_archive(&self.paths, &patch) {
+        let archive = match write_patch_archive(&self.paths, &prepared.patch) {
             Ok(archive) => archive,
             Err(err) => {
                 let _ = std::fs::remove_file(&stored_path);
@@ -394,26 +373,26 @@ impl Workspace {
                 "INSERT INTO sources (id, original_path, original_name, stored_name, format, imported_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
-                    source_id,
-                    source_path.display().to_string(),
-                    original_name,
-                    stored_name,
-                    import_plan.format,
+                    prepared.source_id,
+                    prepared.source_path.display().to_string(),
+                    prepared.original_name,
+                    prepared.stored_name,
+                    prepared.format,
                     imported_at
                 ],
             )?;
 
             insert_source_chunks_tx(
                 &transaction,
-                &source_id,
-                &import_patch.chunk_ids,
-                &import_plan.chunks,
+                &prepared.source_id,
+                &prepared.chunk_ids,
+                &prepared.chunks,
             )?;
-            apply_patch_ops_tx(&transaction, &patch.ops)?;
+            apply_patch_ops_tx(&transaction, &prepared.patch.ops)?;
             insert_patch_run_tx(
                 &transaction,
                 &archive,
-                patch.summary.as_ref(),
+                prepared.patch.summary.as_ref(),
                 "source_import",
             )?;
             Ok(())
@@ -427,13 +406,13 @@ impl Workspace {
                     return Err(err.into());
                 }
                 Ok(SourceImportReport {
-                    source_id,
-                    original_name,
-                    stored_name,
-                    root_node_id: import_patch.root_node_id,
-                    root_title: import_plan.root.title,
-                    node_count: import_patch.node_count,
-                    chunk_count: import_plan.chunks.len(),
+                    source_id: prepared.source_id,
+                    original_name: prepared.original_name,
+                    stored_name: prepared.stored_name,
+                    root_node_id: prepared.root_node_id,
+                    root_title: prepared.root_title,
+                    node_count: prepared.node_count,
+                    chunk_count: prepared.chunk_count,
                 })
             }
             Err(err) => {
@@ -442,6 +421,22 @@ impl Workspace {
                 Err(err)
             }
         }
+    }
+
+    pub fn preview_source_import(&self, source_path: &Path) -> Result<SourceImportPreview> {
+        let prepared = self.prepare_source_import(source_path)?;
+        Ok(SourceImportPreview {
+            report: SourceImportReport {
+                source_id: prepared.source_id,
+                original_name: prepared.original_name,
+                stored_name: prepared.stored_name,
+                root_node_id: prepared.root_node_id,
+                root_title: prepared.root_title,
+                node_count: prepared.node_count,
+                chunk_count: prepared.chunk_count,
+            },
+            patch: prepared.patch,
+        })
     }
 
     pub fn list_sources(&self) -> Result<Vec<SourceRecord>> {
@@ -647,7 +642,7 @@ impl Workspace {
                 .join(format!("outline-{}.md", timestamp_now())),
         };
 
-        if let Some(parent) = target.parent() {
+        if let Some(parent) = target.parent().filter(|path| !path.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("failed to create {}", parent.display()))?;
         }
@@ -984,6 +979,49 @@ impl Workspace {
         Ok(patch)
     }
 
+    fn prepare_source_import(&self, source_path: &Path) -> Result<PreparedSourceImport> {
+        let source_path = source_path
+            .canonicalize()
+            .with_context(|| format!("failed to resolve source file {}", source_path.display()))?;
+        if !source_path.is_file() {
+            bail!("{} is not a file", source_path.display());
+        }
+
+        let import_plan = load_source_plan(&source_path)?;
+        let original_name = source_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .context("source file name is missing or invalid unicode")?
+            .to_string();
+        let root_parent_id = self.root_id()?;
+        let source_id = Uuid::new_v4().to_string();
+        let import_patch =
+            build_source_import_patch(&root_parent_id, &original_name, &source_id, &import_plan)?;
+        let patch = self.prepare_patch_document_with_context(
+            import_patch.patch,
+            import_patch.validation_context,
+        )?;
+        let root_title = import_plan.root.title.clone();
+        let format = import_plan.format;
+        let chunks = import_plan.chunks;
+        let chunk_count = import_patch.chunk_ids.len();
+
+        Ok(PreparedSourceImport {
+            source_path: source_path.clone(),
+            format,
+            chunks,
+            source_id: source_id.clone(),
+            original_name,
+            stored_name: build_stored_source_name(&source_id, &source_path),
+            root_node_id: import_patch.root_node_id,
+            root_title,
+            node_count: import_patch.node_count,
+            chunk_count,
+            patch,
+            chunk_ids: import_patch.chunk_ids,
+        })
+    }
+
     fn validate_patch(
         &self,
         patch: &PatchDocument,
@@ -1035,6 +1073,21 @@ struct SourceImportPatch {
     node_count: usize,
     chunk_ids: Vec<String>,
     validation_context: PatchValidationContext,
+}
+
+struct PreparedSourceImport {
+    source_path: PathBuf,
+    format: String,
+    chunks: Vec<SourceChunkDraft>,
+    source_id: String,
+    original_name: String,
+    stored_name: String,
+    root_node_id: String,
+    root_title: String,
+    node_count: usize,
+    chunk_count: usize,
+    patch: PatchDocument,
+    chunk_ids: Vec<String>,
 }
 
 impl SimulatedWorkspaceState {
@@ -1938,6 +1991,46 @@ mod tests {
             problem_detail.sources[0].chunks[0].label.as_deref(),
             Some("Problem")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn preview_source_import_generates_patch_without_mutating_workspace() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let preview = workspace.preview_source_import(&source_path)?;
+
+        assert_eq!(preview.report.original_name, "notes.md");
+        assert_eq!(preview.report.root_title, "Launch Plan");
+        assert_eq!(preview.report.chunk_count, 1);
+        assert!(preview.report.stored_name.ends_with(".md"));
+        assert!(matches!(
+            preview.patch.ops.first(),
+            Some(PatchOp::AddNode { .. })
+        ));
+        assert!(
+            preview
+                .patch
+                .ops
+                .iter()
+                .any(|op| matches!(op, PatchOp::AttachSource { .. }))
+        );
+        assert!(
+            preview
+                .patch
+                .ops
+                .iter()
+                .any(|op| matches!(op, PatchOp::AttachSourceChunk { .. }))
+        );
+        assert_eq!(workspace.list_nodes()?.len(), 1);
+        assert!(workspace.list_sources()?.is_empty());
+        assert!(workspace.patch_history()?.is_empty());
         Ok(())
     }
 

@@ -110,7 +110,13 @@ pub enum PatchCommand {
 #[derive(Debug, Subcommand)]
 pub enum SourceCommand {
     /// Import a Markdown or text file into the current workspace.
-    Import { path: PathBuf },
+    Import {
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        emit_patch: Option<PathBuf>,
+    },
     /// List imported source files.
     List,
     /// Show one imported source with chunks and linked nodes.

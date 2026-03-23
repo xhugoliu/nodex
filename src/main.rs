@@ -164,19 +164,27 @@ fn main() -> Result<()> {
         Command::Source { command } => {
             let mut workspace = Workspace::open_from(&cwd)?;
             match command {
-                SourceCommand::Import { path } => {
-                    let report = workspace.import_source(&resolve_path(&cwd, &path))?;
-                    println!(
-                        "Imported source {} as {}",
-                        report.original_name, report.source_id
-                    );
-                    println!("stored file: {}", report.stored_name);
-                    println!(
-                        "generated root node: {} [{}]",
-                        report.root_title, report.root_node_id
-                    );
-                    println!("generated nodes: {}", report.node_count);
-                    println!("generated chunks: {}", report.chunk_count);
+                SourceCommand::Import {
+                    path,
+                    dry_run,
+                    emit_patch,
+                } => {
+                    let source_path = resolve_path(&cwd, &path);
+                    if dry_run || emit_patch.is_some() {
+                        let preview = workspace.preview_source_import(&source_path)?;
+                        if let Some(patch_path) = emit_patch {
+                            let patch_path = resolve_path(&cwd, &patch_path);
+                            write_patch_document(&patch_path, &preview.patch)?;
+                            println!("Wrote import patch preview to {}", patch_path.display());
+                        }
+                        if dry_run {
+                            println!("Dry run succeeded.");
+                        }
+                        print_source_import_preview(&preview);
+                    } else {
+                        let report = workspace.import_source(&source_path)?;
+                        print_source_import_report(&report);
+                    }
                 }
                 SourceCommand::List => {
                     let sources = workspace.list_sources()?;
@@ -321,4 +329,44 @@ fn print_patch_report(report: &crate::model::ApplyPatchReport) {
     if let Some(run_id) = &report.run_id {
         println!("Run id: {run_id}");
     }
+}
+
+fn print_source_import_report(report: &crate::model::SourceImportReport) {
+    println!(
+        "Imported source {} as {}",
+        report.original_name, report.source_id
+    );
+    println!("stored file: {}", report.stored_name);
+    println!(
+        "generated root node: {} [{}]",
+        report.root_title, report.root_node_id
+    );
+    println!("generated nodes: {}", report.node_count);
+    println!("generated chunks: {}", report.chunk_count);
+}
+
+fn print_source_import_preview(preview: &crate::model::SourceImportPreview) {
+    println!(
+        "Planned source import {} as {}",
+        preview.report.original_name, preview.report.source_id
+    );
+    println!("planned stored file: {}", preview.report.stored_name);
+    println!(
+        "planned root node: {} [{}]",
+        preview.report.root_title, preview.report.root_node_id
+    );
+    println!("planned nodes: {}", preview.report.node_count);
+    println!("planned chunks: {}", preview.report.chunk_count);
+    print_patch_preview(&preview.patch);
+}
+
+fn write_patch_document(path: &std::path::Path, patch: &PatchDocument) -> Result<()> {
+    if let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    let patch_json = serde_json::to_string_pretty(patch)?;
+    std::fs::write(path, patch_json)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
 }
