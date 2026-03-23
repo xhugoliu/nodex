@@ -74,6 +74,7 @@
 当前用途：
 
 - 查看 patch 历史
+- 记录 CLI convenience commands 和 `source import` 这类内部生成的结构化修改
 - 将来接 AI 后保留每次模型修改提案
 
 ### `snapshots`

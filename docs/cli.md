@@ -99,6 +99,7 @@ nodex patch history
 - `apply --dry-run` 做校验和预览，不修改工作区
 - `apply` 会把 patch 文件内容归档到 `./.nodex/runs/`
 - `history` 用来查看已经应用过的 patch
+- multi-op patch 会按顺序基于前序 op 的结果继续校验和执行，所以后续 op 可以引用同一 patch 里新建出来的节点
 
 ### Source 操作
 
@@ -113,6 +114,7 @@ nodex source show <source-id>
 - 当前只支持 `md` / `txt`
 - 导入的原文件会复制到 `./.nodex/sources/`
 - 导入时会生成一个初始节点树
+- 导入生成的节点结构会复用 patch 引擎，并写入 `patch history`
 - 导入时会自动生成基础来源切片，并把生成节点和切片建立关联
 - `source list` 用来查看已经导入的来源文件
 - `source show` 用来查看一个来源的切片和每个切片关联到的节点

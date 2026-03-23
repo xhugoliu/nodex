@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -288,15 +288,7 @@ impl Workspace {
         origin: &str,
         dry_run: bool,
     ) -> Result<ApplyPatchReport> {
-        if patch.version != 1 {
-            bail!("unsupported patch version {}; expected 1", patch.version);
-        }
-        if patch.ops.is_empty() {
-            bail!("patch must contain at least one operation");
-        }
-
-        let patch = patch.resolved();
-        self.validate_patch(&patch)?;
+        let patch = self.prepare_patch_document(patch)?;
         let preview = patch.preview_lines();
 
         if dry_run {
@@ -307,40 +299,26 @@ impl Workspace {
             });
         }
 
-        let run_id = Uuid::new_v4().to_string();
-        let file_name = format!("{run_id}.json");
-        let run_path = self.paths.runs_dir.join(&file_name);
-        let patch_json = serde_json::to_string_pretty(&patch)?;
-        std::fs::write(&run_path, patch_json.as_bytes())
-            .with_context(|| format!("failed to write {}", run_path.display()))?;
-
-        let applied_at = timestamp_now();
+        let archive = write_patch_archive(&self.paths, &patch)?;
         let transaction = self.conn.transaction()?;
-        let apply_result =
-            (|| -> Result<()> {
-                for op in &patch.ops {
-                    apply_op_transaction(&transaction, op)?;
-                }
-                transaction.execute(
-                "INSERT INTO patch_runs (id, summary, origin, patch_json, file_name, applied_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![run_id, patch.summary, origin, patch_json, file_name, applied_at],
-            )?;
-                Ok(())
-            })();
+        let apply_result = (|| -> Result<()> {
+            apply_patch_ops_tx(&transaction, &patch.ops)?;
+            insert_patch_run_tx(&transaction, &archive, patch.summary.as_ref(), origin)?;
+            Ok(())
+        })();
 
         if let Err(err) = apply_result {
-            let _ = std::fs::remove_file(&run_path);
+            let _ = std::fs::remove_file(&archive.run_path);
             return Err(err);
         }
 
         if let Err(err) = transaction.commit() {
-            let _ = std::fs::remove_file(&run_path);
+            let _ = std::fs::remove_file(&archive.run_path);
             return Err(err.into());
         }
 
         Ok(ApplyPatchReport {
-            run_id: Some(run_id),
+            run_id: Some(archive.run_id),
             summary: patch.summary,
             preview,
         })
@@ -378,6 +356,15 @@ impl Workspace {
         }
 
         let import_plan = load_source_plan(&source_path)?;
+        let original_name = source_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .context("source file name is missing or invalid unicode")?
+            .to_string();
+        let root_parent_id = self.root_id()?;
+        let import_patch = build_source_import_patch(&root_parent_id, &original_name, &import_plan);
+        let patch = self.prepare_patch_document(import_patch.patch)?;
+
         let source_id = Uuid::new_v4().to_string();
         let stored_name = build_stored_source_name(&source_id, &source_path);
         let stored_path = self.paths.sources_dir.join(&stored_name);
@@ -389,15 +376,16 @@ impl Workspace {
             )
         })?;
 
+        let archive = match write_patch_archive(&self.paths, &patch) {
+            Ok(archive) => archive,
+            Err(err) => {
+                let _ = std::fs::remove_file(&stored_path);
+                return Err(err);
+            }
+        };
         let imported_at = timestamp_now();
-        let original_name = source_path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .context("source file name is missing or invalid unicode")?
-            .to_string();
-        let root_parent_id = self.root_id()?;
         let transaction = self.conn.transaction()?;
-        let import_result = (|| -> Result<(String, usize)> {
+        let import_result = (|| -> Result<()> {
             transaction.execute(
                 "INSERT INTO sources (id, original_path, original_name, stored_name, format, imported_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -412,33 +400,42 @@ impl Workspace {
             )?;
 
             let chunk_ids = insert_source_chunks_tx(&transaction, &source_id, &import_plan.chunks)?;
-            insert_imported_tree_tx(
+            apply_patch_ops_tx(&transaction, &patch.ops)?;
+            link_imported_nodes_tx(
                 &transaction,
-                &root_parent_id,
                 &source_id,
                 &chunk_ids,
-                &import_plan.root,
-            )
+                &import_patch.node_links,
+            )?;
+            insert_patch_run_tx(
+                &transaction,
+                &archive,
+                patch.summary.as_ref(),
+                "source_import",
+            )?;
+            Ok(())
         })();
 
         match import_result {
-            Ok((root_node_id, node_count)) => {
+            Ok(()) => {
                 if let Err(err) = transaction.commit() {
                     let _ = std::fs::remove_file(&stored_path);
+                    let _ = std::fs::remove_file(&archive.run_path);
                     return Err(err.into());
                 }
                 Ok(SourceImportReport {
                     source_id,
                     original_name,
                     stored_name,
-                    root_node_id,
+                    root_node_id: import_patch.root_node_id,
                     root_title: import_plan.root.title,
-                    node_count,
+                    node_count: import_patch.node_count,
                     chunk_count: import_plan.chunks.len(),
                 })
             }
             Err(err) => {
                 let _ = std::fs::remove_file(&stored_path);
+                let _ = std::fs::remove_file(&archive.run_path);
                 Err(err)
             }
         }
@@ -963,86 +960,129 @@ impl Workspace {
             .context("root_id metadata is missing")
     }
 
+    fn prepare_patch_document(&self, patch: PatchDocument) -> Result<PatchDocument> {
+        if patch.version != 1 {
+            bail!("unsupported patch version {}; expected 1", patch.version);
+        }
+        if patch.ops.is_empty() {
+            bail!("patch must contain at least one operation");
+        }
+
+        let patch = patch.resolved();
+        self.validate_patch(&patch)?;
+        Ok(patch)
+    }
+
     fn validate_patch(&self, patch: &PatchDocument) -> Result<()> {
         let root_id = self.root_id()?;
+        let mut tree = SimulatedTree::from_nodes(root_id, self.list_nodes()?);
         for op in &patch.ops {
-            match op {
-                PatchOp::AddNode {
-                    id,
-                    parent_id,
-                    position,
-                    ..
-                } => {
-                    let node_id = id
-                        .as_deref()
-                        .context("resolved add_node operation is missing an id")?;
-                    if self.node_exists(node_id)? {
-                        bail!("cannot add node {node_id}: a node with that id already exists");
-                    }
-                    if !self.node_exists(parent_id)? {
-                        bail!("cannot add node {node_id}: parent {parent_id} was not found");
-                    }
-                    validate_position(*position)?;
-                }
-                PatchOp::UpdateNode {
-                    id,
-                    title,
-                    body,
-                    kind,
-                } => {
-                    if !self.node_exists(id)? {
-                        bail!("cannot update node {id}: node was not found");
-                    }
-                    if title.is_none() && body.is_none() && kind.is_none() {
-                        bail!("cannot update node {id}: provide at least one field to change");
-                    }
-                }
-                PatchOp::MoveNode {
-                    id,
-                    parent_id,
-                    position,
-                } => {
-                    if id == &root_id {
-                        bail!("cannot move the root node");
-                    }
-                    if !self.node_exists(id)? {
-                        bail!("cannot move node {id}: node was not found");
-                    }
-                    if !self.node_exists(parent_id)? {
-                        bail!("cannot move node {id}: parent {parent_id} was not found");
-                    }
-                    self.ensure_move_is_acyclic(id, parent_id)?;
-                    validate_position(*position)?;
-                }
-                PatchOp::DeleteNode { id } => {
-                    if id == &root_id {
-                        bail!("cannot delete the root node");
-                    }
-                    if !self.node_exists(id)? {
-                        bail!("cannot delete node {id}: node was not found");
-                    }
-                }
-            }
+            tree.validate_and_apply(op)?;
         }
         Ok(())
     }
+}
 
-    fn node_exists(&self, id: &str) -> Result<bool> {
-        let exists: Option<i64> = self
-            .conn
-            .query_row("SELECT 1 FROM nodes WHERE id = ?1", [id], |row| row.get(0))
-            .optional()?;
-        Ok(exists.is_some())
+struct SimulatedTree {
+    root_id: String,
+    parent_ids: HashMap<String, Option<String>>,
+}
+
+struct PatchArchive {
+    run_id: String,
+    file_name: String,
+    patch_json: String,
+    applied_at: i64,
+    run_path: PathBuf,
+}
+
+struct SourceImportPatch {
+    patch: PatchDocument,
+    root_node_id: String,
+    node_count: usize,
+    node_links: Vec<SourceImportNodeLink>,
+}
+
+struct SourceImportNodeLink {
+    node_id: String,
+    chunk_indexes: Vec<usize>,
+}
+
+impl SimulatedTree {
+    fn from_nodes(root_id: String, nodes: Vec<Node>) -> Self {
+        let parent_ids = nodes
+            .into_iter()
+            .map(|node| (node.id, node.parent_id))
+            .collect::<HashMap<_, _>>();
+        Self {
+            root_id,
+            parent_ids,
+        }
     }
 
-    fn parent_id_of(&self, id: &str) -> Result<Option<String>> {
-        self.conn
-            .query_row("SELECT parent_id FROM nodes WHERE id = ?1", [id], |row| {
-                row.get(0)
-            })
-            .optional()
-            .map(|value| value.flatten())
-            .map_err(Into::into)
+    fn validate_and_apply(&mut self, op: &PatchOp) -> Result<()> {
+        match op {
+            PatchOp::AddNode {
+                id,
+                parent_id,
+                position,
+                ..
+            } => {
+                let node_id = id
+                    .as_deref()
+                    .context("resolved add_node operation is missing an id")?;
+                if self.parent_ids.contains_key(node_id) {
+                    bail!("cannot add node {node_id}: a node with that id already exists");
+                }
+                if !self.parent_ids.contains_key(parent_id) {
+                    bail!("cannot add node {node_id}: parent {parent_id} was not found");
+                }
+                validate_position(*position)?;
+                self.parent_ids
+                    .insert(node_id.to_string(), Some(parent_id.clone()));
+            }
+            PatchOp::UpdateNode {
+                id,
+                title,
+                body,
+                kind,
+            } => {
+                if !self.parent_ids.contains_key(id) {
+                    bail!("cannot update node {id}: node was not found");
+                }
+                if title.is_none() && body.is_none() && kind.is_none() {
+                    bail!("cannot update node {id}: provide at least one field to change");
+                }
+            }
+            PatchOp::MoveNode {
+                id,
+                parent_id,
+                position,
+            } => {
+                if id == &self.root_id {
+                    bail!("cannot move the root node");
+                }
+                if !self.parent_ids.contains_key(id) {
+                    bail!("cannot move node {id}: node was not found");
+                }
+                if !self.parent_ids.contains_key(parent_id) {
+                    bail!("cannot move node {id}: parent {parent_id} was not found");
+                }
+                self.ensure_move_is_acyclic(id, parent_id)?;
+                validate_position(*position)?;
+                self.parent_ids.insert(id.clone(), Some(parent_id.clone()));
+            }
+            PatchOp::DeleteNode { id } => {
+                if id == &self.root_id {
+                    bail!("cannot delete the root node");
+                }
+                if !self.parent_ids.contains_key(id) {
+                    bail!("cannot delete node {id}: node was not found");
+                }
+                self.delete_subtree(id);
+            }
+        }
+        Ok(())
     }
 
     fn ensure_move_is_acyclic(&self, node_id: &str, new_parent_id: &str) -> Result<()> {
@@ -1055,9 +1095,27 @@ impl Workspace {
             if current == node_id {
                 bail!("cannot move node {node_id}: that would create a cycle");
             }
-            cursor = self.parent_id_of(&current)?;
+            cursor = self.parent_ids.get(&current).cloned().flatten();
         }
         Ok(())
+    }
+
+    fn delete_subtree(&mut self, node_id: &str) {
+        let mut pending = vec![node_id.to_string()];
+        let mut to_remove = Vec::new();
+
+        while let Some(current_id) = pending.pop() {
+            to_remove.push(current_id.clone());
+            for (child_id, parent_id) in &self.parent_ids {
+                if parent_id.as_deref() == Some(current_id.as_str()) {
+                    pending.push(child_id.clone());
+                }
+            }
+        }
+
+        for node_id in to_remove {
+            self.parent_ids.remove(&node_id);
+        }
     }
 }
 
@@ -1182,6 +1240,50 @@ fn get_node_tx(transaction: &Transaction<'_>, id: &str) -> Result<Option<Node>> 
         .map_err(Into::into)
 }
 
+fn apply_patch_ops_tx(transaction: &Transaction<'_>, ops: &[PatchOp]) -> Result<()> {
+    for op in ops {
+        apply_op_transaction(transaction, op)?;
+    }
+    Ok(())
+}
+
+fn write_patch_archive(paths: &ProjectPaths, patch: &PatchDocument) -> Result<PatchArchive> {
+    let run_id = Uuid::new_v4().to_string();
+    let file_name = format!("{run_id}.json");
+    let run_path = paths.runs_dir.join(&file_name);
+    let patch_json = serde_json::to_string_pretty(patch)?;
+    std::fs::write(&run_path, patch_json.as_bytes())
+        .with_context(|| format!("failed to write {}", run_path.display()))?;
+    Ok(PatchArchive {
+        run_id,
+        file_name,
+        patch_json,
+        applied_at: timestamp_now(),
+        run_path,
+    })
+}
+
+fn insert_patch_run_tx(
+    transaction: &Transaction<'_>,
+    archive: &PatchArchive,
+    summary: Option<&String>,
+    origin: &str,
+) -> Result<()> {
+    transaction.execute(
+        "INSERT INTO patch_runs (id, summary, origin, patch_json, file_name, applied_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            archive.run_id,
+            summary,
+            origin,
+            archive.patch_json,
+            archive.file_name,
+            archive.applied_at
+        ],
+    )?;
+    Ok(())
+}
+
 fn insert_source_chunks_tx(
     transaction: &Transaction<'_>,
     source_id: &str,
@@ -1208,47 +1310,78 @@ fn insert_source_chunks_tx(
     Ok(chunk_ids)
 }
 
-fn insert_imported_tree_tx(
+fn link_imported_nodes_tx(
     transaction: &Transaction<'_>,
-    parent_id: &str,
     source_id: &str,
     chunk_ids: &[String],
-    node: &ImportedNode,
-) -> Result<(String, usize)> {
-    let node_id = Uuid::new_v4().to_string();
-    let now = timestamp_now();
-    let position = next_position_tx(transaction, parent_id)?;
-    transaction.execute(
-        "INSERT INTO nodes (id, parent_id, title, body, kind, position, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-        params![
-            node_id, parent_id, node.title, node.body, node.kind, position, now
-        ],
-    )?;
-    transaction.execute(
-        "INSERT INTO node_sources (node_id, source_id) VALUES (?1, ?2)",
-        params![node_id, source_id],
-    )?;
-    for chunk_index in &node.chunk_indexes {
-        let chunk_id = chunk_ids.get(*chunk_index).with_context(|| {
-            format!(
-                "chunk index {} was not found while importing source",
-                chunk_index
-            )
-        })?;
+    node_links: &[SourceImportNodeLink],
+) -> Result<()> {
+    for node_link in node_links {
         transaction.execute(
-            "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
-            params![node_id, chunk_id],
+            "INSERT INTO node_sources (node_id, source_id) VALUES (?1, ?2)",
+            params![node_link.node_id, source_id],
         )?;
+        for chunk_index in &node_link.chunk_indexes {
+            let chunk_id = chunk_ids.get(*chunk_index).with_context(|| {
+                format!(
+                    "chunk index {} was not found while importing source",
+                    chunk_index
+                )
+            })?;
+            transaction.execute(
+                "INSERT INTO node_source_chunks (node_id, chunk_id) VALUES (?1, ?2)",
+                params![node_link.node_id, chunk_id],
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn build_source_import_patch(
+    root_parent_id: &str,
+    original_name: &str,
+    import_plan: &crate::source::SourceImportPlan,
+) -> SourceImportPatch {
+    fn visit_imported_node(
+        node: &ImportedNode,
+        parent_id: &str,
+        ops: &mut Vec<PatchOp>,
+        node_links: &mut Vec<SourceImportNodeLink>,
+    ) -> String {
+        let node_id = Uuid::new_v4().to_string();
+        ops.push(PatchOp::AddNode {
+            id: Some(node_id.clone()),
+            parent_id: parent_id.to_string(),
+            title: node.title.clone(),
+            kind: Some(node.kind.clone()),
+            body: node.body.clone(),
+            position: None,
+        });
+        node_links.push(SourceImportNodeLink {
+            node_id: node_id.clone(),
+            chunk_indexes: node.chunk_indexes.clone(),
+        });
+        for child in &node.children {
+            visit_imported_node(child, &node_id, ops, node_links);
+        }
+        node_id
     }
 
-    let mut total_nodes = 1usize;
-    for child in &node.children {
-        let (_, child_count) =
-            insert_imported_tree_tx(transaction, &node_id, source_id, chunk_ids, child)?;
-        total_nodes += child_count;
+    let mut ops = Vec::new();
+    let mut node_links = Vec::new();
+    let root_node_id =
+        visit_imported_node(&import_plan.root, root_parent_id, &mut ops, &mut node_links);
+
+    SourceImportPatch {
+        patch: PatchDocument {
+            version: 1,
+            summary: Some(format!("Import source \"{original_name}\"")),
+            ops,
+        },
+        root_node_id,
+        node_count: node_links.len(),
+        node_links,
     }
-    Ok((node_id, total_nodes))
 }
 
 fn next_position_tx(transaction: &Transaction<'_>, parent_id: &str) -> Result<i64> {
@@ -1481,6 +1614,13 @@ mod tests {
         assert_eq!(import_report.chunk_count, 2);
         assert_eq!(workspace.list_source_chunks()?.len(), 2);
         assert_eq!(workspace.list_node_source_chunks()?.len(), 2);
+        let patch_history = workspace.patch_history()?;
+        assert_eq!(patch_history.len(), 1);
+        assert_eq!(patch_history[0].origin, "source_import");
+        assert_eq!(
+            patch_history[0].summary.as_deref(),
+            Some("Import source \"notes.md\"")
+        );
         let source_detail = workspace.source_detail(&import_report.source_id)?;
         assert_eq!(source_detail.chunks.len(), 2);
         assert_eq!(
@@ -1517,6 +1657,7 @@ mod tests {
         assert_eq!(workspace.list_sources()?.len(), 1);
         assert_eq!(workspace.list_source_chunks()?.len(), 2);
         assert_eq!(workspace.list_node_source_chunks()?.len(), 2);
+        assert_eq!(workspace.patch_history()?.len(), 2);
 
         let root_detail = workspace.node_detail(&import_report.root_node_id)?;
         assert_eq!(root_detail.sources.len(), 1);
@@ -1534,7 +1675,7 @@ mod tests {
     }
 
     #[test]
-    fn patch_validation_rejects_new_nodes_referenced_by_later_ops() -> Result<()> {
+    fn patch_validation_allows_new_nodes_referenced_by_later_ops() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
 
@@ -1558,20 +1699,79 @@ mod tests {
                     body: None,
                     position: None,
                 },
+                PatchOp::UpdateNode {
+                    id: "parent".to_string(),
+                    title: None,
+                    body: Some("Generated in one patch".to_string()),
+                    kind: None,
+                },
+            ],
+        };
+
+        let report = workspace.apply_patch_document(patch, "test", false)?;
+        assert!(report.run_id.is_some());
+        assert_eq!(workspace.patch_history()?.len(), 1);
+        assert_eq!(workspace.list_nodes()?.len(), 3);
+
+        let parent = workspace.node_detail("parent")?;
+        assert_eq!(parent.node.body.as_deref(), Some("Generated in one patch"));
+        assert_eq!(parent.children.len(), 1);
+        assert_eq!(parent.children[0].id, "child");
+        Ok(())
+    }
+
+    #[test]
+    fn patch_validation_rejects_references_to_nodes_deleted_earlier_in_same_patch() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Delete a branch before a later update".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("parent".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Parent".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AddNode {
+                    id: Some("child".to_string()),
+                    parent_id: "parent".to_string(),
+                    title: "Child".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::DeleteNode {
+                    id: "parent".to_string(),
+                },
+                PatchOp::UpdateNode {
+                    id: "child".to_string(),
+                    title: Some("Still here".to_string()),
+                    body: None,
+                    kind: None,
+                },
             ],
         };
 
         let error = workspace
             .apply_patch_document(patch, "test", false)
-            .expect_err("patch should be validated against the pre-apply workspace state");
-        assert!(error.to_string().contains("parent parent was not found"));
+            .expect_err("updates after a subtree delete should fail validation");
+        assert!(
+            error
+                .to_string()
+                .contains("cannot update node child: node was not found")
+        );
         assert_eq!(workspace.list_nodes()?.len(), 1);
         assert!(workspace.patch_history()?.is_empty());
         Ok(())
     }
 
     #[test]
-    fn failed_patch_apply_rolls_back_database_and_archive() -> Result<()> {
+    fn failed_patch_validation_keeps_database_and_archive_clean() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
 
@@ -1600,7 +1800,7 @@ mod tests {
 
         workspace
             .apply_patch_document(patch, "test", false)
-            .expect_err("duplicate ids in one patch should fail during apply");
+            .expect_err("duplicate ids in one patch should fail validation");
 
         assert_eq!(workspace.list_nodes()?.len(), 1);
         assert!(workspace.patch_history()?.is_empty());

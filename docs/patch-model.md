@@ -118,6 +118,7 @@ patch 可以来自：
 
 - 手写 JSON
 - CLI convenience commands，例如 `nodex node add`
+- CLI 内部生成的结构化计划，例如 `nodex source import` 创建初始节点树
 - 未来的 AI 结构化输出
 
 ### 2. 预览
@@ -144,12 +145,13 @@ nodex patch apply <file> --dry-run
 - `position` 是否合法
 - 根节点是否被非法移动或删除
 - `move_node` 是否会产生环
+- 校验会按 `ops` 顺序模拟 patch 执行后的中间状态
 
-当前还有一个重要边界：
+这意味着：
 
-- 校验是基于 apply 前的工作区状态进行的
-- 不会模拟同一份 patch 里前序 op 带来的临时结果
-- 这意味着后续 op 目前不能引用同一 patch 里刚 `add_node` 出来的新节点
+- 后续 op 可以引用同一 patch 里前面刚 `add_node` 出来的新节点
+- 后续 op 看到的是前序 op 之后的结构状态，而不是 apply 前的旧状态
+- 如果某个节点或子树已经在前序 op 里被删除，后续再引用它会直接报错
 
 ### 4. 应用
 
@@ -173,7 +175,7 @@ nodex patch apply <file> --dry-run
 - 批量重排
 - 跨图引用
 
-此外，当前 multi-op patch 虽然支持多个操作顺序执行，但校验阶段仍然要求每个 op 的目标都已经存在于 apply 前的工作区里。
+此外，当前 multi-op patch 会按顺序执行和校验，但 patch 模型还没有覆盖来源关联、证据关系等更高层语义。
 
 ## 下一步扩展建议
 
