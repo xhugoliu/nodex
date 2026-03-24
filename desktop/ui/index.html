@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nodex</title>
+    <title data-i18n="app.title">Nodex</title>
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="./main.js" defer></script>
   </head>
@@ -11,23 +11,35 @@
     <div class="shell">
       <header class="hero">
         <div>
-          <p class="eyebrow">Nodex Desktop</p>
-          <h1>Patch-first mind map shell</h1>
-          <p class="lede">
+          <p class="eyebrow" data-i18n="hero.eyebrow">Nodex Desktop</p>
+          <h1 data-i18n="hero.title">Patch-first mind map shell</h1>
+          <p class="lede" data-i18n="hero.lede">
             A thin desktop layer over the local Nodex core. Open a workspace,
             inspect structure, preview source imports, and apply patches.
           </p>
         </div>
         <div class="workspace-bar">
+          <label class="language-control">
+            <span data-i18n="language.label">Language</span>
+            <select id="language-select">
+              <option value="auto" data-i18n="language.auto">Follow system</option>
+              <option value="zh-CN" data-i18n="language.zhCN">简体中文</option>
+              <option value="en-US" data-i18n="language.enUS">English</option>
+            </select>
+          </label>
           <label>
-            Workspace path
-            <input id="workspace-path" placeholder="/path/to/project or workspace" />
+            <span data-i18n="workspace.pathLabel">Workspace path</span>
+            <input
+              id="workspace-path"
+              data-i18n-placeholder="workspace.pathPlaceholder"
+              placeholder="/path/to/project or workspace"
+            />
           </label>
           <div class="row">
-            <button id="pick-workspace">Choose Folder</button>
-            <button id="open-workspace" class="primary">Open Workspace</button>
-            <button id="init-workspace">Init Workspace</button>
-            <button id="refresh-workspace">Refresh</button>
+            <button id="pick-workspace" data-i18n="workspace.chooseFolder">Choose Folder</button>
+            <button id="open-workspace" class="primary" data-i18n="workspace.open">Open Workspace</button>
+            <button id="init-workspace" data-i18n="workspace.init">Init Workspace</button>
+            <button id="refresh-workspace" data-i18n="workspace.refresh">Refresh</button>
           </div>
         </div>
       </header>
@@ -35,159 +47,159 @@
       <main class="grid">
         <section class="panel sidebar">
           <div class="panel-header">
-            <h2>Workspace</h2>
-            <p id="workspace-meta" class="muted">No workspace opened yet.</p>
+            <h2 data-i18n="sidebar.workspace">Workspace</h2>
+            <p id="workspace-meta" class="muted" data-i18n="sidebar.workspaceEmpty">No workspace opened yet.</p>
           </div>
 
           <div class="stack">
             <div class="card">
               <div class="card-head">
-                <h3>Tree</h3>
+                <h3 data-i18n="sidebar.tree">Tree</h3>
               </div>
-              <div id="tree-view" class="tree-view empty">Open a workspace to inspect its tree.</div>
+              <div id="tree-view" class="tree-view empty" data-i18n="sidebar.treeEmpty">Open a workspace to inspect its tree.</div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Sources</h3>
+                <h3 data-i18n="sidebar.sources">Sources</h3>
               </div>
-              <div id="source-list" class="list empty">No source loaded.</div>
+              <div id="source-list" class="list empty" data-i18n="sidebar.sourcesEmpty">No source loaded.</div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Snapshots</h3>
+                <h3 data-i18n="sidebar.snapshots">Snapshots</h3>
               </div>
               <label>
-                Save snapshot
-                <input id="snapshot-label" placeholder="optional label" />
+                <span data-i18n="sidebar.saveSnapshot">Save snapshot</span>
+                <input id="snapshot-label" data-i18n-placeholder="sidebar.snapshotLabelPlaceholder" placeholder="optional label" />
               </label>
-              <button id="save-snapshot">Save Snapshot</button>
-              <div id="snapshot-list" class="list empty">No snapshots loaded.</div>
+              <button id="save-snapshot" data-i18n="sidebar.saveSnapshotButton">Save Snapshot</button>
+              <div id="snapshot-list" class="list empty" data-i18n="sidebar.snapshotsEmpty">No snapshots loaded.</div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Patch History</h3>
+                <h3 data-i18n="sidebar.patchHistory">Patch History</h3>
               </div>
-              <div id="history-list" class="list empty">No patch history loaded.</div>
+              <div id="history-list" class="list empty" data-i18n="sidebar.patchHistoryEmpty">No patch history loaded.</div>
             </div>
           </div>
         </section>
 
         <section class="panel detail">
           <div class="panel-header">
-            <h2>Inspector</h2>
-            <p id="detail-meta" class="muted">Select a node or source.</p>
+            <h2 data-i18n="detail.title">Inspector</h2>
+            <p id="detail-meta" class="muted" data-i18n="detail.emptyMeta">Select a node or source.</p>
           </div>
-          <div id="detail-view" class="detail-view empty">
+          <div id="detail-view" class="detail-view empty" data-i18n="detail.emptyBody">
             Details will appear here.
           </div>
         </section>
 
         <section class="panel actions">
           <div class="panel-header">
-            <h2>Actions</h2>
-            <p class="muted">Preview first, then apply.</p>
+            <h2 data-i18n="actions.title">Actions</h2>
+            <p class="muted" data-i18n="actions.subtitle">Preview first, then apply.</p>
           </div>
 
           <div class="stack">
             <div class="card">
               <div class="card-head">
-                <h3>Node Editing</h3>
+                <h3 data-i18n="nodeEditing.title">Node Editing</h3>
               </div>
-              <p id="node-edit-meta" class="muted">Select a node to draft edit patches.</p>
+              <p id="node-edit-meta" class="muted" data-i18n="nodeEditing.emptyMeta">Select a node to draft edit patches.</p>
 
               <div class="editor-block">
-                <h4>Add Child</h4>
+                <h4 data-i18n="nodeEditing.addChild">Add Child</h4>
                 <label>
-                  Title
-                  <input id="add-child-title" placeholder="New child title" />
+                  <span data-i18n="fields.title">Title</span>
+                  <input id="add-child-title" data-i18n-placeholder="nodeEditing.addChildTitlePlaceholder" placeholder="New child title" />
                 </label>
                 <label>
-                  Kind
-                  <input id="add-child-kind" placeholder="topic" />
+                  <span data-i18n="fields.kind">Kind</span>
+                  <input id="add-child-kind" data-i18n-placeholder="nodeEditing.kindPlaceholder" placeholder="topic" />
                 </label>
                 <label>
-                  Body
+                  <span data-i18n="fields.body">Body</span>
                   <textarea id="add-child-body" class="small-textarea" spellcheck="false"></textarea>
                 </label>
                 <div class="row">
-                  <button id="draft-add-child" class="primary">Draft Add Child</button>
+                  <button id="draft-add-child" class="primary" data-i18n="nodeEditing.draftAddChild">Draft Add Child</button>
                 </div>
               </div>
 
               <div class="editor-block">
-                <h4>Update Selected Node</h4>
+                <h4 data-i18n="nodeEditing.updateNode">Update Selected Node</h4>
                 <label>
-                  Title
-                  <input id="update-node-title" placeholder="leave blank to keep current" />
+                  <span data-i18n="fields.title">Title</span>
+                  <input id="update-node-title" data-i18n-placeholder="nodeEditing.keepCurrentPlaceholder" placeholder="leave blank to keep current" />
                 </label>
                 <label>
-                  Kind
-                  <input id="update-node-kind" placeholder="leave blank to keep current" />
+                  <span data-i18n="fields.kind">Kind</span>
+                  <input id="update-node-kind" data-i18n-placeholder="nodeEditing.keepCurrentPlaceholder" placeholder="leave blank to keep current" />
                 </label>
                 <label>
-                  Body
+                  <span data-i18n="fields.body">Body</span>
                   <textarea id="update-node-body" class="small-textarea" spellcheck="false"></textarea>
                 </label>
                 <div class="row">
-                  <button id="draft-update-node">Draft Update</button>
+                  <button id="draft-update-node" data-i18n="nodeEditing.draftUpdate">Draft Update</button>
                 </div>
               </div>
 
               <div class="editor-block">
-                <h4>Move Selected Node</h4>
+                <h4 data-i18n="nodeEditing.moveNode">Move Selected Node</h4>
                 <label>
-                  New parent id
-                  <input id="move-node-parent" placeholder="root or another node id" />
+                  <span data-i18n="nodeEditing.newParentId">New parent id</span>
+                  <input id="move-node-parent" data-i18n-placeholder="nodeEditing.moveParentPlaceholder" placeholder="root or another node id" />
                 </label>
                 <label>
-                  Position
-                  <input id="move-node-position" placeholder="optional index" />
+                  <span data-i18n="nodeEditing.position">Position</span>
+                  <input id="move-node-position" data-i18n-placeholder="nodeEditing.positionPlaceholder" placeholder="optional index" />
                 </label>
                 <div class="row">
-                  <button id="draft-move-node">Draft Move</button>
-                  <button id="draft-delete-node" class="danger">Draft Delete</button>
+                  <button id="draft-move-node" data-i18n="nodeEditing.draftMove">Draft Move</button>
+                  <button id="draft-delete-node" class="danger" data-i18n="nodeEditing.draftDelete">Draft Delete</button>
                 </div>
               </div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Source Import</h3>
+                <h3 data-i18n="sourceImport.title">Source Import</h3>
               </div>
               <label>
-                Source file path
-                <input id="source-path" placeholder="/path/to/file.md" />
+                <span data-i18n="sourceImport.pathLabel">Source file path</span>
+                <input id="source-path" data-i18n-placeholder="sourceImport.pathPlaceholder" placeholder="/path/to/file.md" />
               </label>
               <div class="row">
-                <button id="pick-source">Choose File</button>
-                <button id="preview-import" class="primary">Preview Import</button>
-                <button id="run-import">Run Import</button>
+                <button id="pick-source" data-i18n="sourceImport.chooseFile">Choose File</button>
+                <button id="preview-import" class="primary" data-i18n="sourceImport.preview">Preview Import</button>
+                <button id="run-import" data-i18n="sourceImport.run">Run Import</button>
               </div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Patch Editor</h3>
-                <button id="clear-patch" class="ghost">Clear</button>
+                <h3 data-i18n="patchEditor.title">Patch Editor</h3>
+                <button id="clear-patch" class="ghost" data-i18n="patchEditor.clear">Clear</button>
               </div>
               <label>
-                Patch JSON
+                <span data-i18n="patchEditor.label">Patch JSON</span>
                 <textarea id="patch-editor" spellcheck="false"></textarea>
               </label>
               <div class="row">
-                <button id="preview-patch" class="primary">Preview Patch</button>
-                <button id="apply-patch">Apply Patch</button>
+                <button id="preview-patch" class="primary" data-i18n="patchEditor.preview">Preview Patch</button>
+                <button id="apply-patch" data-i18n="patchEditor.apply">Apply Patch</button>
               </div>
             </div>
 
             <div class="card">
               <div class="card-head">
-                <h3>Console</h3>
+                <h3 data-i18n="console.title">Console</h3>
               </div>
-              <div id="console-output" class="console empty">Nothing to show yet.</div>
+              <div id="console-output" class="console empty" data-i18n="console.empty">Nothing to show yet.</div>
             </div>
           </div>
         </section>

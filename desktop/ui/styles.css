@@ -30,7 +30,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -78,6 +79,10 @@ textarea {
   border-radius: 22px;
   background: rgba(255, 250, 239, 0.74);
   border: 1px solid rgba(67, 54, 33, 0.08);
+}
+
+.language-control {
+  max-width: 240px;
 }
 
 .grid {
@@ -154,6 +159,7 @@ label {
 
 input,
 textarea,
+select,
 .console,
 .detail-view,
 .tree-view,
@@ -166,7 +172,8 @@ textarea,
 }
 
 input,
-textarea {
+textarea,
+select {
   padding: 12px 14px;
 }
 
