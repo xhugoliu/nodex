@@ -35,13 +35,14 @@ cargo run -- export outline
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
+- 最小 Tauri 桌面壳骨架
 
 当前还没落地：
 
 - AI 生成 patch
 - PDF 导入与来源切片
 - 来源追踪与证据视图
-- Tauri 图形界面
+- 完整 Tauri 图形界面
 
 ## Docs
 

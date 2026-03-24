@@ -19,6 +19,15 @@
 - 生成初始节点树
 - 生成基础来源切片并关联到导入节点
 
+阶段五也已经开始了一层最小桌面壳：
+
+- Tauri app 骨架
+- 工作区打开 / 初始化
+- 树视图与节点 / source 详情查看
+- source import 预览 / 导入
+- patch 预览 / 应用
+- snapshot 列表与恢复入口
+
 这对应的核心问题是：
 
 > patch-first 的本地工作区模型是否站得住
@@ -124,6 +133,16 @@
 - patch 预览器
 - 来源查看器
 - 快照恢复入口
+
+当前已落地的最小版本：
+
+- `desktop/src-tauri` + `desktop/ui` 最小壳工程
+- 复用共享 Rust 内核，而不是前端单独维护状态语义
+- 工作区打开 / 初始化
+- 树视图、节点详情、source 详情
+- source import preview / import
+- patch preview / apply
+- snapshot list / restore
 
 关键问题：
 

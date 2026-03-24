@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nodex</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./main.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Nodex Desktop</p>
+          <h1>Patch-first mind map shell</h1>
+          <p class="lede">
+            A thin desktop layer over the local Nodex core. Open a workspace,
+            inspect structure, preview source imports, and apply patches.
+          </p>
+        </div>
+        <div class="workspace-bar">
+          <label>
+            Workspace path
+            <input id="workspace-path" placeholder="/path/to/project or workspace" />
+          </label>
+          <div class="row">
+            <button id="open-workspace" class="primary">Open Workspace</button>
+            <button id="init-workspace">Init Workspace</button>
+            <button id="refresh-workspace">Refresh</button>
+          </div>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel sidebar">
+          <div class="panel-header">
+            <h2>Workspace</h2>
+            <p id="workspace-meta" class="muted">No workspace opened yet.</p>
+          </div>
+
+          <div class="stack">
+            <div class="card">
+              <div class="card-head">
+                <h3>Tree</h3>
+              </div>
+              <div id="tree-view" class="tree-view empty">Open a workspace to inspect its tree.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Sources</h3>
+              </div>
+              <div id="source-list" class="list empty">No source loaded.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Snapshots</h3>
+              </div>
+              <label>
+                Save snapshot
+                <input id="snapshot-label" placeholder="optional label" />
+              </label>
+              <button id="save-snapshot">Save Snapshot</button>
+              <div id="snapshot-list" class="list empty">No snapshots loaded.</div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Patch History</h3>
+              </div>
+              <div id="history-list" class="list empty">No patch history loaded.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel detail">
+          <div class="panel-header">
+            <h2>Inspector</h2>
+            <p id="detail-meta" class="muted">Select a node or source.</p>
+          </div>
+          <div id="detail-view" class="detail-view empty">
+            Details will appear here.
+          </div>
+        </section>
+
+        <section class="panel actions">
+          <div class="panel-header">
+            <h2>Actions</h2>
+            <p class="muted">Preview first, then apply.</p>
+          </div>
+
+          <div class="stack">
+            <div class="card">
+              <div class="card-head">
+                <h3>Source Import</h3>
+              </div>
+              <label>
+                Source file path
+                <input id="source-path" placeholder="/path/to/file.md" />
+              </label>
+              <div class="row">
+                <button id="preview-import" class="primary">Preview Import</button>
+                <button id="run-import">Run Import</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Patch Editor</h3>
+                <button id="clear-patch" class="ghost">Clear</button>
+              </div>
+              <label>
+                Patch JSON
+                <textarea id="patch-editor" spellcheck="false"></textarea>
+              </label>
+              <div class="row">
+                <button id="preview-patch" class="primary">Preview Patch</button>
+                <button id="apply-patch">Apply Patch</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>Console</h3>
+              </div>
+              <div id="console-output" class="console empty">Nothing to show yet.</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

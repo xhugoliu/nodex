@@ -1,0 +1,19 @@
+[package]
+name = "nodex-desktop"
+version = "0.1.0"
+edition = "2024"
+description = "Minimal Tauri shell for Nodex"
+
+[lib]
+name = "nodex_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow = "1.0.100"
+nodex = { path = "../.." }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+tauri = { version = "2", features = [] }

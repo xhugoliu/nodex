@@ -14,29 +14,42 @@ Nodex 的长期目标不是“做一个只活在 CLI 里的工具”，而是：
 
 ## 当前已经落地的结构
 
-当前仓库虽然还是单二进制项目，但已经有了比较明确的分层：
+当前仓库已经从单一 CLI 二进制，演化成“共享内核 + CLI + 最小桌面壳”的结构：
+
+### `src/lib.rs`
+
+共享内核入口。
+
+职责：
+
+- 暴露 `model / patch / project / source / store` 给 CLI 和桌面壳复用
 
 ### `src/main.rs`
 
-命令入口和输出分发。
+CLI 命令入口和输出分发。
 
 职责：
 
 - 解析 CLI 参数
-- 调用工作区层能力
+- 调用共享内核
 - 输出人类可读结果
 
 ### `src/store.rs`
 
-当前最接近“内核”的部分。
+共享工作区内核入口。
 
 职责：
 
 - 初始化工作区
 - 管理 SQLite schema
-- 应用 patch
-- 保存和恢复快照
-- 生成树视图和大纲导出
+- 汇总 `store` 子模块
+
+当前 `store` 已进一步按职责拆到：
+
+- `src/store/patching.rs`
+- `src/store/queries.rs`
+- `src/store/source_import.rs`
+- `src/store/snapshots.rs`
 
 ### `src/patch.rs`
 
@@ -68,34 +81,50 @@ Nodex 的长期目标不是“做一个只活在 CLI 里的工具”，而是：
 - 从当前目录向上发现 `.nodex/project.db`
 - 统一 `runs/`、`snapshots/`、`sources/`、`exports/` 路径
 
+### `desktop/src-tauri`
+
+最小 Tauri 桌面壳后端。
+
+职责：
+
+- 暴露桌面命令给前端调用
+- 复用 `nodex` 共享内核
+- 负责 Tauri app 配置与窗口生命周期
+
+### `desktop/ui`
+
+最小桌面壳前端。
+
+职责：
+
+- 工作区打开 / 初始化
+- 树视图和详情查看
+- source import 预览与执行
+- patch 预览与应用
+- snapshot 列表与恢复入口
+
 ## 当前架构图
 
 ```text
-+-------------------+
-|      CLI          |
-|  command parsing  |
-|  human output     |
-+---------+---------+
-          |
-          v
-+-------------------+
-|    workspace      |
-|  init / patch /   |
-|  snapshot / export|
-+---------+---------+
-          |
-          v
-+-------------------+
-|   patch model     |
-|  patch document   |
-|  patch ops        |
-+---------+---------+
-          |
-          v
-+-------------------+
-|  local storage    |
-|  SQLite + files   |
-+-------------------+
++-------------------+      +-------------------+
+|      CLI          |      |   Tauri Shell     |
+| command parsing   |      | commands + UI     |
+| human output      |      | desktop entry     |
++---------+---------+      +---------+---------+
+          \                         /
+           \                       /
+            v                     v
+           +-----------------------+
+           |     shared core       |
+           | model / patch / store |
+           | source / project      |
+           +-----------+-----------+
+                       |
+                       v
+           +-----------------------+
+           |    local storage      |
+           |    SQLite + files     |
+           +-----------------------+
 ```
 
 ## 未来建议演化
@@ -155,7 +184,7 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - AI 生成 patch
 - 更完整的来源与证据模型
 - PDF 导入
-- Tauri 图形界面
+- 完整脑图式 Tauri 图形界面
 
 其中资料导入已经有一版最小实现：
 
@@ -164,4 +193,4 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - 初始节点树生成
 - chunk 级基础关联
 
-所以接下来更适合做的，不是“从零开始做 import”，而是继续把 import、evidence 和 AI patch 往同一套内核边界里收敛。
+目前已经有一层最小桌面壳，所以接下来更适合做的，不是“先把 GUI 做大”，而是让 GUI 继续薄、内核继续稳，并把 AI patch 能力接到同一套边界上。

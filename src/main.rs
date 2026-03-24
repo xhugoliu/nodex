@@ -1,21 +1,19 @@
 mod cli;
-mod model;
-mod patch;
-mod project;
-mod source;
-mod store;
 
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use nodex::{
+    model::{ApplyPatchReport, SourceImportPreview, SourceImportReport},
+    patch::PatchDocument,
+    store::{Workspace, format_timestamp},
+};
 
 use crate::cli::{
     Cli, Command, ExportCommand, ListFormat, NodeCommand, PatchCommand, SnapshotCommand,
     SourceCommand,
 };
-use crate::patch::PatchDocument;
-use crate::store::{Workspace, format_timestamp};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -319,7 +317,7 @@ fn print_patch_preview(patch: &PatchDocument) {
     }
 }
 
-fn print_patch_report(report: &crate::model::ApplyPatchReport) {
+fn print_patch_report(report: &ApplyPatchReport) {
     if let Some(summary) = &report.summary {
         println!("Summary: {summary}");
     }
@@ -331,7 +329,7 @@ fn print_patch_report(report: &crate::model::ApplyPatchReport) {
     }
 }
 
-fn print_source_import_report(report: &crate::model::SourceImportReport) {
+fn print_source_import_report(report: &SourceImportReport) {
     println!(
         "Imported source {} as {}",
         report.original_name, report.source_id
@@ -345,7 +343,7 @@ fn print_source_import_report(report: &crate::model::SourceImportReport) {
     println!("generated chunks: {}", report.chunk_count);
 }
 
-fn print_source_import_preview(preview: &crate::model::SourceImportPreview) {
+fn print_source_import_preview(preview: &SourceImportPreview) {
     println!(
         "Planned source import {} as {}",
         preview.report.original_name, preview.report.source_id

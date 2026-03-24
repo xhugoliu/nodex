@@ -32,7 +32,7 @@ pub struct SnapshotState {
     pub node_source_chunks: Vec<NodeSourceChunkRecord>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct PatchRunRecord {
     pub id: String,
     pub summary: Option<String>,
@@ -41,7 +41,7 @@ pub struct PatchRunRecord {
     pub applied_at: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SnapshotRecord {
     pub id: String,
     pub label: Option<String>,
@@ -49,7 +49,7 @@ pub struct SnapshotRecord {
     pub created_at: i64,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ApplyPatchReport {
     pub run_id: Option<String>,
     pub summary: Option<String>,
@@ -89,7 +89,7 @@ pub struct NodeSourceChunkRecord {
     pub chunk_id: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SourceImportReport {
     pub source_id: String,
     pub original_name: String,
@@ -100,25 +100,25 @@ pub struct SourceImportReport {
     pub chunk_count: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SourceImportPreview {
     pub report: SourceImportReport,
     pub patch: PatchDocument,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeSummary {
     pub id: String,
     pub title: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeSourceDetail {
     pub source: SourceRecord,
     pub chunks: Vec<SourceChunkRecord>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeDetail {
     pub node: Node,
     pub parent: Option<NodeSummary>,
@@ -126,13 +126,13 @@ pub struct NodeDetail {
     pub sources: Vec<NodeSourceDetail>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SourceChunkDetail {
     pub chunk: SourceChunkRecord,
     pub linked_nodes: Vec<NodeSummary>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct SourceDetail {
     pub source: SourceRecord,
     pub chunks: Vec<SourceChunkDetail>,
