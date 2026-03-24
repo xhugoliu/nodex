@@ -1,3 +1,5 @@
+import { open } from "@tauri-apps/plugin-dialog";
+
 const invoke = window.__TAURI__?.core?.invoke;
 
 const state = {
@@ -11,6 +13,7 @@ const state = {
 
 const els = {
   workspacePath: document.querySelector("#workspace-path"),
+  pickWorkspace: document.querySelector("#pick-workspace"),
   openWorkspace: document.querySelector("#open-workspace"),
   initWorkspace: document.querySelector("#init-workspace"),
   refreshWorkspace: document.querySelector("#refresh-workspace"),
@@ -37,6 +40,7 @@ const els = {
   snapshotLabel: document.querySelector("#snapshot-label"),
   saveSnapshot: document.querySelector("#save-snapshot"),
   sourcePath: document.querySelector("#source-path"),
+  pickSource: document.querySelector("#pick-source"),
   previewImport: document.querySelector("#preview-import"),
   runImport: document.querySelector("#run-import"),
   patchEditor: document.querySelector("#patch-editor"),
@@ -56,7 +60,9 @@ function bindEvents() {
   els.openWorkspace.addEventListener("click", () => loadWorkspace("open"));
   els.initWorkspace.addEventListener("click", () => loadWorkspace("init"));
   els.refreshWorkspace.addEventListener("click", () => refreshWorkspace());
+  els.pickWorkspace.addEventListener("click", () => chooseWorkspaceFolder());
   els.saveSnapshot.addEventListener("click", () => saveSnapshot());
+  els.pickSource.addEventListener("click", () => chooseSourceFile());
   els.previewImport.addEventListener("click", () => previewSourceImport());
   els.runImport.addEventListener("click", () => runSourceImport());
   els.draftAddChild.addEventListener("click", () => draftAddChildPatch());
@@ -69,6 +75,42 @@ function bindEvents() {
     els.patchEditor.value = "";
     setConsole("Patch editor cleared.");
   });
+}
+
+async function chooseWorkspaceFolder() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: "Choose a Nodex workspace directory",
+    });
+    if (typeof selected === "string") {
+      els.workspacePath.value = selected;
+      setConsole(`Selected workspace folder: ${selected}`);
+    }
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+async function chooseSourceFile() {
+  try {
+    const selected = await open({
+      directory: false,
+      multiple: false,
+      title: "Choose a source file",
+      filters: [
+        { name: "Markdown", extensions: ["md", "markdown"] },
+        { name: "Text", extensions: ["txt", "text"] },
+      ],
+    });
+    if (typeof selected === "string") {
+      els.sourcePath.value = selected;
+      setConsole(`Selected source file: ${selected}`);
+    }
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
 }
 
 async function loadWorkspace(mode) {
@@ -373,10 +415,17 @@ function renderHistory(entries) {
       <div class="item-title">${escapeHtml(entry.summary || "(no summary)")}</div>
       <div class="item-meta">${escapeHtml(entry.origin)} · ${escapeHtml(entry.id)}</div>
     `;
+    const row = document.createElement("div");
+    row.className = "row";
+    const previewButton = document.createElement("button");
+    previewButton.textContent = "Preview";
+    previewButton.addEventListener("click", () => previewPatchFromHistory(entry.id));
     const button = document.createElement("button");
     button.textContent = "Load Patch";
     button.addEventListener("click", () => loadPatchFromHistory(entry.id));
-    item.appendChild(button);
+    row.appendChild(previewButton);
+    row.appendChild(button);
+    item.appendChild(row);
     stack.appendChild(item);
   });
   els.historyList.className = "list";
@@ -512,6 +561,26 @@ async function loadPatchFromHistory(runId) {
     });
     els.patchEditor.value = JSON.stringify(patch, null, 2);
     setConsole(`Loaded patch run ${runId} into the editor.`, "success");
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+async function previewPatchFromHistory(runId) {
+  if (!ensureWorkspace()) return;
+  try {
+    const patch = await invoke("get_patch_document", {
+      start_path: state.workspacePath,
+      run_id: runId,
+    });
+    const report = await invoke("preview_patch", {
+      start_path: state.workspacePath,
+      patch_json: JSON.stringify(patch),
+    });
+    setConsole(
+      [`History preview: ${runId}`, "", renderPatchReport(report, true)].join("\n"),
+      "success",
+    );
   } catch (error) {
     setConsole(String(error), "error");
   }
