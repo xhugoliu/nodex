@@ -137,6 +137,19 @@ impl Workspace {
         Ok(records)
     }
 
+    pub fn patch_document_by_run_id(&self, run_id: &str) -> Result<PatchDocument> {
+        let patch_json: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT patch_json FROM patch_runs WHERE id = ?1",
+                [run_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let patch_json = patch_json.with_context(|| format!("patch run {run_id} was not found"))?;
+        Ok(serde_json::from_str(&patch_json)?)
+    }
+
     pub(super) fn prepare_patch_document(&self, patch: PatchDocument) -> Result<PatchDocument> {
         self.prepare_patch_document_with_context(patch, PatchValidationContext::default())
     }

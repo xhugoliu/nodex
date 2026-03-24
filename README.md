@@ -36,6 +36,7 @@ cargo run -- export outline
 - snapshot 保存与恢复
 - Markdown outline 导出
 - 最小 Tauri 桌面壳骨架
+- 桌面壳内的节点编辑 patch 起草与历史 patch 回填
 
 当前还没落地：
 

@@ -24,8 +24,10 @@
 - Tauri app 骨架
 - 工作区打开 / 初始化
 - 树视图与节点 / source 详情查看
+- 节点编辑 patch 起草
 - source import 预览 / 导入
 - patch 预览 / 应用
+- patch history 回填
 - snapshot 列表与恢复入口
 
 这对应的核心问题是：
@@ -140,8 +142,10 @@
 - 复用共享 Rust 内核，而不是前端单独维护状态语义
 - 工作区打开 / 初始化
 - 树视图、节点详情、source 详情
+- 节点编辑 patch 起草
 - source import preview / import
 - patch preview / apply
+- patch history 回填查看
 - snapshot list / restore
 
 关键问题：

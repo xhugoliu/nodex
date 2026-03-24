@@ -99,8 +99,10 @@ CLI 命令入口和输出分发。
 
 - 工作区打开 / 初始化
 - 树视图和详情查看
+- 节点编辑 patch 起草
 - source import 预览与执行
 - patch 预览与应用
+- patch history 回填查看
 - snapshot 列表与恢复入口
 
 ## 当前架构图

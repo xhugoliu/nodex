@@ -131,6 +131,12 @@ textarea {
   margin-bottom: 10px;
 }
 
+.card h4 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  color: var(--warm);
+}
+
 .muted {
   margin: 0;
   color: var(--muted);
@@ -171,6 +177,10 @@ textarea {
   font-size: 0.88rem;
 }
 
+.small-textarea {
+  min-height: 92px;
+}
+
 .row {
   display: flex;
   gap: 10px;
@@ -199,6 +209,15 @@ button.primary {
 
 button.primary:hover {
   background: var(--accent-strong);
+}
+
+button.danger {
+  background: rgba(180, 35, 24, 0.14);
+  color: var(--danger);
+}
+
+button.danger:hover {
+  background: rgba(180, 35, 24, 0.2);
 }
 
 button.ghost {
@@ -263,6 +282,18 @@ button.ghost {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+}
+
+.editor-block {
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid rgba(67, 54, 33, 0.08);
+}
+
+.editor-block:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 
 .snapshot-item button {

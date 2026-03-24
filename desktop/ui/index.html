@@ -93,6 +93,67 @@
           <div class="stack">
             <div class="card">
               <div class="card-head">
+                <h3>Node Editing</h3>
+              </div>
+              <p id="node-edit-meta" class="muted">Select a node to draft edit patches.</p>
+
+              <div class="editor-block">
+                <h4>Add Child</h4>
+                <label>
+                  Title
+                  <input id="add-child-title" placeholder="New child title" />
+                </label>
+                <label>
+                  Kind
+                  <input id="add-child-kind" placeholder="topic" />
+                </label>
+                <label>
+                  Body
+                  <textarea id="add-child-body" class="small-textarea" spellcheck="false"></textarea>
+                </label>
+                <div class="row">
+                  <button id="draft-add-child" class="primary">Draft Add Child</button>
+                </div>
+              </div>
+
+              <div class="editor-block">
+                <h4>Update Selected Node</h4>
+                <label>
+                  Title
+                  <input id="update-node-title" placeholder="leave blank to keep current" />
+                </label>
+                <label>
+                  Kind
+                  <input id="update-node-kind" placeholder="leave blank to keep current" />
+                </label>
+                <label>
+                  Body
+                  <textarea id="update-node-body" class="small-textarea" spellcheck="false"></textarea>
+                </label>
+                <div class="row">
+                  <button id="draft-update-node">Draft Update</button>
+                </div>
+              </div>
+
+              <div class="editor-block">
+                <h4>Move Selected Node</h4>
+                <label>
+                  New parent id
+                  <input id="move-node-parent" placeholder="root or another node id" />
+                </label>
+                <label>
+                  Position
+                  <input id="move-node-position" placeholder="optional index" />
+                </label>
+                <div class="row">
+                  <button id="draft-move-node">Draft Move</button>
+                  <button id="draft-delete-node" class="danger">Draft Delete</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
                 <h3>Source Import</h3>
               </div>
               <label>

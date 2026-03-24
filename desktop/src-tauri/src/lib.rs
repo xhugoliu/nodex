@@ -6,7 +6,7 @@ use nodex::{
         ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
         SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
     },
-    patch::PatchDocument,
+    patch::{PatchDocument, PatchOp},
     store::Workspace,
 };
 use serde::Serialize;
@@ -39,6 +39,65 @@ fn open_workspace_from(start_path: &str) -> Result<Workspace> {
 
 fn parse_patch_document(patch_json: &str) -> Result<PatchDocument> {
     serde_json::from_str(patch_json).context("failed to parse patch JSON")
+}
+
+fn add_node_patch(
+    title: String,
+    parent_id: String,
+    kind: Option<String>,
+    body: Option<String>,
+    position: Option<i64>,
+) -> PatchDocument {
+    PatchDocument {
+        version: 1,
+        summary: Some(format!("Add node \"{title}\"")),
+        ops: vec![PatchOp::AddNode {
+            id: None,
+            parent_id,
+            title,
+            kind,
+            body,
+            position,
+        }],
+    }
+}
+
+fn update_node_patch(
+    node_id: String,
+    title: Option<String>,
+    body: Option<String>,
+    kind: Option<String>,
+) -> PatchDocument {
+    PatchDocument {
+        version: 1,
+        summary: Some(format!("Update node {node_id}")),
+        ops: vec![PatchOp::UpdateNode {
+            id: node_id,
+            title,
+            body,
+            kind,
+        }],
+    }
+}
+
+fn move_node_patch(node_id: String, parent_id: String, position: Option<i64>) -> PatchDocument {
+    PatchDocument {
+        version: 1,
+        summary: Some(format!("Move node {node_id}")),
+        ops: vec![PatchOp::MoveNode {
+            id: node_id,
+            parent_id,
+            position,
+        }],
+    }
+}
+
+fn delete_node_patch(node_id: String) -> PatchDocument {
+    PatchDocument {
+        version: 1,
+        summary: Some(format!("Delete node {node_id}")),
+        ops: vec![PatchOp::DeleteNode { id: node_id }],
+    }
 }
 
 #[command]
@@ -100,6 +159,45 @@ fn apply_patch(start_path: String, patch_json: String) -> Result<ApplyPatchRepor
 }
 
 #[command]
+fn get_patch_document(start_path: String, run_id: String) -> Result<PatchDocument, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    workspace
+        .patch_document_by_run_id(&run_id)
+        .map_err(|err| err.to_string())
+}
+
+#[command]
+fn draft_add_node_patch(
+    title: String,
+    parent_id: String,
+    kind: Option<String>,
+    body: Option<String>,
+    position: Option<i64>,
+) -> PatchDocument {
+    add_node_patch(title, parent_id, kind, body, position)
+}
+
+#[command]
+fn draft_update_node_patch(
+    node_id: String,
+    title: Option<String>,
+    body: Option<String>,
+    kind: Option<String>,
+) -> PatchDocument {
+    update_node_patch(node_id, title, body, kind)
+}
+
+#[command]
+fn draft_move_node_patch(node_id: String, parent_id: String, position: Option<i64>) -> PatchDocument {
+    move_node_patch(node_id, parent_id, position)
+}
+
+#[command]
+fn draft_delete_node_patch(node_id: String) -> PatchDocument {
+    delete_node_patch(node_id)
+}
+
+#[command]
 fn save_snapshot(start_path: String, label: Option<String>) -> Result<SnapshotRecord, String> {
     let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     workspace.save_snapshot(label).map_err(|err| err.to_string())
@@ -119,7 +217,12 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             apply_patch,
+            draft_add_node_patch,
+            draft_delete_node_patch,
+            draft_move_node_patch,
+            draft_update_node_patch,
             get_node_detail,
+            get_patch_document,
             get_source_detail,
             import_source,
             init_workspace,

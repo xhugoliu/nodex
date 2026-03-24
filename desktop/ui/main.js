@@ -6,6 +6,7 @@ const state = {
   selectedSourceId: null,
   selectedNodeButton: null,
   selectedSourceButton: null,
+  selectedNodeDetail: null,
 };
 
 const els = {
@@ -20,6 +21,19 @@ const els = {
   snapshotList: document.querySelector("#snapshot-list"),
   historyList: document.querySelector("#history-list"),
   detailView: document.querySelector("#detail-view"),
+  nodeEditMeta: document.querySelector("#node-edit-meta"),
+  addChildTitle: document.querySelector("#add-child-title"),
+  addChildKind: document.querySelector("#add-child-kind"),
+  addChildBody: document.querySelector("#add-child-body"),
+  draftAddChild: document.querySelector("#draft-add-child"),
+  updateNodeTitle: document.querySelector("#update-node-title"),
+  updateNodeKind: document.querySelector("#update-node-kind"),
+  updateNodeBody: document.querySelector("#update-node-body"),
+  draftUpdateNode: document.querySelector("#draft-update-node"),
+  moveNodeParent: document.querySelector("#move-node-parent"),
+  moveNodePosition: document.querySelector("#move-node-position"),
+  draftMoveNode: document.querySelector("#draft-move-node"),
+  draftDeleteNode: document.querySelector("#draft-delete-node"),
   snapshotLabel: document.querySelector("#snapshot-label"),
   saveSnapshot: document.querySelector("#save-snapshot"),
   sourcePath: document.querySelector("#source-path"),
@@ -45,6 +59,10 @@ function bindEvents() {
   els.saveSnapshot.addEventListener("click", () => saveSnapshot());
   els.previewImport.addEventListener("click", () => previewSourceImport());
   els.runImport.addEventListener("click", () => runSourceImport());
+  els.draftAddChild.addEventListener("click", () => draftAddChildPatch());
+  els.draftUpdateNode.addEventListener("click", () => draftUpdateNodePatch());
+  els.draftMoveNode.addEventListener("click", () => draftMoveNodePatch());
+  els.draftDeleteNode.addEventListener("click", () => draftDeleteNodePatch());
   els.previewPatch.addEventListener("click", () => previewPatch());
   els.applyPatch.addEventListener("click", () => applyPatch());
   els.clearPatch.addEventListener("click", () => {
@@ -207,8 +225,10 @@ async function showNodeDetail(nodeId, button) {
     });
     state.selectedNodeId = nodeId;
     state.selectedSourceId = null;
+    state.selectedNodeDetail = detail;
     markActive(button, "node");
     renderNodeDetail(detail);
+    syncNodeEditForm(detail);
   } catch (error) {
     setConsole(String(error), "error");
   }
@@ -223,8 +243,10 @@ async function showSourceDetail(sourceId, button) {
     });
     state.selectedSourceId = sourceId;
     state.selectedNodeId = null;
+    state.selectedNodeDetail = null;
     markActive(button, "source");
     renderSourceDetail(detail);
+    clearNodeEditForm("Select a node to draft edit patches.");
   } catch (error) {
     setConsole(String(error), "error");
   }
@@ -237,6 +259,11 @@ function applyWorkspaceOverview(overview) {
   renderSources(overview.sources);
   renderSnapshots(overview.snapshots);
   renderHistory(overview.patch_history);
+  if (state.selectedNodeId && !findNodeById(overview.tree, state.selectedNodeId)) {
+    state.selectedNodeId = null;
+    state.selectedNodeDetail = null;
+    clearNodeEditForm("Select a node to draft edit patches.");
+  }
 }
 
 function renderTree(tree) {
@@ -346,6 +373,10 @@ function renderHistory(entries) {
       <div class="item-title">${escapeHtml(entry.summary || "(no summary)")}</div>
       <div class="item-meta">${escapeHtml(entry.origin)} · ${escapeHtml(entry.id)}</div>
     `;
+    const button = document.createElement("button");
+    button.textContent = "Load Patch";
+    button.addEventListener("click", () => loadPatchFromHistory(entry.id));
+    item.appendChild(button);
     stack.appendChild(item);
   });
   els.historyList.className = "list";
@@ -438,7 +469,7 @@ function renderSourceDetail(detail) {
 }
 
 function renderImportPreview(preview) {
-  const lines = preview.patch.ops.map((op) => `- ${op.type || op.kind || "op"}`);
+  const lines = preview.patch.ops.map((op) => `- ${op.type || "op"}`);
   return [
     `Dry preview for ${preview.report.original_name}`,
     `planned source id: ${preview.report.source_id}`,
@@ -470,6 +501,160 @@ function renderPatchReport(report, dryRun) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+async function loadPatchFromHistory(runId) {
+  if (!ensureWorkspace()) return;
+  try {
+    const patch = await invoke("get_patch_document", {
+      start_path: state.workspacePath,
+      run_id: runId,
+    });
+    els.patchEditor.value = JSON.stringify(patch, null, 2);
+    setConsole(`Loaded patch run ${runId} into the editor.`, "success");
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+async function draftAddChildPatch() {
+  if (!ensureNodeSelected()) return;
+  const title = els.addChildTitle.value.trim();
+  if (!title) {
+    setConsole("Add child requires a title.", "error");
+    return;
+  }
+
+  try {
+    const patch = await invoke("draft_add_node_patch", {
+      title,
+      parent_id: state.selectedNodeId,
+      kind: optionalText(els.addChildKind.value) || "topic",
+      body: optionalText(els.addChildBody.value),
+      position: null,
+    });
+    loadDraftIntoEditor(patch, `Drafted add-child patch under ${state.selectedNodeId}.`);
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+async function draftUpdateNodePatch() {
+  if (!ensureNodeSelected()) return;
+
+  const title = optionalText(els.updateNodeTitle.value);
+  const kind = optionalText(els.updateNodeKind.value);
+  const body = optionalTextareaValue(els.updateNodeBody);
+  if (title === null && kind === null && body === undefined) {
+    setConsole("Update draft needs at least one changed field.", "error");
+    return;
+  }
+
+  try {
+    const patch = await invoke("draft_update_node_patch", {
+      node_id: state.selectedNodeId,
+      title,
+      kind,
+      body: body === undefined ? null : body,
+    });
+    loadDraftIntoEditor(patch, `Drafted update patch for ${state.selectedNodeId}.`);
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+async function draftMoveNodePatch() {
+  if (!ensureNodeSelected()) return;
+  const parentId = els.moveNodeParent.value.trim();
+  if (!parentId) {
+    setConsole("Move draft requires a new parent id.", "error");
+    return;
+  }
+
+  try {
+    const patch = await invoke("draft_move_node_patch", {
+      node_id: state.selectedNodeId,
+      parent_id: parentId,
+      position: parseOptionalInteger(els.moveNodePosition.value),
+    });
+    loadDraftIntoEditor(patch, `Drafted move patch for ${state.selectedNodeId}.`);
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+async function draftDeleteNodePatch() {
+  if (!ensureNodeSelected()) return;
+
+  try {
+    const patch = await invoke("draft_delete_node_patch", {
+      node_id: state.selectedNodeId,
+    });
+    loadDraftIntoEditor(patch, `Drafted delete patch for ${state.selectedNodeId}.`);
+  } catch (error) {
+    setConsole(String(error), "error");
+  }
+}
+
+function loadDraftIntoEditor(patch, message) {
+  els.patchEditor.value = JSON.stringify(patch, null, 2);
+  setConsole(message, "success");
+}
+
+function syncNodeEditForm(detail) {
+  els.nodeEditMeta.textContent = `Selected node: ${detail.node.title} [${detail.node.id}]`;
+  els.updateNodeTitle.value = detail.node.title || "";
+  els.updateNodeKind.value = detail.node.kind || "";
+  els.updateNodeBody.value = detail.node.body || "";
+  els.moveNodeParent.value = detail.node.parent?.id || "";
+}
+
+function clearNodeEditForm(message) {
+  els.nodeEditMeta.textContent = message;
+  els.updateNodeTitle.value = "";
+  els.updateNodeKind.value = "";
+  els.updateNodeBody.value = "";
+  els.addChildTitle.value = "";
+  els.addChildKind.value = "";
+  els.addChildBody.value = "";
+  els.moveNodeParent.value = "";
+  els.moveNodePosition.value = "";
+}
+
+function ensureNodeSelected() {
+  if (state.selectedNodeId) return true;
+  setConsole("Select a node in the tree first.", "error");
+  return false;
+}
+
+function findNodeById(treeNode, nodeId) {
+  if (treeNode.node.id === nodeId) return treeNode;
+  for (const child of treeNode.children) {
+    const match = findNodeById(child, nodeId);
+    if (match) return match;
+  }
+  return null;
+}
+
+function optionalText(value) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function optionalTextareaValue(element) {
+  const raw = element.value;
+  if (raw === "") return undefined;
+  return raw;
+}
+
+function parseOptionalInteger(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (Number.isNaN(parsed)) {
+    throw new Error(`Invalid integer value: ${trimmed}`);
+  }
+  return parsed;
 }
 
 function markActive(button, kind) {
