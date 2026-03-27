@@ -91,9 +91,9 @@ CLI 命令入口和输出分发。
 - 复用 `nodex` 共享内核
 - 负责 Tauri app 配置与窗口生命周期
 
-### `desktop/ui`
+### `desktop/src`
 
-最小桌面壳前端。
+最小桌面壳前端，当前用 `React + Vite + TypeScript + Tailwind CSS` 组织。
 
 职责：
 
@@ -104,6 +104,16 @@ CLI 命令入口和输出分发。
 - patch 预览与应用
 - patch history 回填查看
 - snapshot 列表与恢复入口
+
+### `desktop/index.html` + `desktop/vite.config.ts`
+
+桌面前端入口与构建编排。
+
+职责：
+
+- 提供 Vite 入口页
+- 管理前端开发服务器与生产构建
+- 把 Tauri dev/build 接到前端产物
 
 ## 当前架构图
 

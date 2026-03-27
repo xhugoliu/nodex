@@ -35,7 +35,7 @@ cargo run -- export outline
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
-- 最小 Tauri 桌面壳骨架
+- 基于 React + Vite + TypeScript + Tailwind CSS 的最小 Tauri 桌面壳
 - 桌面壳内的节点编辑 patch 起草与历史 patch 回填
 
 当前还没落地：

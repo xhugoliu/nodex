@@ -1,0 +1,389 @@
+import type { LanguagePreference, Locale } from "./types";
+
+type TranslationValue = string | TranslationTree;
+
+interface TranslationTree {
+  [key: string]: TranslationValue;
+}
+
+export const LANGUAGE_STORAGE_KEY = "nodex.desktop.language";
+
+const translations: Record<Locale, TranslationTree> = {
+  "en-US": {
+    app: {
+      title: "Nodex",
+    },
+    hero: {
+      eyebrow: "Nodex Desktop",
+      title: "Patch-first mind map shell",
+      lede:
+        "A thin desktop layer over the local Nodex core. Open a workspace, inspect structure, preview source imports, and apply patches.",
+    },
+    language: {
+      label: "Language",
+      auto: "Follow system",
+      zhCN: "简体中文",
+      enUS: "English",
+    },
+    workspace: {
+      pathLabel: "Workspace path",
+      pathPlaceholder: "/path/to/project or workspace",
+      chooseFolder: "Choose Folder",
+      open: "Open Workspace",
+      init: "Init Workspace",
+      refresh: "Refresh",
+      meta: "{name} — {path}",
+    },
+    sidebar: {
+      workspace: "Workspace",
+      workspaceEmpty: "No workspace opened yet.",
+      tree: "Tree",
+      treeEmpty: "Open a workspace to inspect its tree.",
+      sources: "Sources",
+      sourcesEmpty: "No source loaded.",
+      snapshots: "Snapshots",
+      saveSnapshot: "Save snapshot",
+      snapshotLabelPlaceholder: "optional label",
+      saveSnapshotButton: "Save Snapshot",
+      snapshotsEmpty: "No snapshots loaded.",
+      patchHistory: "Patch History",
+      patchHistoryEmpty: "No patch history loaded.",
+    },
+    detail: {
+      title: "Inspector",
+      emptyMeta: "Select a node or source.",
+      emptyBody: "Details will appear here.",
+      nodeMeta: "Node {id}",
+      sourceMeta: "Source {id}",
+      nodeSection: "Node",
+      relationsSection: "Relations",
+      sourcesSection: "Sources",
+      sourceSection: "Source",
+      chunksSection: "Chunks",
+      parent: "Parent: {value}",
+      children: "Children: {value}",
+      noBody: "(no body)",
+      noSourceLinks: "No source links.",
+      noChunks: "No chunks.",
+      noLabel: "(no label)",
+      sourceLevelOnly: "Source-level link only",
+      chunkMeta: "Chunk {ordinal} · {start}-{end}",
+      nodes: "Nodes: {value}",
+      none: "(none)",
+    },
+    actions: {
+      title: "Actions",
+      subtitle: "Preview first, then apply.",
+    },
+    fields: {
+      title: "Title",
+      kind: "Kind",
+      body: "Body",
+    },
+    nodeEditing: {
+      title: "Node Editing",
+      emptyMeta: "Select a node to draft edit patches.",
+      selectedMeta: "Selected node: {title} [{id}]",
+      addChild: "Add Child",
+      addChildTitlePlaceholder: "New child title",
+      kindPlaceholder: "topic",
+      draftAddChild: "Draft Add Child",
+      updateNode: "Update Selected Node",
+      keepCurrentPlaceholder: "leave blank to keep current",
+      moveNode: "Move Selected Node",
+      newParentId: "New parent id",
+      moveParentPlaceholder: "root or another node id",
+      position: "Position",
+      positionPlaceholder: "optional index",
+      draftMove: "Draft Move",
+      draftDelete: "Draft Delete",
+      draftUpdate: "Draft Update",
+    },
+    sourceImport: {
+      title: "Source Import",
+      pathLabel: "Source file path",
+      pathPlaceholder: "/path/to/file.md",
+      chooseFile: "Choose File",
+      preview: "Preview Import",
+      run: "Run Import",
+    },
+    patchEditor: {
+      title: "Patch Editor",
+      clear: "Clear",
+      label: "Patch JSON",
+      preview: "Preview Patch",
+      apply: "Apply Patch",
+    },
+    console: {
+      title: "Console",
+      empty: "Nothing to show yet.",
+    },
+    history: {
+      preview: "Preview",
+      load: "Load Patch",
+      restore: "Restore",
+      noSummary: "(no summary)",
+      noLabel: "(no label)",
+    },
+    messages: {
+      tauriUnavailable: "Tauri runtime is not available in this context.",
+      dialogUnavailable: "The dialog API is not available in this context.",
+      patchEditorCleared: "Patch editor cleared.",
+      chooseWorkspaceSuccess: "Selected workspace folder: {path}",
+      chooseSourceSuccess: "Selected source file: {path}",
+      provideWorkspacePath: "Please provide a workspace path first.",
+      provideParentId: "Move draft requires a new parent id.",
+      provideSourcePath: "Please provide a source file path.",
+      initializedWorkspace: "Initialized and opened workspace at {path}.",
+      openedWorkspace: "Opened workspace at {path}.",
+      refreshedWorkspace: "Refreshed {name}.",
+      patchEditorEmpty: "Patch editor is empty.",
+      savedSnapshot: "Saved snapshot {id}.",
+      restoredSnapshot: "Restored snapshot {id}.",
+      loadedPatchRun: "Loaded patch run {id} into the editor.",
+      historyPreview: "History preview: {id}",
+      addChildRequiresTitle: "Add child requires a title.",
+      updateNeedsField: "Update draft needs at least one changed field.",
+      draftedAddChild: "Drafted add-child patch under {nodeId}.",
+      draftedUpdate: "Drafted update patch for {nodeId}.",
+      draftedMove: "Drafted move patch for {nodeId}.",
+      draftedDelete: "Drafted delete patch for {nodeId}.",
+      selectNodeFirst: "Select a node in the tree first.",
+      selectWorkspaceFirst: "Open or initialize a workspace first.",
+      invalidInteger: "Invalid integer value: {value}",
+    },
+    reports: {
+      importPreviewTitle: "Dry preview for {name}",
+      plannedSourceId: "planned source id: {id}",
+      plannedRootNode: "planned root node: {title} [{id}]",
+      plannedNodes: "planned nodes: {count}",
+      plannedChunks: "planned chunks: {count}",
+      summary: "summary: {value}",
+      importedTitle: "Imported {name} as {id}",
+      storedFile: "stored file: {value}",
+      rootNode: "root node: {title} [{id}]",
+      generatedNodes: "generated nodes: {count}",
+      generatedChunks: "generated chunks: {count}",
+      patchPreviewSucceeded: "Patch preview succeeded.",
+      patchApplied: "Patch applied.",
+      runId: "run id: {id}",
+    },
+  },
+  "zh-CN": {
+    app: {
+      title: "Nodex",
+    },
+    hero: {
+      eyebrow: "Nodex 桌面壳",
+      title: "Patch-first 脑图工作台壳层",
+      lede:
+        "这是包在本地 Nodex 内核外的一层轻桌面壳。你可以打开工作区、查看结构、预览资料导入，并对 patch 进行预览和应用。",
+    },
+    language: {
+      label: "语言",
+      auto: "跟随系统",
+      zhCN: "简体中文",
+      enUS: "English",
+    },
+    workspace: {
+      pathLabel: "工作区路径",
+      pathPlaceholder: "/path/to/project or workspace",
+      chooseFolder: "选择文件夹",
+      open: "打开工作区",
+      init: "初始化工作区",
+      refresh: "刷新",
+      meta: "{name} — {path}",
+    },
+    sidebar: {
+      workspace: "工作区",
+      workspaceEmpty: "还没有打开工作区。",
+      tree: "树视图",
+      treeEmpty: "先打开工作区，再查看树结构。",
+      sources: "来源",
+      sourcesEmpty: "还没有来源。",
+      snapshots: "快照",
+      saveSnapshot: "保存快照",
+      snapshotLabelPlaceholder: "可选标签",
+      saveSnapshotButton: "保存快照",
+      snapshotsEmpty: "还没有快照。",
+      patchHistory: "Patch 历史",
+      patchHistoryEmpty: "还没有 patch 历史。",
+    },
+    detail: {
+      title: "详情面板",
+      emptyMeta: "请选择一个节点或来源。",
+      emptyBody: "详情会显示在这里。",
+      nodeMeta: "节点 {id}",
+      sourceMeta: "来源 {id}",
+      nodeSection: "节点",
+      relationsSection: "关系",
+      sourcesSection: "来源",
+      sourceSection: "来源",
+      chunksSection: "切片",
+      parent: "父节点：{value}",
+      children: "子节点：{value}",
+      noBody: "（无正文）",
+      noSourceLinks: "没有来源关联。",
+      noChunks: "没有切片。",
+      noLabel: "（无标签）",
+      sourceLevelOnly: "只有 source-level link",
+      chunkMeta: "切片 {ordinal} · {start}-{end}",
+      nodes: "关联节点：{value}",
+      none: "（无）",
+    },
+    actions: {
+      title: "操作",
+      subtitle: "先预览，再应用。",
+    },
+    fields: {
+      title: "标题",
+      kind: "类型",
+      body: "正文",
+    },
+    nodeEditing: {
+      title: "节点编辑",
+      emptyMeta: "选择一个节点后，可以起草编辑 patch。",
+      selectedMeta: "当前节点：{title} [{id}]",
+      addChild: "新增子节点",
+      addChildTitlePlaceholder: "新子节点标题",
+      kindPlaceholder: "topic",
+      draftAddChild: "起草新增子节点",
+      updateNode: "更新当前节点",
+      keepCurrentPlaceholder: "留空则保持当前值",
+      moveNode: "移动当前节点",
+      newParentId: "新父节点 id",
+      moveParentPlaceholder: "root 或其他节点 id",
+      position: "位置",
+      positionPlaceholder: "可选索引",
+      draftMove: "起草移动",
+      draftDelete: "起草删除",
+      draftUpdate: "起草更新",
+    },
+    sourceImport: {
+      title: "资料导入",
+      pathLabel: "来源文件路径",
+      pathPlaceholder: "/path/to/file.md",
+      chooseFile: "选择文件",
+      preview: "预览导入",
+      run: "执行导入",
+    },
+    patchEditor: {
+      title: "Patch 编辑器",
+      clear: "清空",
+      label: "Patch JSON",
+      preview: "预览 Patch",
+      apply: "应用 Patch",
+    },
+    console: {
+      title: "控制台",
+      empty: "这里还没有内容。",
+    },
+    history: {
+      preview: "预览",
+      load: "载入 Patch",
+      restore: "恢复",
+      noSummary: "（无摘要）",
+      noLabel: "（无标签）",
+    },
+    messages: {
+      tauriUnavailable: "当前环境里没有可用的 Tauri 运行时。",
+      dialogUnavailable: "当前环境里没有可用的文件对话框能力。",
+      patchEditorCleared: "Patch 编辑器已清空。",
+      chooseWorkspaceSuccess: "已选择工作区文件夹：{path}",
+      chooseSourceSuccess: "已选择来源文件：{path}",
+      provideWorkspacePath: "请先输入工作区路径。",
+      provideParentId: "移动草案需要填写新的父节点 id。",
+      provideSourcePath: "请先输入来源文件路径。",
+      initializedWorkspace: "已初始化并打开工作区：{path}",
+      openedWorkspace: "已打开工作区：{path}",
+      refreshedWorkspace: "已刷新 {name}。",
+      patchEditorEmpty: "Patch 编辑器目前为空。",
+      savedSnapshot: "已保存快照 {id}。",
+      restoredSnapshot: "已恢复快照 {id}。",
+      loadedPatchRun: "已将 patch run {id} 载入编辑器。",
+      historyPreview: "历史 patch 预览：{id}",
+      addChildRequiresTitle: "新增子节点必须填写标题。",
+      updateNeedsField: "更新草案至少要包含一个变更字段。",
+      draftedAddChild: "已为 {nodeId} 起草新增子节点 patch。",
+      draftedUpdate: "已为 {nodeId} 起草更新 patch。",
+      draftedMove: "已为 {nodeId} 起草移动 patch。",
+      draftedDelete: "已为 {nodeId} 起草删除 patch。",
+      selectNodeFirst: "请先在树里选择一个节点。",
+      selectWorkspaceFirst: "请先打开或初始化一个工作区。",
+      invalidInteger: "无效的整数值：{value}",
+    },
+    reports: {
+      importPreviewTitle: "{name} 的 dry preview",
+      plannedSourceId: "计划 source id：{id}",
+      plannedRootNode: "计划根节点：{title} [{id}]",
+      plannedNodes: "计划节点数：{count}",
+      plannedChunks: "计划切片数：{count}",
+      summary: "摘要：{value}",
+      importedTitle: "已导入 {name} 为 {id}",
+      storedFile: "存储文件：{value}",
+      rootNode: "根节点：{title} [{id}]",
+      generatedNodes: "生成节点数：{count}",
+      generatedChunks: "生成切片数：{count}",
+      patchPreviewSucceeded: "Patch 预览成功。",
+      patchApplied: "Patch 已应用。",
+      runId: "运行记录：{id}",
+    },
+  },
+};
+
+export function loadLanguagePreference(): LanguagePreference {
+  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (stored === "zh-CN" || stored === "en-US" || stored === "auto") {
+    return stored;
+  }
+  return "auto";
+}
+
+export function resolveSystemLocale(): Locale {
+  const candidates = navigator.languages?.length
+    ? navigator.languages
+    : [navigator.language];
+
+  for (const locale of candidates) {
+    if (!locale) {
+      continue;
+    }
+
+    const normalized = locale.toLowerCase();
+    if (normalized.startsWith("zh")) {
+      return "zh-CN";
+    }
+    if (normalized.startsWith("en")) {
+      return "en-US";
+    }
+  }
+
+  return "en-US";
+}
+
+export function translate(
+  locale: Locale,
+  key: string,
+  vars: Record<string, string | number> = {},
+): string {
+  const template =
+    getMessage(translations[locale], key) ??
+    getMessage(translations["en-US"], key) ??
+    key;
+
+  return template.replace(/\{(\w+)\}/g, (_, name) =>
+    String(vars[name] ?? ""),
+  );
+}
+
+function getMessage(localeTree: TranslationTree, key: string): string | undefined {
+  let current: TranslationValue | undefined = localeTree;
+  for (const part of key.split(".")) {
+    if (!current || typeof current === "string") {
+      return undefined;
+    }
+    current = current[part];
+  }
+
+  return typeof current === "string" ? current : undefined;
+}

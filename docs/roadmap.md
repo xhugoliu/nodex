@@ -138,7 +138,8 @@
 
 当前已落地的最小版本：
 
-- `desktop/src-tauri` + `desktop/ui` 最小壳工程
+- `desktop/src-tauri` + `desktop/src` 最小壳工程
+- 前端已切到 `React + Vite + TypeScript + Tailwind CSS`
 - 复用共享 Rust 内核，而不是前端单独维护状态语义
 - 工作区打开 / 初始化
 - 树视图、节点详情、source 详情

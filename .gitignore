@@ -1,5 +1,6 @@
 /target
 /.nodex
+/desktop/dist
 /desktop/node_modules
 /desktop/src-tauri/target
 /desktop/src-tauri/gen
