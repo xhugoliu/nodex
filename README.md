@@ -36,7 +36,9 @@ cargo run -- export outline
 - snapshot 保存与恢复
 - Markdown outline 导出
 - 基于 React + Vite + TypeScript + Tailwind CSS 的最小 Tauri 桌面壳
-- 桌面壳内的节点编辑 patch 起草与历史 patch 回填
+- 单屏三栏桌面工作台：树 / 详情摘要 / 统一编辑器
+- 工作区入口收敛为“打开文件夹后自动打开或初始化”
+- 由原生 Tauri 菜单栏承载低频动作：语言、source import、snapshot、历史 patch
 
 当前还没落地：
 

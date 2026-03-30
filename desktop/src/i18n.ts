@@ -49,6 +49,14 @@ const translations: Record<Locale, TranslationTree> = {
       patchHistory: "Patch History",
       patchHistoryEmpty: "No patch history loaded.",
     },
+    navigator: {
+      title: "Workspace",
+      searchLabel: "Filter tree",
+      searchPlaceholder: "Search title, id, or kind",
+      searchResults: "{count} matches",
+      totalNodes: "{count} nodes",
+      searchEmpty: "No nodes matched this filter.",
+    },
     detail: {
       title: "Inspector",
       emptyMeta: "Select a node or source.",
@@ -65,11 +73,16 @@ const translations: Record<Locale, TranslationTree> = {
       noBody: "(no body)",
       noSourceLinks: "No source links.",
       noChunks: "No chunks.",
+      moreChunks: "{count} more chunks",
       noLabel: "(no label)",
       sourceLevelOnly: "Source-level link only",
       chunkMeta: "Chunk {ordinal} · {start}-{end}",
       nodes: "Nodes: {value}",
       none: "(none)",
+      createdAt: "Created: {value}",
+      updatedAt: "Updated: {value}",
+      importedAt: "Imported: {value}",
+      openSource: "Open source",
     },
     actions: {
       title: "Actions",
@@ -114,6 +127,14 @@ const translations: Record<Locale, TranslationTree> = {
       preview: "Preview Patch",
       apply: "Apply Patch",
     },
+    composer: {
+      emptyTitle: "No patch drafted yet.",
+      emptyBody:
+        "Draft from node edits, source import preview, or patch history to keep the patch-first flow visible.",
+      patchOps: "{count} ops in draft",
+      openPatch: "Open patch",
+      invalidPatch: "Patch draft cannot be parsed.",
+    },
     console: {
       title: "Console",
       empty: "Nothing to show yet.",
@@ -124,6 +145,15 @@ const translations: Record<Locale, TranslationTree> = {
       restore: "Restore",
       noSummary: "(no summary)",
       noLabel: "(no label)",
+    },
+    menu: {
+      workspace: "Workspace",
+      source: "Source",
+      history: "History",
+      restoreSnapshot: "Restore Snapshot",
+      recentSources: "Recent Sources",
+      recentPatches: "Recent Patches",
+      none: "(none)",
     },
     messages: {
       tauriUnavailable: "Tauri runtime is not available in this context.",
@@ -150,6 +180,7 @@ const translations: Record<Locale, TranslationTree> = {
       draftedDelete: "Drafted delete patch for {nodeId}.",
       selectNodeFirst: "Select a node in the tree first.",
       selectWorkspaceFirst: "Open or initialize a workspace first.",
+      moveNeedsChange: "Move draft needs a new parent or position change.",
       invalidInteger: "Invalid integer value: {value}",
     },
     reports: {
@@ -209,6 +240,14 @@ const translations: Record<Locale, TranslationTree> = {
       patchHistory: "Patch 历史",
       patchHistoryEmpty: "还没有 patch 历史。",
     },
+    navigator: {
+      title: "工作区",
+      searchLabel: "筛选树视图",
+      searchPlaceholder: "搜索标题、id 或 kind",
+      searchResults: "{count} 个匹配节点",
+      totalNodes: "共 {count} 个节点",
+      searchEmpty: "没有匹配当前筛选的节点。",
+    },
     detail: {
       title: "详情面板",
       emptyMeta: "请选择一个节点或来源。",
@@ -225,11 +264,16 @@ const translations: Record<Locale, TranslationTree> = {
       noBody: "（无正文）",
       noSourceLinks: "没有来源关联。",
       noChunks: "没有切片。",
+      moreChunks: "另有 {count} 个切片",
       noLabel: "（无标签）",
       sourceLevelOnly: "只有 source-level link",
       chunkMeta: "切片 {ordinal} · {start}-{end}",
       nodes: "关联节点：{value}",
       none: "（无）",
+      createdAt: "创建时间：{value}",
+      updatedAt: "更新时间：{value}",
+      importedAt: "导入时间：{value}",
+      openSource: "打开来源",
     },
     actions: {
       title: "操作",
@@ -274,6 +318,14 @@ const translations: Record<Locale, TranslationTree> = {
       preview: "预览 Patch",
       apply: "应用 Patch",
     },
+    composer: {
+      emptyTitle: "还没有待处理的 patch",
+      emptyBody:
+        "可以先起草节点变更、预览资料导入，或从历史里载入 patch，让 patch-first 流程始终可见。",
+      patchOps: "当前草案包含 {count} 个操作",
+      openPatch: "打开 Patch",
+      invalidPatch: "Patch 草案解析失败。",
+    },
     console: {
       title: "控制台",
       empty: "这里还没有内容。",
@@ -284,6 +336,15 @@ const translations: Record<Locale, TranslationTree> = {
       restore: "恢复",
       noSummary: "（无摘要）",
       noLabel: "（无标签）",
+    },
+    menu: {
+      workspace: "工作区",
+      source: "来源",
+      history: "历史",
+      restoreSnapshot: "恢复快照",
+      recentSources: "最近来源",
+      recentPatches: "最近 Patch",
+      none: "（无）",
     },
     messages: {
       tauriUnavailable: "当前环境里没有可用的 Tauri 运行时。",
@@ -310,6 +371,7 @@ const translations: Record<Locale, TranslationTree> = {
       draftedDelete: "已为 {nodeId} 起草删除 patch。",
       selectNodeFirst: "请先在树里选择一个节点。",
       selectWorkspaceFirst: "请先打开或初始化一个工作区。",
+      moveNeedsChange: "移动草案至少要变更父节点或位置。",
       invalidInteger: "无效的整数值：{value}",
     },
     reports: {

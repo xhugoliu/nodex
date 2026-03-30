@@ -90,6 +90,14 @@ CLI 命令入口和输出分发。
 - 暴露桌面命令给前端调用
 - 复用 `nodex` 共享内核
 - 负责 Tauri app 配置与窗口生命周期
+- 维护原生 app menu，而不是把菜单逻辑放在前端模拟
+- 把低频桌面动作映射成原生菜单事件：
+  - 打开文件夹并自动“打开或初始化工作区”
+  - source import preview / import
+  - snapshot 保存 / 恢复
+  - 历史 patch 载入
+  - 语言切换
+- 把菜单动作和工作区状态变化通过事件发回前端
 
 ### `desktop/src`
 
@@ -97,13 +105,15 @@ CLI 命令入口和输出分发。
 
 职责：
 
-- 工作区打开 / 初始化
-- 树视图和详情查看
-- 节点编辑 patch 起草
-- source import 预览与执行
-- patch 预览与应用
-- patch history 回填查看
-- snapshot 列表与恢复入口
+- 维持单屏、薄壳的桌面工作台
+- 提供三块核心区域：
+  - 左栏：树视图
+  - 中栏：详情摘要与底部控制台
+  - 右栏：统一节点编辑器与 patch 编辑器
+- 负责把节点编辑动作起草为 patch
+- 负责 patch 预览与应用
+- 监听原生菜单事件并更新页面状态
+- 不再把所有低频入口都堆在页面里
 
 ### `desktop/index.html` + `desktop/vite.config.ts`
 
@@ -118,25 +128,25 @@ CLI 命令入口和输出分发。
 ## 当前架构图
 
 ```text
-+-------------------+      +-------------------+
-|      CLI          |      |   Tauri Shell     |
-| command parsing   |      | commands + UI     |
-| human output      |      | desktop entry     |
-+---------+---------+      +---------+---------+
-          \                         /
-           \                       /
-            v                     v
-           +-----------------------+
-           |     shared core       |
-           | model / patch / store |
-           | source / project      |
-           +-----------+-----------+
-                       |
-                       v
-           +-----------------------+
-           |    local storage      |
-           |    SQLite + files     |
-           +-----------------------+
++-------------------+      +----------------------------+
+|      CLI          |      |       Tauri Shell          |
+| command parsing   |      | native menu + thin UI      |
+| human output      |      | desktop commands + events  |
++---------+---------+      +-------------+--------------+
+          \                               /
+           \                             /
+            v                           v
+           +-----------------------------+
+           |         shared core         |
+           | model / patch / store       |
+           | source / project            |
+           +--------------+--------------+
+                          |
+                          v
+           +-----------------------------+
+           |        local storage        |
+           |        SQLite + files       |
+           +-----------------------------+
 ```
 
 ## 未来建议演化

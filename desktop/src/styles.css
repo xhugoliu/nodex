@@ -2,21 +2,21 @@
 
 :root {
   color-scheme: light;
-  --bg: #f7f3e8;
-  --bg-warm: #f2e9d3;
-  --panel: rgba(255, 252, 245, 0.84);
-  --panel-strong: rgba(255, 250, 239, 0.94);
-  --line: rgba(67, 54, 33, 0.14);
-  --line-soft: rgba(67, 54, 33, 0.08);
-  --text: #2a2114;
-  --muted: #6f614f;
-  --accent: #0f766e;
-  --accent-strong: #0c5d57;
-  --warm: #c98c27;
+  --bg: #f3f4f6;
+  --bg-warm: #e5e7eb;
+  --panel: rgba(255, 255, 255, 0.96);
+  --panel-strong: rgba(255, 255, 255, 0.98);
+  --line: rgba(15, 23, 42, 0.12);
+  --line-soft: rgba(15, 23, 42, 0.06);
+  --text: #111827;
+  --muted: #6b7280;
+  --accent: #111827;
+  --accent-strong: #030712;
+  --warm: #6b7280;
   --danger: #b42318;
-  --shadow: 0 24px 60px rgba(49, 35, 14, 0.12);
+  --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
   --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
-  --font-serif: "Iowan Old Style", "Palatino Linotype", serif;
+  --font-serif: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "SFMono-Regular", "Menlo", "Monaco", monospace;
 }
 
@@ -30,31 +30,7 @@ body {
   margin: 0;
   color: var(--text);
   font-family: var(--font-sans);
-  background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 28%),
-    radial-gradient(circle at top right, rgba(201, 140, 39, 0.16), transparent 22%),
-    linear-gradient(180deg, #f6f1e3 0%, var(--bg) 100%);
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.1),
-      rgba(255, 255, 255, 0)
-    ),
-    repeating-linear-gradient(
-      135deg,
-      rgba(67, 54, 33, 0.015) 0,
-      rgba(67, 54, 33, 0.015) 8px,
-      transparent 8px,
-      transparent 24px
-    );
-  opacity: 0.55;
+  background: var(--bg);
 }
 
 * {
@@ -62,7 +38,7 @@ body::before {
 }
 
 ::selection {
-  background: rgba(15, 118, 110, 0.16);
+  background: rgba(17, 24, 39, 0.12);
   color: var(--text);
 }
 
@@ -82,14 +58,9 @@ input,
 textarea,
 select {
   transition:
-    transform 180ms ease,
     border-color 180ms ease,
     background-color 180ms ease,
     box-shadow 180ms ease;
-}
-
-button:not(:disabled):hover {
-  transform: translateY(-1px);
 }
 
 .surface-panel {
@@ -102,12 +73,12 @@ button:not(:disabled):hover {
 }
 
 .surface-blur {
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(8px);
 }
 
 .scroll-panel {
   scrollbar-width: thin;
-  scrollbar-color: rgba(111, 97, 79, 0.4) transparent;
+  scrollbar-color: rgba(107, 114, 128, 0.4) transparent;
 }
 
 .scroll-panel::-webkit-scrollbar {
@@ -116,6 +87,6 @@ button:not(:disabled):hover {
 }
 
 .scroll-panel::-webkit-scrollbar-thumb {
-  background: rgba(111, 97, 79, 0.24);
+  background: rgba(107, 114, 128, 0.24);
   border-radius: 999px;
 }

@@ -22,13 +22,14 @@
 阶段五也已经开始了一层最小桌面壳：
 
 - Tauri app 骨架
-- 工作区打开 / 初始化
-- 树视图与节点 / source 详情查看
-- 节点编辑 patch 起草
-- source import 预览 / 导入
-- patch 预览 / 应用
-- patch history 回填
-- snapshot 列表与恢复入口
+- 打开文件夹后自动“打开或初始化工作区”
+- 单屏三栏工作台：树 / 详情摘要 / 统一编辑器
+- 节点编辑 patch 起草与 patch 预览 / 应用
+- 由原生 app menu 承载的低频入口：
+  - source import preview / import
+  - snapshot 保存 / 恢复
+  - 历史 patch 载入
+  - 语言切换
 
 这对应的核心问题是：
 
@@ -141,13 +142,12 @@
 - `desktop/src-tauri` + `desktop/src` 最小壳工程
 - 前端已切到 `React + Vite + TypeScript + Tailwind CSS`
 - 复用共享 Rust 内核，而不是前端单独维护状态语义
-- 工作区打开 / 初始化
-- 树视图、节点详情、source 详情
-- 节点编辑 patch 起草
-- source import preview / import
-- patch preview / apply
-- patch history 回填查看
-- snapshot list / restore
+- 原生 app menu
+- 打开文件夹后自动“打开或初始化工作区”
+- 单屏三栏桌面工作台
+- 中栏压缩后的详情摘要与底部控制台
+- 右栏统一节点编辑器与 patch 编辑器
+- source import / snapshot / 历史 patch / 语言切换通过原生菜单进入
 
 关键问题：
 
