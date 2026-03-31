@@ -53,13 +53,15 @@
 
 - `nodex init`
 - `nodex node add/update/move/delete/list`
+- `nodex node cite-chunk/uncite-chunk`
 - `nodex patch inspect/apply/history`
 - `nodex snapshot save/list/restore`
 - `nodex export outline`
+- `node show` / `source list` / `source show` / `patch history` / `snapshot list` 的基础 JSON 输出
 
 阶段一还可以继续补：
 
-- JSON 输出模式
+- 更完整的 JSON 输出模式
 - 更完整的错误码和退出码
 - patch 文件模板生成
 - 更好的树视图

@@ -80,14 +80,18 @@ nodex node add <title> [--parent root] [--kind topic] [--body ...] [--position N
 nodex node update <id> [--title ...] [--body ...] [--kind ...]
 nodex node move <id> --parent <id> [--position N]
 nodex node delete <id>
-nodex node show <id>
+nodex node cite-chunk <id> <chunk-id>
+nodex node uncite-chunk <id> <chunk-id>
+nodex node show <id> [--format text|json]
 nodex node list [--format tree|json]
 ```
 
 说明：
 
 - `node add/update/move/delete` 并不是绕过 patch 引擎直接写库，而是走同一套结构化 patch 流程
+- `node cite-chunk` / `node uncite-chunk` 是显式 evidence 引用的 convenience command，底层同样走 patch 引擎
 - `node show` 用来查看节点详情、来源关联，以及显式 evidence 引用
+- `node show --format json` 返回结构化节点详情
 - `node list --format tree` 返回人类可读树
 - `node list --format json` 返回结构化树
 
@@ -96,7 +100,7 @@ nodex node list [--format tree|json]
 ```text
 nodex patch inspect <file>
 nodex patch apply <file> [--dry-run]
-nodex patch history
+nodex patch history [--format text|json]
 ```
 
 说明：
@@ -105,6 +109,7 @@ nodex patch history
 - `apply --dry-run` 做校验和预览，不修改工作区
 - `apply` 会把 patch 文件内容归档到 `./.nodex/runs/`
 - `history` 用来查看已经应用过的 patch
+- `history --format json` 返回结构化 patch run 列表
 - multi-op patch 会按顺序基于前序 op 的结果继续校验和执行，所以后续 op 可以引用同一 patch 里新建出来的节点
 - 当前 patch 除了节点结构编辑，也支持：
   - `attach/detach source`
@@ -116,8 +121,8 @@ nodex patch history
 
 ```text
 nodex source import <file> [--dry-run] [--emit-patch path]
-nodex source list
-nodex source show <source-id>
+nodex source list [--format text|json]
+nodex source show <source-id> [--format text|json]
 ```
 
 说明：
@@ -132,18 +137,20 @@ nodex source show <source-id>
 - `--dry-run` 和 `--emit-patch` 可以一起用
 - `source list` 用来查看已经导入的来源文件
 - `source show` 用来查看一个来源的切片、结构关联节点，以及显式引用它作为 evidence 的节点
+- `source list/show --format json` 返回结构化来源信息
 
 ### Snapshot 操作
 
 ```text
 nodex snapshot save [--label ...]
-nodex snapshot list
+nodex snapshot list [--format text|json]
 nodex snapshot restore <snapshot-id>
 ```
 
 说明：
 
 - `save` 会把当前完整状态保存到 `./.nodex/snapshots/`
+- `list --format json` 返回结构化 snapshot 列表
 - `restore` 会在真正恢复前自动保存一份 `auto-before-restore-*` 快照
 - 当前 snapshot 会保存节点树、已导入 source、source chunks 以及基础关联
 - 当前 restore 不会回滚 `patch history`

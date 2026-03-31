@@ -9,10 +9,11 @@ use nodex::{
     patch::PatchDocument,
     store::{Workspace, format_timestamp},
 };
+use serde::Serialize;
 
 use crate::cli::{
-    Cli, Command, ExportCommand, ListFormat, NodeCommand, PatchCommand, SnapshotCommand,
-    SourceCommand,
+    Cli, Command, ExportCommand, ListFormat, NodeCommand, OutputFormat, PatchCommand,
+    SnapshotCommand, SourceCommand,
 };
 
 fn main() -> Result<()> {
@@ -63,49 +64,81 @@ fn main() -> Result<()> {
                     let report = workspace.delete_node(id)?;
                     print_patch_report(&report);
                 }
-                NodeCommand::Show { id } => {
-                    let detail = workspace.node_detail(&id)?;
-                    println!("Node: {} [{}]", detail.node.title, detail.node.id);
-                    println!("kind: {}", detail.node.kind);
-                    println!(
-                        "parent: {}",
-                        detail
-                            .parent
-                            .map(|node| format!("{} [{}]", node.title, node.id))
-                            .unwrap_or_else(|| "(none)".to_string())
-                    );
-                    if let Some(body) = detail.node.body {
-                        println!("body: {}", body);
-                    } else {
-                        println!("body: (none)");
-                    }
-                    if detail.children.is_empty() {
-                        println!("children: (none)");
-                    } else {
-                        let children = detail
-                            .children
-                            .into_iter()
-                            .map(|node| format!("{} [{}]", node.title, node.id))
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        println!("children: {}", children);
-                    }
-                    if detail.sources.is_empty() {
-                        println!("sources: (none)");
-                    } else {
-                        println!("sources: {}", detail.sources.len());
-                        for source_detail in detail.sources {
-                            println!(
-                                "- {} [{}]",
-                                source_detail.source.original_name, source_detail.source.id
-                            );
-                            if source_detail.chunks.is_empty() {
-                                println!("  chunks: (source-level link only)");
-                            } else {
-                                for chunk in source_detail.chunks {
+                NodeCommand::CiteChunk { id, chunk_id } => {
+                    let report = workspace.cite_source_chunk(id, chunk_id)?;
+                    print_patch_report(&report);
+                }
+                NodeCommand::UnciteChunk { id, chunk_id } => {
+                    let report = workspace.uncite_source_chunk(id, chunk_id)?;
+                    print_patch_report(&report);
+                }
+                NodeCommand::Show { id, format } => match format {
+                    OutputFormat::Text => {
+                        let detail = workspace.node_detail(&id)?;
+                        println!("Node: {} [{}]", detail.node.title, detail.node.id);
+                        println!("kind: {}", detail.node.kind);
+                        println!(
+                            "parent: {}",
+                            detail
+                                .parent
+                                .map(|node| format!("{} [{}]", node.title, node.id))
+                                .unwrap_or_else(|| "(none)".to_string())
+                        );
+                        if let Some(body) = detail.node.body {
+                            println!("body: {}", body);
+                        } else {
+                            println!("body: (none)");
+                        }
+                        if detail.children.is_empty() {
+                            println!("children: (none)");
+                        } else {
+                            let children = detail
+                                .children
+                                .into_iter()
+                                .map(|node| format!("{} [{}]", node.title, node.id))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            println!("children: {}", children);
+                        }
+                        if detail.sources.is_empty() {
+                            println!("sources: (none)");
+                        } else {
+                            println!("sources: {}", detail.sources.len());
+                            for source_detail in detail.sources {
+                                println!(
+                                    "- {} [{}]",
+                                    source_detail.source.original_name, source_detail.source.id
+                                );
+                                if source_detail.chunks.is_empty() {
+                                    println!("  chunks: (source-level link only)");
+                                } else {
+                                    for chunk in source_detail.chunks {
+                                        let label = chunk.label.as_deref().unwrap_or("(no label)");
+                                        println!(
+                                            "  - chunk {} [{}-{}] {}",
+                                            chunk.ordinal + 1,
+                                            chunk.start_line,
+                                            chunk.end_line,
+                                            label
+                                        );
+                                        println!("    {}", chunk.text);
+                                    }
+                                }
+                            }
+                        }
+                        if detail.evidence.is_empty() {
+                            println!("evidence: (none)");
+                        } else {
+                            println!("evidence: {}", detail.evidence.len());
+                            for evidence_detail in detail.evidence {
+                                println!(
+                                    "- {} [{}]",
+                                    evidence_detail.source.original_name, evidence_detail.source.id
+                                );
+                                for chunk in evidence_detail.chunks {
                                     let label = chunk.label.as_deref().unwrap_or("(no label)");
                                     println!(
-                                        "  - chunk {} [{}-{}] {}",
+                                        "  - cite chunk {} [{}-{}] {}",
                                         chunk.ordinal + 1,
                                         chunk.start_line,
                                         chunk.end_line,
@@ -116,29 +149,8 @@ fn main() -> Result<()> {
                             }
                         }
                     }
-                    if detail.evidence.is_empty() {
-                        println!("evidence: (none)");
-                    } else {
-                        println!("evidence: {}", detail.evidence.len());
-                        for evidence_detail in detail.evidence {
-                            println!(
-                                "- {} [{}]",
-                                evidence_detail.source.original_name, evidence_detail.source.id
-                            );
-                            for chunk in evidence_detail.chunks {
-                                let label = chunk.label.as_deref().unwrap_or("(no label)");
-                                println!(
-                                    "  - cite chunk {} [{}-{}] {}",
-                                    chunk.ordinal + 1,
-                                    chunk.start_line,
-                                    chunk.end_line,
-                                    label
-                                );
-                                println!("    {}", chunk.text);
-                            }
-                        }
-                    }
-                }
+                    OutputFormat::Json => print_json(&workspace.node_detail(&id)?)?,
+                },
                 NodeCommand::List { format } => match format {
                     ListFormat::Tree => print!("{}", workspace.tree_string()?),
                     ListFormat::Json => println!("{}", workspace.tree_json()?),
@@ -160,23 +172,28 @@ fn main() -> Result<()> {
                     }
                     print_patch_report(&report);
                 }
-                PatchCommand::History => {
+                PatchCommand::History { format } => {
                     let history = workspace.patch_history()?;
-                    if history.is_empty() {
-                        println!("No patches have been applied yet.");
-                    } else {
-                        for entry in history {
-                            let summary =
-                                entry.summary.unwrap_or_else(|| "(no summary)".to_string());
-                            println!(
-                                "{}  {}  {}  {}",
-                                entry.id,
-                                format_timestamp(entry.applied_at),
-                                entry.origin,
-                                summary
-                            );
-                            println!("  file: {}", entry.file_name);
+                    match format {
+                        OutputFormat::Text => {
+                            if history.is_empty() {
+                                println!("No patches have been applied yet.");
+                            } else {
+                                for entry in history {
+                                    let summary =
+                                        entry.summary.unwrap_or_else(|| "(no summary)".to_string());
+                                    println!(
+                                        "{}  {}  {}  {}",
+                                        entry.id,
+                                        format_timestamp(entry.applied_at),
+                                        entry.origin,
+                                        summary
+                                    );
+                                    println!("  file: {}", entry.file_name);
+                                }
+                            }
                         }
+                        OutputFormat::Json => print_json(&history)?,
                     }
                 }
             }
@@ -206,69 +223,77 @@ fn main() -> Result<()> {
                         print_source_import_report(&report);
                     }
                 }
-                SourceCommand::List => {
+                SourceCommand::List { format } => {
                     let sources = workspace.list_sources()?;
-                    if sources.is_empty() {
-                        println!("No sources have been imported yet.");
-                    } else {
-                        for source in sources {
-                            println!(
-                                "{}  {}  {}  {}",
-                                source.id,
-                                format_timestamp(source.imported_at),
-                                source.format,
-                                source.original_name
-                            );
-                            println!("  file: {}", source.stored_name);
+                    match format {
+                        OutputFormat::Text => {
+                            if sources.is_empty() {
+                                println!("No sources have been imported yet.");
+                            } else {
+                                for source in sources {
+                                    println!(
+                                        "{}  {}  {}  {}",
+                                        source.id,
+                                        format_timestamp(source.imported_at),
+                                        source.format,
+                                        source.original_name
+                                    );
+                                    println!("  file: {}", source.stored_name);
+                                }
+                            }
                         }
+                        OutputFormat::Json => print_json(&sources)?,
                     }
                 }
-                SourceCommand::Show { source_id } => {
-                    let detail = workspace.source_detail(&source_id)?;
-                    println!(
-                        "Source: {} [{}]",
-                        detail.source.original_name, detail.source.id
-                    );
-                    println!("format: {}", detail.source.format);
-                    println!("imported: {}", format_timestamp(detail.source.imported_at));
-                    println!("stored file: {}", detail.source.stored_name);
-                    println!("original path: {}", detail.source.original_path);
-                    println!("chunks: {}", detail.chunks.len());
-                    for chunk_detail in detail.chunks {
-                        let chunk = chunk_detail.chunk;
-                        let label = chunk.label.as_deref().unwrap_or("(no label)");
+                SourceCommand::Show { source_id, format } => match format {
+                    OutputFormat::Text => {
+                        let detail = workspace.source_detail(&source_id)?;
                         println!(
-                            "- chunk {} [{}-{}] {}",
-                            chunk.ordinal + 1,
-                            chunk.start_line,
-                            chunk.end_line,
-                            label
+                            "Source: {} [{}]",
+                            detail.source.original_name, detail.source.id
                         );
-                        println!("  {}", chunk.text);
-                        if chunk_detail.linked_nodes.is_empty() {
-                            println!("  nodes: (none)");
-                        } else {
-                            let linked_nodes = chunk_detail
-                                .linked_nodes
-                                .into_iter()
-                                .map(|node| format!("{} [{}]", node.title, node.id))
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            println!("  nodes: {}", linked_nodes);
-                        }
-                        if chunk_detail.evidence_nodes.is_empty() {
-                            println!("  evidence nodes: (none)");
-                        } else {
-                            let evidence_nodes = chunk_detail
-                                .evidence_nodes
-                                .into_iter()
-                                .map(|node| format!("{} [{}]", node.title, node.id))
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            println!("  evidence nodes: {}", evidence_nodes);
+                        println!("format: {}", detail.source.format);
+                        println!("imported: {}", format_timestamp(detail.source.imported_at));
+                        println!("stored file: {}", detail.source.stored_name);
+                        println!("original path: {}", detail.source.original_path);
+                        println!("chunks: {}", detail.chunks.len());
+                        for chunk_detail in detail.chunks {
+                            let chunk = chunk_detail.chunk;
+                            let label = chunk.label.as_deref().unwrap_or("(no label)");
+                            println!(
+                                "- chunk {} [{}-{}] {}",
+                                chunk.ordinal + 1,
+                                chunk.start_line,
+                                chunk.end_line,
+                                label
+                            );
+                            println!("  {}", chunk.text);
+                            if chunk_detail.linked_nodes.is_empty() {
+                                println!("  nodes: (none)");
+                            } else {
+                                let linked_nodes = chunk_detail
+                                    .linked_nodes
+                                    .into_iter()
+                                    .map(|node| format!("{} [{}]", node.title, node.id))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                println!("  nodes: {}", linked_nodes);
+                            }
+                            if chunk_detail.evidence_nodes.is_empty() {
+                                println!("  evidence nodes: (none)");
+                            } else {
+                                let evidence_nodes = chunk_detail
+                                    .evidence_nodes
+                                    .into_iter()
+                                    .map(|node| format!("{} [{}]", node.title, node.id))
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                println!("  evidence nodes: {}", evidence_nodes);
+                            }
                         }
                     }
-                }
+                    OutputFormat::Json => print_json(&workspace.source_detail(&source_id)?)?,
+                },
             }
         }
         Command::Snapshot { command } => {
@@ -283,24 +308,29 @@ fn main() -> Result<()> {
                     );
                     println!("file: {}", snapshot.file_name);
                 }
-                SnapshotCommand::List => {
+                SnapshotCommand::List { format } => {
                     let snapshots = workspace.list_snapshots()?;
-                    if snapshots.is_empty() {
-                        println!("No snapshots found.");
-                    } else {
-                        for snapshot in snapshots {
-                            let label = snapshot
-                                .label
-                                .clone()
-                                .unwrap_or_else(|| "(no label)".to_string());
-                            println!(
-                                "{}  {}  {}",
-                                snapshot.id,
-                                format_timestamp(snapshot.created_at),
-                                label
-                            );
-                            println!("  file: {}", snapshot.file_name);
+                    match format {
+                        OutputFormat::Text => {
+                            if snapshots.is_empty() {
+                                println!("No snapshots found.");
+                            } else {
+                                for snapshot in snapshots {
+                                    let label = snapshot
+                                        .label
+                                        .clone()
+                                        .unwrap_or_else(|| "(no label)".to_string());
+                                    println!(
+                                        "{}  {}  {}",
+                                        snapshot.id,
+                                        format_timestamp(snapshot.created_at),
+                                        label
+                                    );
+                                    println!("  file: {}", snapshot.file_name);
+                                }
+                            }
                         }
+                        OutputFormat::Json => print_json(&snapshots)?,
                     }
                 }
                 SnapshotCommand::Restore { snapshot_id } => {
@@ -399,5 +429,10 @@ fn write_patch_document(path: &std::path::Path, patch: &PatchDocument) -> Result
     let patch_json = serde_json::to_string_pretty(patch)?;
     std::fs::write(path, patch_json)
         .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
+fn print_json<T: Serialize>(value: &T) -> Result<()> {
+    println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
 }

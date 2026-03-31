@@ -489,6 +489,32 @@ mod tests {
     }
 
     #[test]
+    fn convenience_methods_can_cite_and_uncite_source_chunks() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let problem_id = source_detail.chunks[0].linked_nodes[0].id.clone();
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        let cite_report = workspace.cite_source_chunk(problem_id.clone(), chunk_id.clone())?;
+        assert!(cite_report.run_id.is_some());
+        assert_eq!(workspace.node_detail(&problem_id)?.evidence.len(), 1);
+
+        let uncite_report = workspace.uncite_source_chunk(problem_id.clone(), chunk_id.clone())?;
+        assert!(uncite_report.run_id.is_some());
+        assert!(workspace.node_detail(&problem_id)?.evidence.is_empty());
+        assert_eq!(workspace.patch_history()?.len(), 3);
+        Ok(())
+    }
+
+    #[test]
     fn patch_validation_requires_source_link_before_chunk_link() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;

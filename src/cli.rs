@@ -78,8 +78,16 @@ pub enum NodeCommand {
     },
     /// Delete a node and its descendants.
     Delete { id: String },
+    /// Cite one source chunk as explicit evidence for a node.
+    CiteChunk { id: String, chunk_id: String },
+    /// Remove one explicit source chunk citation from a node.
+    UnciteChunk { id: String, chunk_id: String },
     /// Show one node with parent, children, and linked sources.
-    Show { id: String },
+    Show {
+        id: String,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
     /// List the current map.
     List {
         #[arg(long, value_enum, default_value_t = ListFormat::Tree)]
@@ -90,6 +98,12 @@ pub enum NodeCommand {
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ListFormat {
     Tree,
+    Json,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum OutputFormat {
+    Text,
     Json,
 }
 
@@ -104,7 +118,10 @@ pub enum PatchCommand {
         dry_run: bool,
     },
     /// Show applied patch history.
-    History,
+    History {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -118,9 +135,16 @@ pub enum SourceCommand {
         emit_patch: Option<PathBuf>,
     },
     /// List imported source files.
-    List,
+    List {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
     /// Show one imported source with chunks and linked nodes.
-    Show { source_id: String },
+    Show {
+        source_id: String,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -131,7 +155,10 @@ pub enum SnapshotCommand {
         label: Option<String>,
     },
     /// List saved snapshots.
-    List,
+    List {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
     /// Restore a snapshot.
     Restore { snapshot_id: String },
 }

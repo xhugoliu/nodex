@@ -72,6 +72,34 @@ impl Workspace {
         self.apply_patch_document(patch, "cli", false)
     }
 
+    pub fn cite_source_chunk(
+        &mut self,
+        node_id: String,
+        chunk_id: String,
+    ) -> Result<ApplyPatchReport> {
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some(format!("Cite source chunk {chunk_id} for node {node_id}")),
+            ops: vec![PatchOp::CiteSourceChunk { node_id, chunk_id }],
+        };
+        self.apply_patch_document(patch, "cli", false)
+    }
+
+    pub fn uncite_source_chunk(
+        &mut self,
+        node_id: String,
+        chunk_id: String,
+    ) -> Result<ApplyPatchReport> {
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some(format!(
+                "Remove cited source chunk {chunk_id} from node {node_id}"
+            )),
+            ops: vec![PatchOp::UnciteSourceChunk { node_id, chunk_id }],
+        };
+        self.apply_patch_document(patch, "cli", false)
+    }
+
     pub fn apply_patch_document(
         &mut self,
         patch: PatchDocument,
