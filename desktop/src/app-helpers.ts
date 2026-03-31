@@ -1,4 +1,9 @@
-import type { ApplyPatchReport, TreeNode } from "./types";
+import type {
+  ApplyPatchReport,
+  ParentCandidate,
+  PatchOperation,
+  TreeNode,
+} from "./types";
 
 export type ConsoleTone = "success" | "error";
 export type Translator = (
@@ -16,6 +21,7 @@ export interface PatchDraftState {
   summary: string | null;
   opCount: number;
   opTypes: PatchOpSummary[];
+  ops: PatchOperation[];
   error: string | null;
 }
 
@@ -79,12 +85,14 @@ export function filterTree(tree: TreeNode, query: string): TreeNode | null {
 
 export function nodeMatchesQuery(treeNode: TreeNode["node"], query: string): boolean {
   const normalizedQuery = query.toLowerCase();
-  return [
-    treeNode.id,
-    treeNode.title,
-    treeNode.kind,
-    treeNode.body ?? "",
-  ].some((field) => field.toLowerCase().includes(normalizedQuery));
+  if (normalizedQuery.startsWith("id:")) {
+    const idQuery = normalizedQuery.slice(3).trim();
+    return idQuery ? treeNode.id.toLowerCase().includes(idQuery) : false;
+  }
+
+  return [treeNode.title, treeNode.kind].some((field) =>
+    field.toLowerCase().includes(normalizedQuery),
+  );
 }
 
 export function findNodeById(tree: TreeNode, nodeId: string): TreeNode | null {
@@ -102,6 +110,31 @@ export function findNodeById(tree: TreeNode, nodeId: string): TreeNode | null {
   return null;
 }
 
+export function listParentCandidates(
+  tree: TreeNode,
+  excludedNodeId: string | null,
+): ParentCandidate[] {
+  const excludedIds = excludedNodeId ? collectSubtreeIds(tree, excludedNodeId) : new Set();
+  const candidates = new Array<ParentCandidate>();
+
+  const visit = (current: TreeNode, path: string[]) => {
+    if (!excludedIds.has(current.node.id)) {
+      const nextPath = [...path, current.node.title];
+      candidates.push({
+        id: current.node.id,
+        label: nextPath.join(" / "),
+      });
+
+      for (const child of current.children) {
+        visit(child, nextPath);
+      }
+    }
+  };
+
+  visit(tree, []);
+  return candidates;
+}
+
 export function optionalText(value: string): string | null {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
@@ -115,6 +148,7 @@ export function inspectPatchDraft(text: string): PatchDraftState {
       summary: null,
       opCount: 0,
       opTypes: [],
+      ops: [],
       error: null,
     };
   }
@@ -124,17 +158,15 @@ export function inspectPatchDraft(text: string): PatchDraftState {
       summary?: unknown;
       ops?: unknown;
     };
-    const ops = Array.isArray(patch.ops) ? patch.ops : [];
+    const ops = Array.isArray(patch.ops)
+      ? patch.ops.filter(
+          (op): op is PatchOperation => Boolean(op) && typeof op === "object",
+        )
+      : [];
     const counts = new Map<string, number>();
 
     for (const op of ops) {
-      const type =
-        op &&
-        typeof op === "object" &&
-        "type" in op &&
-        typeof op.type === "string"
-          ? op.type
-          : "op";
+      const type = typeof op.type === "string" ? op.type : "op";
       counts.set(type, (counts.get(type) ?? 0) + 1);
     }
 
@@ -143,6 +175,7 @@ export function inspectPatchDraft(text: string): PatchDraftState {
       summary: typeof patch.summary === "string" ? patch.summary : null,
       opCount: ops.length,
       opTypes: Array.from(counts, ([type, count]) => ({ type, count })),
+      ops,
       error: null,
     };
   } catch (error) {
@@ -151,8 +184,68 @@ export function inspectPatchDraft(text: string): PatchDraftState {
       summary: null,
       opCount: 0,
       opTypes: [],
+      ops: [],
       error: formatError(error),
     };
+  }
+}
+
+export function describePatchOperation(op: PatchOperation, t: Translator): string {
+  const type = typeof op.type === "string" ? op.type : "op";
+
+  switch (type) {
+    case "add_node": {
+      const title = stringValue(op.title, t("composer.untitledNode"));
+      const parent = stringValue(op.parent_id, "root");
+      const position = integerValue(op.position);
+      return position === null
+        ? t("composer.opAddNode", { title, parent })
+        : t("composer.opAddNodeAt", { title, parent, position });
+    }
+    case "update_node": {
+      const node = stringValue(op.id, "node");
+      const fields = changedFieldLabels(op, t);
+      return fields.length
+        ? t("composer.opUpdateNodeFields", {
+            node,
+            fields: fields.join(", "),
+          })
+        : t("composer.opUpdateNode", { node });
+    }
+    case "move_node": {
+      const node = stringValue(op.id, "node");
+      const parent = stringValue(op.parent_id, "root");
+      const position = integerValue(op.position);
+      return position === null
+        ? t("composer.opMoveNode", { node, parent })
+        : t("composer.opMoveNodeAt", { node, parent, position });
+    }
+    case "delete_node":
+      return t("composer.opDeleteNode", {
+        node: stringValue(op.id, "node"),
+      });
+    case "attach_source":
+      return t("composer.opAttachSource", {
+        source: stringValue(op.source_id, "source"),
+        node: stringValue(op.node_id, "node"),
+      });
+    case "attach_source_chunk":
+      return t("composer.opAttachSourceChunk", {
+        chunk: stringValue(op.chunk_id, "chunk"),
+        node: stringValue(op.node_id, "node"),
+      });
+    case "detach_source":
+      return t("composer.opDetachSource", {
+        source: stringValue(op.source_id, "source"),
+        node: stringValue(op.node_id, "node"),
+      });
+    case "detach_source_chunk":
+      return t("composer.opDetachSourceChunk", {
+        chunk: stringValue(op.chunk_id, "chunk"),
+        node: stringValue(op.node_id, "node"),
+      });
+    default:
+      return type;
   }
 }
 
@@ -180,4 +273,56 @@ export function formatError(error: unknown): string {
   }
 
   return String(error);
+}
+
+function changedFieldLabels(op: PatchOperation, t: Translator): string[] {
+  const fields = new Array<string>();
+
+  if (typeof op.title === "string") {
+    fields.push(t("fields.title"));
+  }
+
+  if (typeof op.kind === "string") {
+    fields.push(t("fields.kind"));
+  }
+
+  if (typeof op.body === "string") {
+    fields.push(t("fields.body"));
+  }
+
+  return fields;
+}
+
+function stringValue(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+
+  return fallback;
+}
+
+function integerValue(value: unknown): number | null {
+  return Number.isInteger(value) ? Number(value) : null;
+}
+
+function collectSubtreeIds(tree: TreeNode, nodeId: string): Set<string> {
+  if (tree.node.id === nodeId) {
+    return new Set(flattenTreeIds(tree));
+  }
+
+  for (const child of tree.children) {
+    const childResult = collectSubtreeIds(child, nodeId);
+    if (childResult.size) {
+      return childResult;
+    }
+  }
+
+  return new Set();
+}
+
+function flattenTreeIds(tree: TreeNode): string[] {
+  return [
+    tree.node.id,
+    ...tree.children.flatMap((child) => flattenTreeIds(child)),
+  ];
 }

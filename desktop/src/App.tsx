@@ -9,8 +9,8 @@ import {
   findNodeById,
   formatError,
   inspectPatchDraft,
+  listParentCandidates,
   optionalText,
-  parseOptionalInteger,
   renderPatchReport,
   type ConsoleTone,
 } from "./app-helpers";
@@ -20,8 +20,13 @@ import {
   resolveSystemLocale,
   translate,
 } from "./i18n";
-import { EditorPane, InspectorPane, TreePane } from "./components/panes";
-import { hasTauriRuntime, invokeCommand } from "./tauri";
+import {
+  EditorPane,
+  InspectorPane,
+  TreePane,
+  WorkspaceStartPane,
+} from "./components/panes";
+import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
   ApplyPatchReport,
   LanguagePreference,
@@ -52,6 +57,7 @@ interface PatchEditorEventPayload {
   patch_json: string;
   message: string;
   tone: ConsoleTone;
+  reveal_advanced: boolean;
 }
 
 interface LanguageMenuEvent {
@@ -76,13 +82,17 @@ export default function App() {
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const [contextSourceId, setContextSourceId] = useState<string | null>(null);
   const [patchEditor, setPatchEditor] = useState("");
+  const [showAdvancedPatchEditor, setShowAdvancedPatchEditor] = useState(false);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeKind, setUpdateNodeKind] = useState("");
   const [updateNodeBody, setUpdateNodeBody] = useState("");
+  const [addChildTitle, setAddChildTitle] = useState("");
+  const [addChildKind, setAddChildKind] = useState("topic");
+  const [addChildBody, setAddChildBody] = useState("");
   const [moveNodeParent, setMoveNodeParent] = useState("");
-  const [moveNodePosition, setMoveNodePosition] = useState("");
   const [treeQuery, setTreeQuery] = useState("");
   const [consoleEntry, setConsoleEntry] = useState<ConsoleEntry | null>(null);
+  const [showConsoleDetails, setShowConsoleDetails] = useState(false);
 
   const locale =
     languagePreference === "auto" ? systemLocale : languagePreference;
@@ -136,7 +146,6 @@ export default function App() {
       setUpdateNodeKind("");
       setUpdateNodeBody("");
       setMoveNodeParent("");
-      setMoveNodePosition("");
       return;
     }
 
@@ -144,8 +153,13 @@ export default function App() {
     setUpdateNodeKind(selectedNodeDetail.node.kind ?? "");
     setUpdateNodeBody(selectedNodeDetail.node.body ?? "");
     setMoveNodeParent(selectedNodeDetail.parent?.id ?? "");
-    setMoveNodePosition("");
   }, [selectedNodeDetail]);
+
+  useEffect(() => {
+    setAddChildTitle("");
+    setAddChildKind("topic");
+    setAddChildBody("");
+  }, [selectedNodeDetail?.node.id]);
 
   useEffect(() => {
     if (!hasTauriRuntime()) {
@@ -183,6 +197,7 @@ export default function App() {
 
       unlisteners.push(
         await listen<PatchEditorEventPayload>("desktop://patch-editor", (event) => {
+          setShowAdvancedPatchEditor(event.payload.reveal_advanced);
           setPatchEditor(event.payload.patch_json);
           setConsoleMessage(event.payload.message, event.payload.tone);
         }),
@@ -209,12 +224,6 @@ export default function App() {
   const workspaceNodeCount = workspaceOverview
     ? countNodes(workspaceOverview.tree)
     : 0;
-  const nodeEditMeta = selectedNodeDetail
-    ? t("nodeEditing.selectedMeta", {
-        title: selectedNodeDetail.node.title,
-        id: selectedNodeDetail.node.id,
-      })
-    : t("nodeEditing.emptyMeta");
   const filteredTree = workspaceOverview
     ? filterTree(workspaceOverview.tree, deferredTreeQuery)
     : null;
@@ -227,9 +236,19 @@ export default function App() {
     ? t("navigator.searchResults", { count: treeResultCount })
     : t("navigator.totalNodes", { count: workspaceNodeCount });
   const patchDraftState = inspectPatchDraft(deferredPatchEditor);
+  const isRootNodeSelected = selectedNodeDetail?.node.parent_id === null;
+  const moveParentOptions =
+    workspaceOverview && selectedNodeDetail
+      ? listParentCandidates(workspaceOverview.tree, selectedNodeDetail.node.id)
+      : [];
+  const canRunStructureActions =
+    Boolean(selectedNodeDetail) &&
+    !isRootNodeSelected &&
+    moveParentOptions.length > 0;
 
   function setConsoleMessage(message: string, tone: ConsoleTone) {
     setConsoleEntry({ message, tone });
+    setShowConsoleDetails(tone === "error");
   }
 
   function ensureTauri(): boolean {
@@ -300,6 +319,19 @@ export default function App() {
       }
     }
 
+    const fallbackNodeId =
+      overview.tree.node.id ||
+      findNodeById(overview.tree, "root")?.node.id ||
+      null;
+    if (fallbackNodeId) {
+      const reloaded = await fetchNodeDetail(fallbackNodeId, overview.root_dir, {
+        silentError: true,
+      });
+      if (reloaded) {
+        return;
+      }
+    }
+
     setSelectedNodeId(null);
     setSelectedSourceId(null);
     setSelectedNodeDetail(null);
@@ -312,6 +344,37 @@ export default function App() {
     return invokeCommand<WorkspaceOverview>("open_workspace", {
       start_path: path,
     });
+  }
+
+  async function openOrInitWorkspaceCommand(path: string) {
+    return invokeCommand<WorkspaceOverview>("open_or_init_workspace", {
+      root_path: path,
+    });
+  }
+
+  async function openWorkspaceFromShortcut() {
+    if (!ensureTauri()) {
+      return;
+    }
+
+    try {
+      const selectedPath = await openPath({
+        directory: true,
+        title: t("workspace.chooseFolder"),
+      });
+      if (!selectedPath) {
+        return;
+      }
+
+      const overview = await openOrInitWorkspaceCommand(selectedPath);
+      await applyOverview(overview);
+      setConsoleMessage(
+        t("messages.openedWorkspace", { path: overview.root_dir }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
   }
 
   async function fetchNodeDetail(
@@ -454,18 +517,19 @@ export default function App() {
       return;
     }
 
-    const title = updateNodeTitle.trim();
+    const title = addChildTitle.trim();
     if (!title) {
       setConsoleMessage(t("messages.addChildRequiresTitle"), "error");
       return;
     }
 
     try {
+      setShowAdvancedPatchEditor(false);
       const patch = await invokeCommand<PatchDocument>("draft_add_node_patch", {
         title,
         parent_id: selectedNodeId,
-        kind: optionalText(updateNodeKind) ?? "topic",
-        body: optionalText(updateNodeBody),
+        kind: optionalText(addChildKind) ?? "topic",
+        body: optionalText(addChildBody),
         position: null,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
@@ -502,6 +566,7 @@ export default function App() {
     }
 
     try {
+      setShowAdvancedPatchEditor(false);
       const patch = await invokeCommand<PatchDocument>(
         "draft_update_node_patch",
         {
@@ -526,6 +591,11 @@ export default function App() {
       return;
     }
 
+    if (!canRunStructureActions) {
+      setConsoleMessage(t("messages.rootNodeStructureLocked"), "error");
+      return;
+    }
+
     const parentId = moveNodeParent.trim();
     if (!parentId) {
       setConsoleMessage(t("messages.provideParentId"), "error");
@@ -538,16 +608,16 @@ export default function App() {
     }
 
     try {
-      const position = parseOptionalInteger(moveNodePosition, t);
-      if (parentId === (selectedNodeDetail.parent?.id ?? "") && position === null) {
+      if (parentId === (selectedNodeDetail.parent?.id ?? "")) {
         setConsoleMessage(t("messages.moveNeedsChange"), "error");
         return;
       }
 
+      setShowAdvancedPatchEditor(false);
       const patch = await invokeCommand<PatchDocument>("draft_move_node_patch", {
         node_id: selectedNodeId,
         parent_id: parentId,
-        position,
+        position: null,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
       setConsoleMessage(
@@ -564,7 +634,13 @@ export default function App() {
       return;
     }
 
+    if (!canRunStructureActions) {
+      setConsoleMessage(t("messages.rootNodeStructureLocked"), "error");
+      return;
+    }
+
     try {
+      setShowAdvancedPatchEditor(false);
       const patch = await invokeCommand<PatchDocument>(
         "draft_delete_node_patch",
         {
@@ -583,78 +659,108 @@ export default function App() {
 
   function clearPatchEditor() {
     setPatchEditor("");
+    setShowAdvancedPatchEditor(false);
     setConsoleMessage(t("messages.patchEditorCleared"), "success");
   }
 
   return (
-    <div className="mx-auto flex h-screen max-w-[1600px] flex-col gap-3 overflow-hidden px-3 py-3">
-      <main className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)_400px]">
-        <TreePane
-          workspaceOverview={workspaceOverview}
-          treeSummary={treeSummary}
-          treeQuery={treeQuery}
-          query={deferredTreeQuery}
-          filteredTree={filteredTree}
-          selectedNodeId={selectedNodeId}
-          t={t}
-          onQueryChange={setTreeQuery}
-          onSelectNode={(nodeId) => {
-            void fetchNodeDetail(nodeId);
-          }}
-        />
-        <InspectorPane
-          selectedNodeDetail={selectedNodeDetail}
-          selectedSourceDetail={selectedSourceDetail}
-          contextNodeId={contextNodeId}
-          contextSourceId={contextSourceId}
-          consoleMessage={consoleMessage}
-          consoleTone={consoleTone}
-          t={t}
-          onSelectNode={(nodeId) => {
-            void fetchNodeDetail(nodeId);
-          }}
-          onSelectSource={(sourceId) => {
-            void fetchSourceDetail(sourceId);
-          }}
-        />
-        <EditorPane
-          selectedNodeDetail={selectedNodeDetail}
-          nodeEditMeta={nodeEditMeta}
-          updateNodeTitle={updateNodeTitle}
-          updateNodeKind={updateNodeKind}
-          updateNodeBody={updateNodeBody}
-          moveNodeParent={moveNodeParent}
-          moveNodePosition={moveNodePosition}
-          patchEditor={patchEditor}
-          patchDraftState={patchDraftState}
-          t={t}
-          onTitleChange={setUpdateNodeTitle}
-          onKindChange={setUpdateNodeKind}
-          onBodyChange={setUpdateNodeBody}
-          onParentChange={setMoveNodeParent}
-          onPositionChange={setMoveNodePosition}
-          onPatchEditorChange={setPatchEditor}
-          onClearPatchEditor={clearPatchEditor}
-          onDraftUpdate={() => {
-            void draftUpdateNodePatch();
-          }}
-          onDraftAddChild={() => {
-            void draftAddChildPatch();
-          }}
-          onDraftMove={() => {
-            void draftMoveNodePatch();
-          }}
-          onDraftDelete={() => {
-            void draftDeleteNodePatch();
-          }}
-          onPreviewPatch={() => {
-            void previewPatch();
-          }}
-          onApplyPatch={() => {
-            void applyPatch();
-          }}
-        />
-      </main>
+    <div className="flex h-screen w-full flex-col gap-3 overflow-hidden px-3 py-3">
+      {workspaceOverview ? (
+        <main className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)_400px]">
+          <TreePane
+            workspaceOverview={workspaceOverview}
+            treeSummary={treeSummary}
+            treeQuery={treeQuery}
+            query={deferredTreeQuery}
+            filteredTree={filteredTree}
+            selectedNodeId={selectedNodeId}
+            t={t}
+            onQueryChange={setTreeQuery}
+            onSelectNode={(nodeId) => {
+              void fetchNodeDetail(nodeId);
+            }}
+          />
+          <InspectorPane
+            hasWorkspace
+            selectedNodeDetail={selectedNodeDetail}
+            selectedSourceDetail={selectedSourceDetail}
+            contextNodeId={contextNodeId}
+            contextSourceId={contextSourceId}
+            consoleMessage={consoleMessage}
+            consoleTone={consoleTone}
+            showConsoleDetails={showConsoleDetails}
+            t={t}
+            onToggleConsoleDetails={() => {
+              setShowConsoleDetails((current) => !current);
+            }}
+            onSelectNode={(nodeId) => {
+              void fetchNodeDetail(nodeId);
+            }}
+            onSelectSource={(sourceId) => {
+              void fetchSourceDetail(sourceId);
+            }}
+          />
+          <EditorPane
+            hasWorkspace
+            selectedNodeDetail={selectedNodeDetail}
+            updateNodeTitle={updateNodeTitle}
+            updateNodeKind={updateNodeKind}
+            updateNodeBody={updateNodeBody}
+            addChildTitle={addChildTitle}
+            addChildKind={addChildKind}
+            addChildBody={addChildBody}
+            moveNodeParent={moveNodeParent}
+            moveParentOptions={moveParentOptions}
+            patchEditor={patchEditor}
+            showAdvancedPatchEditor={showAdvancedPatchEditor}
+            canRunStructureActions={canRunStructureActions}
+            patchDraftState={patchDraftState}
+            t={t}
+            onTitleChange={setUpdateNodeTitle}
+            onKindChange={setUpdateNodeKind}
+            onBodyChange={setUpdateNodeBody}
+            onAddChildTitleChange={setAddChildTitle}
+            onAddChildKindChange={setAddChildKind}
+            onAddChildBodyChange={setAddChildBody}
+            onParentChange={setMoveNodeParent}
+            onPatchEditorChange={setPatchEditor}
+            onToggleAdvancedPatchEditor={() => {
+              setShowAdvancedPatchEditor((current) => !current);
+            }}
+            onClearPatchEditor={clearPatchEditor}
+            onDraftUpdate={() => {
+              void draftUpdateNodePatch();
+            }}
+            onDraftAddChild={() => {
+              void draftAddChildPatch();
+            }}
+            onDraftMove={() => {
+              void draftMoveNodePatch();
+            }}
+            onDraftDelete={() => {
+              void draftDeleteNodePatch();
+            }}
+            onPreviewPatch={() => {
+              void previewPatch();
+            }}
+            onApplyPatch={() => {
+              void applyPatch();
+            }}
+          />
+        </main>
+      ) : (
+        <main className="flex min-h-0 flex-1">
+          <WorkspaceStartPane
+            message={consoleMessage}
+            tone={consoleTone}
+            showStatus={Boolean(consoleEntry)}
+            t={t}
+            onOpenWorkspace={() => {
+              void openWorkspaceFromShortcut();
+            }}
+          />
+        </main>
+      )}
     </div>
   );
 }

@@ -78,6 +78,11 @@ export interface NodeSummary {
   title: string;
 }
 
+export interface ParentCandidate {
+  id: string;
+  label: string;
+}
+
 export interface SourceChunkRecord {
   id: string;
   source_id: string;

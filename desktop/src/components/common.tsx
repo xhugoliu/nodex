@@ -81,7 +81,7 @@ export function EmptyState(props: { title: string; body: string }) {
       <div className="text-base font-semibold text-[color:var(--text)]">
         {props.title}
       </div>
-      <p className={`${subtleTextClass} max-w-md`}>{props.body}</p>
+      <p className={`${subtleTextClass} whitespace-pre-wrap`}>{props.body}</p>
     </div>
   );
 }

@@ -50,6 +50,7 @@ struct PatchEditorPayload {
     patch_json: String,
     message: String,
     tone: String,
+    reveal_advanced: bool,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -190,6 +191,7 @@ fn emit_patch_editor<R: Runtime>(
     app: &AppHandle<R>,
     patch: &PatchDocument,
     message: impl Into<String>,
+    reveal_advanced: bool,
 ) {
     let patch_json = serde_json::to_string_pretty(patch).unwrap_or_else(|_| "{}".to_string());
     let _ = app.emit(
@@ -198,6 +200,7 @@ fn emit_patch_editor<R: Runtime>(
             patch_json,
             message: message.into(),
             tone: "success".to_string(),
+            reveal_advanced,
         },
     );
 }
@@ -488,6 +491,7 @@ fn handle_source_import_menu<R: Runtime>(
                             &app_handle,
                             &preview_result.patch,
                             format!("Previewed import for {}", preview_result.report.original_name),
+                            false,
                         );
                     }
                     Err(err) => emit_console(&app_handle, err.to_string(), "error"),
@@ -551,7 +555,7 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, state: &DesktopState, event
         _ if event_id.starts_with(MENU_HISTORY_PREFIX) => {
             let run_id = event_id.trim_start_matches(MENU_HISTORY_PREFIX);
             match with_current_workspace(state, |workspace| workspace.patch_document_by_run_id(run_id)) {
-                Ok(patch) => emit_patch_editor(app, &patch, format!("Loaded patch {run_id}")),
+                Ok(patch) => emit_patch_editor(app, &patch, format!("Loaded patch {run_id}"), true),
                 Err(err) => emit_console(app, err.to_string(), "error"),
             }
         }
