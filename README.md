@@ -32,6 +32,7 @@ cargo run -- export outline
 - SQLite 工作区
 - Markdown / TXT source import 与基础来源切片关联
 - source / node 双向查看来源链路
+- 显式 evidence 引用：将证据引用与导入关联分离
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
@@ -44,7 +45,7 @@ cargo run -- export outline
 
 - AI 生成 patch
 - PDF 导入与来源切片
-- 来源追踪与证据视图
+- 完整来源追踪与证据视图
 - 完整 Tauri 图形界面
 
 ## Docs

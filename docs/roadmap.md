@@ -35,6 +35,12 @@
 
 > patch-first 的本地工作区模型是否站得住
 
+阶段四也已经开始了一层最小 evidence 语义：
+
+- patch 支持 `cite_source_chunk` / `uncite_source_chunk`
+- 显式 evidence 引用与导入时的 source chunk 关联分离
+- `node show` / `source show` 可查看 evidence 引用
+
 ## 阶段一：CLI 内核
 
 目标：
@@ -116,6 +122,12 @@
 - 节点与来源的引用关系
 - Evidence 视图
 - 基于来源的问答
+
+当前已落地的最小版本：
+
+- `cite_source_chunk` / `uncite_source_chunk`
+- 显式 evidence 引用与基础 source/chunk 关联分离
+- `node show` / `source show` 可查看切片被哪些节点显式引用
 
 关键问题：
 

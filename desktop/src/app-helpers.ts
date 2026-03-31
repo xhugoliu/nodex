@@ -234,6 +234,11 @@ export function describePatchOperation(op: PatchOperation, t: Translator): strin
         chunk: stringValue(op.chunk_id, "chunk"),
         node: stringValue(op.node_id, "node"),
       });
+    case "cite_source_chunk":
+      return t("composer.opCiteSourceChunk", {
+        chunk: stringValue(op.chunk_id, "chunk"),
+        node: stringValue(op.node_id, "node"),
+      });
     case "detach_source":
       return t("composer.opDetachSource", {
         source: stringValue(op.source_id, "source"),
@@ -241,6 +246,11 @@ export function describePatchOperation(op: PatchOperation, t: Translator): strin
       });
     case "detach_source_chunk":
       return t("composer.opDetachSourceChunk", {
+        chunk: stringValue(op.chunk_id, "chunk"),
+        node: stringValue(op.node_id, "node"),
+      });
+    case "uncite_source_chunk":
+      return t("composer.opUnciteSourceChunk", {
         chunk: stringValue(op.chunk_id, "chunk"),
         node: stringValue(op.node_id, "node"),
       });

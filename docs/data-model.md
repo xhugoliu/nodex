@@ -36,6 +36,8 @@
 - `workspace_name`
 - `root_id`
 
+当前 schema version 为 `2`。
+
 ### `nodes`
 
 保存当前脑图状态。
@@ -157,7 +159,22 @@
 
 - 导入时，生成的节点会关联到对应的来源切片
 - 这种 chunk-level link 现在既可能来自 `source import`，也可能来自 `attach_source_chunk` / `detach_source_chunk` patch op
-- 这是一版“基础切片关联”，还不是完整的证据系统
+- 这是一版“基础切片关联”，主要表达结构生成或一般性关联，不等于显式 evidence 引用
+
+### `node_evidence_chunks`
+
+保存节点对来源切片的显式 evidence 引用关系。
+
+字段：
+
+- `node_id`
+- `chunk_id`
+
+当前语义：
+
+- 这层关系来自 `cite_source_chunk` / `uncite_source_chunk` patch op
+- 它和 `node_source_chunks` 分离，避免把“导入生成时的来源关联”和“后续显式引用为证据”混在一起
+- 当前还没有保存 evidence note、quote span、引用理由等更细粒度信息
 
 ## 当前节点类型
 
@@ -191,6 +208,7 @@
 - 所有 `node_sources`
 - 所有 `source_chunks`
 - 所有 `node_source_chunks`
+- 所有 `node_evidence_chunks`
 
 恢复快照时，会：
 
@@ -206,6 +224,7 @@
 - `node_sources`
 - `source_chunks`
 - `node_source_chunks`
+- `node_evidence_chunks`
 
 当前快照没有纳入：
 
@@ -222,7 +241,7 @@
 
 从产品目标看，后续至少还会加入这些数据：
 
-- 节点与来源的引用关系
+- 更完整的节点与来源引用关系
 - 导出记录
 - AI 运行记录
 

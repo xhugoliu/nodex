@@ -87,7 +87,7 @@ nodex node list [--format tree|json]
 说明：
 
 - `node add/update/move/delete` 并不是绕过 patch 引擎直接写库，而是走同一套结构化 patch 流程
-- `node show` 用来查看节点详情，以及它反向关联到的来源和切片
+- `node show` 用来查看节点详情、来源关联，以及显式 evidence 引用
 - `node list --format tree` 返回人类可读树
 - `node list --format json` 返回结构化树
 
@@ -106,7 +106,11 @@ nodex patch history
 - `apply` 会把 patch 文件内容归档到 `./.nodex/runs/`
 - `history` 用来查看已经应用过的 patch
 - multi-op patch 会按顺序基于前序 op 的结果继续校验和执行，所以后续 op 可以引用同一 patch 里新建出来的节点
-- 当前 patch 除了节点结构编辑，也支持 `attach/detach source` 和 `attach/detach source chunk` 这类基础来源关联操作
+- 当前 patch 除了节点结构编辑，也支持：
+  - `attach/detach source`
+  - `attach/detach source chunk`
+  - `cite/uncite source chunk`
+- 目前还没有单独的 `evidence` convenience command；显式 evidence 引用先通过 patch 表达
 
 ### Source 操作
 
@@ -127,7 +131,7 @@ nodex source show <source-id>
 - `--emit-patch path` 会把导入生成的 patch preview 写到指定 JSON 文件，也不会执行真正导入
 - `--dry-run` 和 `--emit-patch` 可以一起用
 - `source list` 用来查看已经导入的来源文件
-- `source show` 用来查看一个来源的切片和每个切片关联到的节点
+- `source show` 用来查看一个来源的切片、结构关联节点，以及显式引用它作为 evidence 的节点
 
 ### Snapshot 操作
 
@@ -172,7 +176,7 @@ nodex export outline [--output path]
 
 - AI 生成 patch
 - PDF 导入
-- 来源与证据视图
+- 完整来源与证据视图
 
 所以这版 CLI 的定位是：
 

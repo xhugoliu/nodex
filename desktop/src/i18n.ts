@@ -167,8 +167,10 @@ const translations: Record<Locale, TranslationTree> = {
       opDeleteNode: "Delete {node}",
       opAttachSource: "Attach source {source} to {node}",
       opAttachSourceChunk: "Attach chunk {chunk} to {node}",
+      opCiteSourceChunk: "Cite chunk {chunk} for {node}",
       opDetachSource: "Detach source {source} from {node}",
       opDetachSourceChunk: "Detach chunk {chunk} from {node}",
+      opUnciteSourceChunk: "Remove cited chunk {chunk} from {node}",
     },
     console: {
       title: "Console",
@@ -397,8 +399,10 @@ const translations: Record<Locale, TranslationTree> = {
       opDeleteNode: "删除 {node}",
       opAttachSource: "将来源 {source} 关联到 {node}",
       opAttachSourceChunk: "将切片 {chunk} 关联到 {node}",
+      opCiteSourceChunk: "将切片 {chunk} 作为 {node} 的证据引用",
       opDetachSource: "从 {node} 解除来源 {source}",
       opDetachSourceChunk: "从 {node} 解除切片 {chunk}",
+      opUnciteSourceChunk: "从 {node} 移除证据切片 {chunk}",
     },
     console: {
       title: "控制台",

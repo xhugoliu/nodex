@@ -6,10 +6,10 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use crate::model::{
-    ApplyPatchReport, Node, NodeDetail, NodeSourceChunkRecord, NodeSourceDetail, NodeSourceRecord,
-    NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState, SourceChunkDetail,
-    SourceChunkRecord, SourceDetail, SourceImportPreview, SourceImportReport, SourceRecord,
-    TreeNode,
+    ApplyPatchReport, Node, NodeDetail, NodeEvidenceChunkRecord, NodeEvidenceDetail,
+    NodeSourceChunkRecord, NodeSourceDetail, NodeSourceRecord, NodeSummary, PatchRunRecord,
+    SnapshotRecord, SnapshotState, SourceChunkDetail, SourceChunkRecord, SourceDetail,
+    SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
 };
 use crate::patch::{PatchDocument, PatchOp};
 use crate::project::ProjectPaths;
@@ -19,6 +19,8 @@ mod patching;
 mod queries;
 mod snapshots;
 mod source_import;
+
+const CURRENT_SCHEMA_VERSION: &str = "2";
 
 pub struct Workspace {
     pub paths: ProjectPaths,
@@ -59,6 +61,8 @@ impl Workspace {
             .with_context(|| format!("failed to open {}", paths.db_path.display()))?;
         let mut workspace = Self { paths, conn };
         workspace.enable_foreign_keys()?;
+        workspace.create_schema()?;
+        workspace.sync_schema_version()?;
         Ok(workspace)
     }
 
@@ -136,8 +140,25 @@ impl Workspace {
                 chunk_id TEXT NOT NULL REFERENCES source_chunks(id) ON DELETE CASCADE,
                 PRIMARY KEY (node_id, chunk_id)
             );
+
+            CREATE TABLE IF NOT EXISTS node_evidence_chunks (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                chunk_id TEXT NOT NULL REFERENCES source_chunks(id) ON DELETE CASCADE,
+                PRIMARY KEY (node_id, chunk_id)
+            );
             ",
         )?;
+        Ok(())
+    }
+
+    fn sync_schema_version(&self) -> Result<()> {
+        let has_workspace: Option<i64> = self
+            .conn
+            .query_row("SELECT 1 FROM metadata LIMIT 1", [], |row| row.get(0))
+            .optional()?;
+        if has_workspace.is_some() {
+            self.set_metadata("schema_version", CURRENT_SCHEMA_VERSION)?;
+        }
         Ok(())
     }
 
@@ -151,7 +172,7 @@ impl Workspace {
             .to_string();
         let now = timestamp_now();
 
-        self.set_metadata("schema_version", "1")?;
+        self.set_metadata("schema_version", CURRENT_SCHEMA_VERSION)?;
         self.set_metadata("created_at", &now.to_string())?;
         self.set_metadata("workspace_name", &workspace_name)?;
         self.set_metadata("root_id", "root")?;
@@ -280,6 +301,7 @@ mod tests {
             import_report.chunk_count
         );
         assert_eq!(snapshot_state.node_source_chunks.len(), 2);
+        assert!(snapshot_state.node_evidence_chunks.is_empty());
         let imported_root_id = import_report.root_node_id.clone();
         workspace.delete_node(imported_root_id)?;
         assert_eq!(workspace.list_sources()?.len(), 1);
@@ -398,6 +420,75 @@ mod tests {
     }
 
     #[test]
+    fn patch_can_cite_source_chunk_without_mutating_source_chunk_links() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Cite imported chunk on a new node".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AttachSource {
+                    node_id: "idea".to_string(),
+                    source_id: import_report.source_id.clone(),
+                },
+                PatchOp::CiteSourceChunk {
+                    node_id: "idea".to_string(),
+                    chunk_id: chunk_id.clone(),
+                },
+            ],
+        };
+
+        let report = workspace.apply_patch_document(patch, "test", false)?;
+        assert!(report.run_id.is_some());
+
+        let detail = workspace.node_detail("idea")?;
+        assert_eq!(detail.sources.len(), 1);
+        assert!(detail.sources[0].chunks.is_empty());
+        assert_eq!(detail.evidence.len(), 1);
+        assert_eq!(detail.evidence[0].source.id, import_report.source_id);
+        assert_eq!(detail.evidence[0].chunks.len(), 1);
+        assert_eq!(
+            detail.evidence[0].chunks[0].label.as_deref(),
+            Some("Problem")
+        );
+
+        let refreshed_source = workspace.source_detail(&import_report.source_id)?;
+        let linked_titles = refreshed_source.chunks[0]
+            .linked_nodes
+            .iter()
+            .map(|node| node.title.clone())
+            .collect::<Vec<_>>();
+        let evidence_titles = refreshed_source.chunks[0]
+            .evidence_nodes
+            .iter()
+            .map(|node| node.title.clone())
+            .collect::<Vec<_>>();
+        assert!(linked_titles.contains(&"Problem".to_string()));
+        assert!(!linked_titles.contains(&"Idea".to_string()));
+        assert!(evidence_titles.contains(&"Idea".to_string()));
+        assert!(!evidence_titles.contains(&"Problem".to_string()));
+        Ok(())
+    }
+
+    #[test]
     fn patch_validation_requires_source_link_before_chunk_link() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
@@ -439,6 +530,54 @@ mod tests {
             error
                 .to_string()
                 .contains("op 2 attach_source_chunk: cannot attach source chunk")
+        );
+        assert_eq!(workspace.list_nodes()?.len(), node_count_before);
+        assert_eq!(workspace.patch_history()?.len(), patch_history_before);
+        Ok(())
+    }
+
+    #[test]
+    fn patch_validation_requires_source_link_before_citation() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+        let node_count_before = workspace.list_nodes()?.len();
+        let patch_history_before = workspace.patch_history()?.len();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Cite chunk without source link".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::CiteSourceChunk {
+                    node_id: "idea".to_string(),
+                    chunk_id,
+                },
+            ],
+        };
+
+        let error = workspace
+            .apply_patch_document(patch, "test", false)
+            .expect_err("citations should require a source-level link first");
+        assert!(
+            error
+                .to_string()
+                .contains("op 2 cite_source_chunk: cannot cite source chunk")
         );
         assert_eq!(workspace.list_nodes()?.len(), node_count_before);
         assert_eq!(workspace.patch_history()?.len(), patch_history_before);
@@ -607,6 +746,87 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(linked_titles.contains(&"Idea".to_string()));
         assert!(linked_titles.contains(&"Problem".to_string()));
+        assert_eq!(workspace.patch_history()?.len(), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_restore_recovers_evidence_citations_without_rewinding_patch_history() -> Result<()>
+    {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        workspace.apply_patch_document(
+            PatchDocument {
+                version: 1,
+                summary: Some("Cite evidence for idea".to_string()),
+                ops: vec![
+                    PatchOp::AddNode {
+                        id: Some("idea".to_string()),
+                        parent_id: "root".to_string(),
+                        title: "Idea".to_string(),
+                        kind: Some("topic".to_string()),
+                        body: None,
+                        position: None,
+                    },
+                    PatchOp::AttachSource {
+                        node_id: "idea".to_string(),
+                        source_id: import_report.source_id.clone(),
+                    },
+                    PatchOp::CiteSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_id.clone(),
+                    },
+                ],
+            },
+            "test",
+            false,
+        )?;
+
+        let snapshot = workspace.save_snapshot(Some("with-citation".to_string()))?;
+        assert_eq!(workspace.patch_history()?.len(), 2);
+        assert_eq!(workspace.node_detail("idea")?.evidence.len(), 1);
+
+        workspace.apply_patch_document(
+            PatchDocument {
+                version: 1,
+                summary: Some("Remove citation from idea".to_string()),
+                ops: vec![PatchOp::UnciteSourceChunk {
+                    node_id: "idea".to_string(),
+                    chunk_id: chunk_id.clone(),
+                }],
+            },
+            "test",
+            false,
+        )?;
+
+        assert!(workspace.node_detail("idea")?.evidence.is_empty());
+        assert_eq!(workspace.patch_history()?.len(), 3);
+
+        workspace.restore_snapshot(&snapshot.id)?;
+
+        let restored_idea = workspace.node_detail("idea")?;
+        assert_eq!(restored_idea.evidence.len(), 1);
+        assert_eq!(restored_idea.evidence[0].source.id, import_report.source_id);
+        assert_eq!(restored_idea.evidence[0].chunks.len(), 1);
+        assert_eq!(restored_idea.evidence[0].chunks[0].id, chunk_id);
+
+        let restored_source = workspace.source_detail(&import_report.source_id)?;
+        let evidence_titles = restored_source.chunks[0]
+            .evidence_nodes
+            .iter()
+            .map(|node| node.title.clone())
+            .collect::<Vec<_>>();
+        assert!(evidence_titles.contains(&"Idea".to_string()));
         assert_eq!(workspace.patch_history()?.len(), 3);
         Ok(())
     }

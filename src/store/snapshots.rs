@@ -134,6 +134,13 @@ impl Workspace {
             )?;
         }
 
+        for node_evidence_chunk in snapshot.node_evidence_chunks {
+            transaction.execute(
+                "INSERT INTO node_evidence_chunks (node_id, chunk_id) VALUES (?1, ?2)",
+                params![node_evidence_chunk.node_id, node_evidence_chunk.chunk_id],
+            )?;
+        }
+
         transaction.commit()?;
         Ok(())
     }
@@ -146,6 +153,7 @@ impl Workspace {
             node_sources: self.list_node_sources()?,
             source_chunks: self.list_source_chunks()?,
             node_source_chunks: self.list_node_source_chunks()?,
+            node_evidence_chunks: self.list_node_evidence_chunks()?,
         })
     }
 

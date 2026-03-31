@@ -50,11 +50,19 @@ pub enum PatchOp {
         node_id: String,
         chunk_id: String,
     },
+    CiteSourceChunk {
+        node_id: String,
+        chunk_id: String,
+    },
     DetachSource {
         node_id: String,
         source_id: String,
     },
     DetachSourceChunk {
+        node_id: String,
+        chunk_id: String,
+    },
+    UnciteSourceChunk {
         node_id: String,
         chunk_id: String,
     },
@@ -86,8 +94,10 @@ impl PatchOp {
             Self::DeleteNode { .. } => "delete_node",
             Self::AttachSource { .. } => "attach_source",
             Self::AttachSourceChunk { .. } => "attach_source_chunk",
+            Self::CiteSourceChunk { .. } => "cite_source_chunk",
             Self::DetachSource { .. } => "detach_source",
             Self::DetachSourceChunk { .. } => "detach_source_chunk",
+            Self::UnciteSourceChunk { .. } => "uncite_source_chunk",
         }
     }
 
@@ -149,11 +159,17 @@ impl PatchOp {
             Self::AttachSourceChunk { node_id, chunk_id } => {
                 format!("attach source chunk {chunk_id} to node {node_id}")
             }
+            Self::CiteSourceChunk { node_id, chunk_id } => {
+                format!("cite source chunk {chunk_id} as evidence for node {node_id}")
+            }
             Self::DetachSource { node_id, source_id } => {
                 format!("detach source {source_id} from node {node_id}")
             }
             Self::DetachSourceChunk { node_id, chunk_id } => {
                 format!("detach source chunk {chunk_id} from node {node_id}")
+            }
+            Self::UnciteSourceChunk { node_id, chunk_id } => {
+                format!("remove cited source chunk {chunk_id} from node {node_id}")
             }
         }
     }

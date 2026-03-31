@@ -116,6 +116,28 @@ fn main() -> Result<()> {
                             }
                         }
                     }
+                    if detail.evidence.is_empty() {
+                        println!("evidence: (none)");
+                    } else {
+                        println!("evidence: {}", detail.evidence.len());
+                        for evidence_detail in detail.evidence {
+                            println!(
+                                "- {} [{}]",
+                                evidence_detail.source.original_name, evidence_detail.source.id
+                            );
+                            for chunk in evidence_detail.chunks {
+                                let label = chunk.label.as_deref().unwrap_or("(no label)");
+                                println!(
+                                    "  - cite chunk {} [{}-{}] {}",
+                                    chunk.ordinal + 1,
+                                    chunk.start_line,
+                                    chunk.end_line,
+                                    label
+                                );
+                                println!("    {}", chunk.text);
+                            }
+                        }
+                    }
                 }
                 NodeCommand::List { format } => match format {
                     ListFormat::Tree => print!("{}", workspace.tree_string()?),
@@ -233,6 +255,17 @@ fn main() -> Result<()> {
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             println!("  nodes: {}", linked_nodes);
+                        }
+                        if chunk_detail.evidence_nodes.is_empty() {
+                            println!("  evidence nodes: (none)");
+                        } else {
+                            let evidence_nodes = chunk_detail
+                                .evidence_nodes
+                                .into_iter()
+                                .map(|node| format!("{} [{}]", node.title, node.id))
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            println!("  evidence nodes: {}", evidence_nodes);
                         }
                     }
                 }

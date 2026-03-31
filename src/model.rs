@@ -30,6 +30,8 @@ pub struct SnapshotState {
     pub node_sources: Vec<NodeSourceRecord>,
     pub source_chunks: Vec<SourceChunkRecord>,
     pub node_source_chunks: Vec<NodeSourceChunkRecord>,
+    #[serde(default)]
+    pub node_evidence_chunks: Vec<NodeEvidenceChunkRecord>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,6 +91,12 @@ pub struct NodeSourceChunkRecord {
     pub chunk_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NodeEvidenceChunkRecord {
+    pub node_id: String,
+    pub chunk_id: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SourceImportReport {
     pub source_id: String,
@@ -119,17 +127,25 @@ pub struct NodeSourceDetail {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct NodeEvidenceDetail {
+    pub source: SourceRecord,
+    pub chunks: Vec<SourceChunkRecord>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeDetail {
     pub node: Node,
     pub parent: Option<NodeSummary>,
     pub children: Vec<NodeSummary>,
     pub sources: Vec<NodeSourceDetail>,
+    pub evidence: Vec<NodeEvidenceDetail>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SourceChunkDetail {
     pub chunk: SourceChunkRecord,
     pub linked_nodes: Vec<NodeSummary>,
+    pub evidence_nodes: Vec<NodeSummary>,
 }
 
 #[derive(Debug, Clone, Serialize)]

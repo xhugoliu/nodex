@@ -184,6 +184,7 @@ impl Workspace {
             self.list_source_chunks()?,
             self.list_node_sources()?,
             self.list_node_source_chunks()?,
+            self.list_node_evidence_chunks()?,
             validation_context,
         );
         for (index, op) in patch.ops.iter().enumerate() {
@@ -208,6 +209,7 @@ struct SimulatedWorkspaceState {
     chunk_source_ids: HashMap<String, String>,
     node_sources: HashSet<(String, String)>,
     node_source_chunks: HashSet<(String, String)>,
+    node_evidence_chunks: HashSet<(String, String)>,
 }
 
 pub(super) struct PatchArchive {
@@ -226,6 +228,7 @@ impl SimulatedWorkspaceState {
         source_chunks: Vec<SourceChunkRecord>,
         node_sources: Vec<NodeSourceRecord>,
         node_source_chunks: Vec<NodeSourceChunkRecord>,
+        node_evidence_chunks: Vec<NodeEvidenceChunkRecord>,
         validation_context: &PatchValidationContext,
     ) -> Self {
         let parent_ids = nodes
@@ -257,6 +260,10 @@ impl SimulatedWorkspaceState {
             .into_iter()
             .map(|link| (link.node_id, link.chunk_id))
             .collect::<HashSet<_>>();
+        let node_evidence_chunks = node_evidence_chunks
+            .into_iter()
+            .map(|link| (link.node_id, link.chunk_id))
+            .collect::<HashSet<_>>();
         Self {
             root_id,
             parent_ids,
@@ -264,6 +271,7 @@ impl SimulatedWorkspaceState {
             chunk_source_ids,
             node_sources,
             node_source_chunks,
+            node_evidence_chunks,
         }
     }
 
@@ -374,6 +382,34 @@ impl SimulatedWorkspaceState {
                     );
                 }
             }
+            PatchOp::CiteSourceChunk { node_id, chunk_id } => {
+                if !self.parent_ids.contains_key(node_id) {
+                    bail!(
+                        "cannot cite source chunk {chunk_id} for node {node_id}: node was not found"
+                    );
+                }
+                let source_id = self.chunk_source_ids.get(chunk_id).with_context(|| {
+                    format!(
+                        "cannot cite source chunk {chunk_id} for node {node_id}: chunk was not found"
+                    )
+                })?;
+                if !self
+                    .node_sources
+                    .contains(&(node_id.clone(), source_id.clone()))
+                {
+                    bail!(
+                        "cannot cite source chunk {chunk_id} for node {node_id}: attach source {source_id} first"
+                    );
+                }
+                if !self
+                    .node_evidence_chunks
+                    .insert((node_id.clone(), chunk_id.clone()))
+                {
+                    bail!(
+                        "cannot cite source chunk {chunk_id} for node {node_id}: citation already exists"
+                    );
+                }
+            }
             PatchOp::DetachSource { node_id, source_id } => {
                 if !self.parent_ids.contains_key(node_id) {
                     bail!(
@@ -398,9 +434,19 @@ impl SimulatedWorkspaceState {
                                 .get(chunk_id)
                                 .is_some_and(|current_source_id| current_source_id == source_id)
                     })
+                    || self
+                        .node_evidence_chunks
+                        .iter()
+                        .any(|(current_node_id, chunk_id)| {
+                            current_node_id == node_id
+                                && self
+                                    .chunk_source_ids
+                                    .get(chunk_id)
+                                    .is_some_and(|current_source_id| current_source_id == source_id)
+                        })
                 {
                     bail!(
-                        "cannot detach source {source_id} from node {node_id}: detach linked source chunks first"
+                        "cannot detach source {source_id} from node {node_id}: detach linked source chunks and citations first"
                     );
                 }
                 self.node_sources
@@ -423,6 +469,26 @@ impl SimulatedWorkspaceState {
                 {
                     bail!(
                         "cannot detach source chunk {chunk_id} from node {node_id}: link was not found"
+                    );
+                }
+            }
+            PatchOp::UnciteSourceChunk { node_id, chunk_id } => {
+                if !self.parent_ids.contains_key(node_id) {
+                    bail!(
+                        "cannot remove cited source chunk {chunk_id} from node {node_id}: node was not found"
+                    );
+                }
+                if !self.chunk_source_ids.contains_key(chunk_id) {
+                    bail!(
+                        "cannot remove cited source chunk {chunk_id} from node {node_id}: chunk was not found"
+                    );
+                }
+                if !self
+                    .node_evidence_chunks
+                    .remove(&(node_id.clone(), chunk_id.clone()))
+                {
+                    bail!(
+                        "cannot remove cited source chunk {chunk_id} from node {node_id}: citation was not found"
                     );
                 }
             }
@@ -463,6 +529,8 @@ impl SimulatedWorkspaceState {
             self.node_sources
                 .retain(|(current_node_id, _)| current_node_id != &node_id);
             self.node_source_chunks
+                .retain(|(current_node_id, _)| current_node_id != &node_id);
+            self.node_evidence_chunks
                 .retain(|(current_node_id, _)| current_node_id != &node_id);
         }
     }
@@ -592,6 +660,32 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
                 params![node_id, chunk_id],
             )?;
         }
+        PatchOp::CiteSourceChunk { node_id, chunk_id } => {
+            let source_id: String = transaction
+                .query_row(
+                    "SELECT source_id FROM source_chunks WHERE id = ?1",
+                    [chunk_id],
+                    |row| row.get(0),
+                )
+                .optional()?
+                .with_context(|| format!("source chunk {chunk_id} was not found"))?;
+            let source_link_exists: Option<i64> = transaction
+                .query_row(
+                    "SELECT 1 FROM node_sources WHERE node_id = ?1 AND source_id = ?2",
+                    params![node_id, source_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if source_link_exists.is_none() {
+                bail!(
+                    "cannot cite source chunk {chunk_id} for node {node_id}: attach source {source_id} first"
+                );
+            }
+            transaction.execute(
+                "INSERT INTO node_evidence_chunks (node_id, chunk_id) VALUES (?1, ?2)",
+                params![node_id, chunk_id],
+            )?;
+        }
         PatchOp::DetachSource { node_id, source_id } => {
             let chunk_link_exists: Option<i64> = transaction
                 .query_row(
@@ -604,9 +698,20 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
                     |row| row.get(0),
                 )
                 .optional()?;
-            if chunk_link_exists.is_some() {
+            let evidence_link_exists: Option<i64> = transaction
+                .query_row(
+                    "SELECT 1
+                     FROM node_evidence_chunks
+                     JOIN source_chunks ON source_chunks.id = node_evidence_chunks.chunk_id
+                     WHERE node_evidence_chunks.node_id = ?1 AND source_chunks.source_id = ?2
+                     LIMIT 1",
+                    params![node_id, source_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if chunk_link_exists.is_some() || evidence_link_exists.is_some() {
                 bail!(
-                    "cannot detach source {source_id} from node {node_id}: detach linked source chunks first"
+                    "cannot detach source {source_id} from node {node_id}: detach linked source chunks and citations first"
                 );
             }
             let removed = transaction.execute(
@@ -637,6 +742,29 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
             if removed == 0 {
                 bail!(
                     "cannot detach source chunk {chunk_id} from node {node_id}: link was not found"
+                );
+            }
+        }
+        PatchOp::UnciteSourceChunk { node_id, chunk_id } => {
+            let chunk_exists: Option<i64> = transaction
+                .query_row(
+                    "SELECT 1 FROM source_chunks WHERE id = ?1",
+                    [chunk_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            if chunk_exists.is_none() {
+                bail!(
+                    "cannot remove cited source chunk {chunk_id} from node {node_id}: chunk was not found"
+                );
+            }
+            let removed = transaction.execute(
+                "DELETE FROM node_evidence_chunks WHERE node_id = ?1 AND chunk_id = ?2",
+                params![node_id, chunk_id],
+            )?;
+            if removed == 0 {
+                bail!(
+                    "cannot remove cited source chunk {chunk_id} from node {node_id}: citation was not found"
                 );
             }
         }
