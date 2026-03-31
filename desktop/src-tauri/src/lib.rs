@@ -318,6 +318,22 @@ fn delete_node_patch(node_id: String) -> PatchDocument {
     }
 }
 
+fn cite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument {
+    PatchDocument {
+        version: 1,
+        summary: Some(format!("Cite chunk {chunk_id} for node {node_id}")),
+        ops: vec![PatchOp::CiteSourceChunk { node_id, chunk_id }],
+    }
+}
+
+fn uncite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument {
+    PatchDocument {
+        version: 1,
+        summary: Some(format!("Remove cited chunk {chunk_id} from node {node_id}")),
+        ops: vec![PatchOp::UnciteSourceChunk { node_id, chunk_id }],
+    }
+}
+
 fn build_native_menu<R: Runtime>(
     app: &AppHandle<R>,
     state: &DesktopState,
@@ -393,14 +409,20 @@ fn build_native_menu<R: Runtime>(
             &SubmenuBuilder::new(app, menu_label(&locale, "workspace"))
                 .text(MENU_WORKSPACE_OPEN, menu_label(&locale, "open_folder"))
                 .text(MENU_WORKSPACE_REFRESH, menu_label(&locale, "refresh"))
-                .text(MENU_WORKSPACE_SAVE_SNAPSHOT, menu_label(&locale, "save_snapshot"))
+                .text(
+                    MENU_WORKSPACE_SAVE_SNAPSHOT,
+                    menu_label(&locale, "save_snapshot"),
+                )
                 .separator()
                 .item(&restore_snapshot_menu)
                 .build()?,
         )
         .item(
             &SubmenuBuilder::new(app, menu_label(&locale, "source"))
-                .text(MENU_SOURCE_PREVIEW_IMPORT, menu_label(&locale, "preview_import"))
+                .text(
+                    MENU_SOURCE_PREVIEW_IMPORT,
+                    menu_label(&locale, "preview_import"),
+                )
                 .text(MENU_SOURCE_RUN_IMPORT, menu_label(&locale, "run_import"))
                 .build()?,
         )
@@ -415,10 +437,7 @@ fn build_native_menu<R: Runtime>(
         .build()
 }
 
-fn refresh_native_menu<R: Runtime>(
-    app: &AppHandle<R>,
-    state: &DesktopState,
-) -> tauri::Result<()> {
+fn refresh_native_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopState) -> tauri::Result<()> {
     let menu = build_native_menu(app, state)?;
     let _ = app.set_menu(menu)?;
     Ok(())
@@ -459,11 +478,7 @@ fn handle_workspace_open_menu<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
-fn handle_source_import_menu<R: Runtime>(
-    app: &AppHandle<R>,
-    state: &DesktopState,
-    preview: bool,
-) {
+fn handle_source_import_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopState, preview: bool) {
     let app_handle = app.clone();
     let workspace_path = match current_workspace_path(state) {
         Some(path) => path,
@@ -490,7 +505,10 @@ fn handle_source_import_menu<R: Runtime>(
                         emit_patch_editor(
                             &app_handle,
                             &preview_result.patch,
-                            format!("Previewed import for {}", preview_result.report.original_name),
+                            format!(
+                                "Previewed import for {}",
+                                preview_result.report.original_name
+                            ),
                             false,
                         );
                     }
@@ -502,8 +520,7 @@ fn handle_source_import_menu<R: Runtime>(
                     .and_then(|report| {
                         let workspace = open_workspace_from(&workspace_path)?;
                         Ok((workspace_overview(&workspace)?, report))
-                    })
-                {
+                    }) {
                     Ok((overview, report)) => {
                         let state = app_handle.state::<DesktopState>();
                         emit_workspace_loaded(
@@ -524,17 +541,21 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, state: &DesktopState, event
 
     match event_id {
         MENU_WORKSPACE_OPEN => handle_workspace_open_menu(app),
-        MENU_WORKSPACE_REFRESH => match with_current_workspace(state, |workspace| workspace_overview(workspace)) {
-            Ok(overview) => emit_workspace_loaded(app, state, overview, "Workspace refreshed."),
-            Err(err) => emit_console(app, err.to_string(), "error"),
-        },
-        MENU_WORKSPACE_SAVE_SNAPSHOT => match with_current_workspace(state, |workspace| workspace.save_snapshot(None)) {
-            Ok(snapshot) => {
-                let _ = refresh_native_menu(app, state);
-                emit_console(app, format!("Saved snapshot {}", snapshot.id), "success");
+        MENU_WORKSPACE_REFRESH => {
+            match with_current_workspace(state, |workspace| workspace_overview(workspace)) {
+                Ok(overview) => emit_workspace_loaded(app, state, overview, "Workspace refreshed."),
+                Err(err) => emit_console(app, err.to_string(), "error"),
             }
-            Err(err) => emit_console(app, err.to_string(), "error"),
-        },
+        }
+        MENU_WORKSPACE_SAVE_SNAPSHOT => {
+            match with_current_workspace(state, |workspace| workspace.save_snapshot(None)) {
+                Ok(snapshot) => {
+                    let _ = refresh_native_menu(app, state);
+                    emit_console(app, format!("Saved snapshot {}", snapshot.id), "success");
+                }
+                Err(err) => emit_console(app, err.to_string(), "error"),
+            }
+        }
         MENU_SOURCE_PREVIEW_IMPORT => handle_source_import_menu(app, state, true),
         MENU_SOURCE_RUN_IMPORT => handle_source_import_menu(app, state, false),
         MENU_LANGUAGE_AUTO => emit_language(app, "auto"),
@@ -546,15 +567,20 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, state: &DesktopState, event
                 workspace.restore_snapshot(snapshot_id)?;
                 workspace_overview(workspace)
             }) {
-                Ok(overview) => {
-                    emit_workspace_loaded(app, state, overview, format!("Restored snapshot {snapshot_id}"))
-                }
+                Ok(overview) => emit_workspace_loaded(
+                    app,
+                    state,
+                    overview,
+                    format!("Restored snapshot {snapshot_id}"),
+                ),
                 Err(err) => emit_console(app, err.to_string(), "error"),
             }
         }
         _ if event_id.starts_with(MENU_HISTORY_PREFIX) => {
             let run_id = event_id.trim_start_matches(MENU_HISTORY_PREFIX);
-            match with_current_workspace(state, |workspace| workspace.patch_document_by_run_id(run_id)) {
+            match with_current_workspace(state, |workspace| {
+                workspace.patch_document_by_run_id(run_id)
+            }) {
                 Ok(patch) => emit_patch_editor(app, &patch, format!("Loaded patch {run_id}"), true),
                 Err(err) => emit_console(app, err.to_string(), "error"),
             }
@@ -652,7 +678,11 @@ fn import_source(
     let report = workspace
         .import_source(Path::new(&source_path))
         .map_err(|err| err.to_string())?;
-    set_current_workspace(&app, state.inner(), display_path(workspace.paths.root_dir.as_path()));
+    set_current_workspace(
+        &app,
+        state.inner(),
+        display_path(workspace.paths.root_dir.as_path()),
+    );
     Ok(report)
 }
 
@@ -677,7 +707,11 @@ fn apply_patch(
     let report = workspace
         .apply_patch_document(patch, "desktop", false)
         .map_err(|err| err.to_string())?;
-    set_current_workspace(&app, state.inner(), display_path(workspace.paths.root_dir.as_path()));
+    set_current_workspace(
+        &app,
+        state.inner(),
+        display_path(workspace.paths.root_dir.as_path()),
+    );
     Ok(report)
 }
 
@@ -725,6 +759,16 @@ fn draft_delete_node_patch(node_id: String) -> PatchDocument {
 }
 
 #[command]
+fn draft_cite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument {
+    cite_source_chunk_patch(node_id, chunk_id)
+}
+
+#[command]
+fn draft_uncite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument {
+    uncite_source_chunk_patch(node_id, chunk_id)
+}
+
+#[command]
 fn save_snapshot(
     app: AppHandle,
     state: State<DesktopState>,
@@ -735,7 +779,11 @@ fn save_snapshot(
     let snapshot = workspace
         .save_snapshot(label)
         .map_err(|err| err.to_string())?;
-    set_current_workspace(&app, state.inner(), display_path(workspace.paths.root_dir.as_path()));
+    set_current_workspace(
+        &app,
+        state.inner(),
+        display_path(workspace.paths.root_dir.as_path()),
+    );
     Ok(snapshot)
 }
 
@@ -771,8 +819,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             apply_patch,
             draft_add_node_patch,
+            draft_cite_source_chunk_patch,
             draft_delete_node_patch,
             draft_move_node_patch,
+            draft_uncite_source_chunk_patch,
             draft_update_node_patch,
             get_node_detail,
             get_patch_document,

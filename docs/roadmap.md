@@ -160,6 +160,7 @@
 - 中栏压缩后的详情摘要与底部控制台
 - 右栏统一节点编辑器与 patch 编辑器
 - source import / snapshot / 历史 patch / 语言切换通过原生菜单进入
+- 可从 source detail 为上下文节点起草 `cite_source_chunk` / `uncite_source_chunk`
 
 关键问题：
 

@@ -387,7 +387,9 @@ export default function App() {
     }
 
     try {
-      const sourceContextId = selectedSourceDetail ? selectedSourceId : null;
+      const sourceContextId = selectedSourceDetail
+        ? selectedSourceId
+        : contextSourceId;
       const detail = await invokeCommand<NodeDetail>("get_node_detail", {
         start_path: path,
         node_id: nodeId,
@@ -417,7 +419,7 @@ export default function App() {
     }
 
     try {
-      const nodeContextId = selectedNodeDetail ? selectedNodeId : null;
+      const nodeContextId = selectedNodeDetail ? selectedNodeId : contextNodeId;
       const detail = await invokeCommand<SourceDetail>("get_source_detail", {
         start_path: path,
         source_id: sourceId,
@@ -657,6 +659,37 @@ export default function App() {
     }
   }
 
+  async function draftSourceChunkCitation(chunkId: string, cited: boolean) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    if (!contextNodeId) {
+      setConsoleMessage(t("messages.selectNodeContextFirst"), "error");
+      return;
+    }
+
+    try {
+      setShowAdvancedPatchEditor(false);
+      const command = cited
+        ? "draft_uncite_source_chunk_patch"
+        : "draft_cite_source_chunk_patch";
+      const patch = await invokeCommand<PatchDocument>(command, {
+        node_id: contextNodeId,
+        chunk_id: chunkId,
+      });
+      setPatchEditor(JSON.stringify(patch, null, 2));
+      setConsoleMessage(
+        cited
+          ? t("messages.draftedUncitation", { nodeId: contextNodeId })
+          : t("messages.draftedCitation", { nodeId: contextNodeId }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   function clearPatchEditor() {
     setPatchEditor("");
     setShowAdvancedPatchEditor(false);
@@ -698,6 +731,12 @@ export default function App() {
             }}
             onSelectSource={(sourceId) => {
               void fetchSourceDetail(sourceId);
+            }}
+            onDraftCiteChunk={(chunkId) => {
+              void draftSourceChunkCitation(chunkId, false);
+            }}
+            onDraftUnciteChunk={(chunkId) => {
+              void draftSourceChunkCitation(chunkId, true);
             }}
           />
           <EditorPane

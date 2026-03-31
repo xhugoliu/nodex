@@ -144,6 +144,8 @@ export function InspectorPane(props: {
   onToggleConsoleDetails: () => void;
   onSelectNode: (nodeId: string) => void;
   onSelectSource: (sourceId: string) => void;
+  onDraftCiteChunk: (chunkId: string) => void;
+  onDraftUnciteChunk: (chunkId: string) => void;
 }) {
   const consoleLabel =
     props.consoleTone === "error"
@@ -172,6 +174,8 @@ export function InspectorPane(props: {
               contextNodeId={props.contextNodeId}
               t={props.t}
               onSelectNode={props.onSelectNode}
+              onDraftCiteChunk={props.onDraftCiteChunk}
+              onDraftUnciteChunk={props.onDraftUnciteChunk}
             />
           ) : (
             <EmptyState
@@ -799,6 +803,56 @@ function CompactNodeDetail(props: {
         )}
       </section>
 
+      <section className="rounded-lg bg-[rgba(17,24,39,0.03)] p-3 space-y-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.evidenceSection")}
+        </div>
+        {props.detail.evidence.length ? (
+          <div className="space-y-2">
+            {props.detail.evidence.slice(0, 4).map((evidenceDetail) => (
+              <button
+                key={evidenceDetail.source.id}
+                className={[
+                  "w-full rounded-xl border px-3 py-3 text-left transition",
+                  props.contextSourceId === evidenceDetail.source.id
+                    ? "border-[rgba(17,24,39,0.18)] bg-white shadow-[0_6px_18px_rgba(15,23,42,0.05)]"
+                    : "border-[color:var(--line)] bg-white hover:border-[rgba(17,24,39,0.18)] hover:bg-white/90",
+                ].join(" ")}
+                onClick={() => props.onSelectSource(evidenceDetail.source.id)}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="truncate text-sm font-medium text-[color:var(--text)]">
+                        {evidenceDetail.source.original_name}
+                      </div>
+                      <span className="shrink-0 rounded-full border border-[color:var(--line)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                        {evidenceDetail.source.format}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-[color:var(--muted)]">
+                      {props.t("detail.citedChunks", {
+                        count: evidenceDetail.chunks.length,
+                      })}
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                      {summarizeChunkLabels(evidenceDetail.chunks, props.t)}
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                    {props.t("detail.openSource")}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("detail.noEvidenceLinks")}
+          </div>
+        )}
+      </section>
+
       <section className="rounded-lg bg-[rgba(17,24,39,0.03)] p-3 space-y-2">
         <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
           {props.t("detail.relationsSection")}
@@ -844,11 +898,20 @@ function CompactSourceDetail(props: {
   contextNodeId: string | null;
   t: Translator;
   onSelectNode: (nodeId: string) => void;
+  onDraftCiteChunk: (chunkId: string) => void;
+  onDraftUnciteChunk: (chunkId: string) => void;
 }) {
   const linkedNodes = Array.from(
     new Map(
       props.detail.chunks
         .flatMap((chunk) => chunk.linked_nodes)
+        .map((node) => [node.id, node]),
+    ).values(),
+  );
+  const evidenceNodes = Array.from(
+    new Map(
+      props.detail.chunks
+        .flatMap((chunk) => chunk.evidence_nodes)
         .map((node) => [node.id, node]),
     ).values(),
   );
@@ -880,6 +943,12 @@ function CompactSourceDetail(props: {
         <div className="space-y-1 text-sm leading-6 text-[color:var(--text)]">
           <div>{props.t("detail.chunksSection")}: {props.detail.chunks.length}</div>
           <div>{props.t("detail.nodes", { value: linkedNodes.length })}</div>
+          <div>{props.t("detail.evidenceNodes", { value: evidenceNodes.length })}</div>
+        </div>
+        <div className="text-sm leading-6 text-[color:var(--muted)]">
+          {props.contextNodeId
+            ? props.t("detail.citationContextReady", { nodeId: props.contextNodeId })
+            : props.t("detail.citationContextMissing")}
         </div>
         {linkedNodes.length ? (
           <div className="flex flex-wrap gap-2 pt-1">
@@ -925,15 +994,43 @@ function CompactSourceDetail(props: {
                       })}
                     </div>
                   </div>
-                  <span className="shrink-0 rounded-full border border-[color:var(--line-soft)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
-                    {props.t("detail.nodes", {
-                      value: chunkDetail.linked_nodes.length,
-                    })}
-                  </span>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <span className="rounded-full border border-[color:var(--line-soft)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                      {props.t("detail.nodes", {
+                        value: chunkDetail.linked_nodes.length,
+                      })}
+                    </span>
+                    <span className="rounded-full border border-[color:var(--line-soft)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                      {props.t("detail.evidenceNodes", {
+                        value: chunkDetail.evidence_nodes.length,
+                      })}
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[color:var(--text)]">
                   {excerptText(chunkDetail.chunk.text, 160)}
                 </div>
+                {props.contextNodeId ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {chunkDetail.evidence_nodes.some(
+                      (node) => node.id === props.contextNodeId,
+                    ) ? (
+                      <button
+                        className={ghostButtonClass}
+                        onClick={() => props.onDraftUnciteChunk(chunkDetail.chunk.id)}
+                      >
+                        {props.t("detail.draftUncite")}
+                      </button>
+                    ) : (
+                      <button
+                        className={secondaryButtonClass}
+                        onClick={() => props.onDraftCiteChunk(chunkDetail.chunk.id)}
+                      >
+                        {props.t("detail.draftCite")}
+                      </button>
+                    )}
+                  </div>
+                ) : null}
                 {chunkDetail.linked_nodes.length ? (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {chunkDetail.linked_nodes.slice(0, 3).map((node) => (

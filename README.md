@@ -40,6 +40,7 @@ cargo run -- export outline
 - 单屏三栏桌面工作台：树 / 详情摘要 / 统一编辑器
 - 工作区入口收敛为“打开文件夹后自动打开或初始化”
 - 由原生 Tauri 菜单栏承载低频动作：语言、source import、snapshot、历史 patch
+- 可从来源详情为上下文节点起草 cite / uncite patch
 
 当前还没落地：
 

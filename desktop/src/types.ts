@@ -98,16 +98,23 @@ export interface NodeSourceDetail {
   chunks: SourceChunkRecord[];
 }
 
+export interface NodeEvidenceDetail {
+  source: SourceRecord;
+  chunks: SourceChunkRecord[];
+}
+
 export interface NodeDetail {
   node: NodeRecord;
   parent: NodeSummary | null;
   children: NodeSummary[];
   sources: NodeSourceDetail[];
+  evidence: NodeEvidenceDetail[];
 }
 
 export interface SourceChunkDetail {
   chunk: SourceChunkRecord;
   linked_nodes: NodeSummary[];
+  evidence_nodes: NodeSummary[];
 }
 
 export interface SourceDetail {
