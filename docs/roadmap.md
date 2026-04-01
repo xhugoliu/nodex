@@ -112,6 +112,7 @@
 - 本地组装 expand 所需的节点、source 与 evidence 上下文
 - 返回 prompt bundle 和 patch scaffold 预览，不调用真实模型
 - 可导出 request bundle，并通过 `ai apply-response` 回放外部 response
+- 可通过 `ai run-external` 调用本地 runner，打通 request -> response -> patch 预览
 
 关键问题：
 

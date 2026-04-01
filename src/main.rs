@@ -5,7 +5,10 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use nodex::{
-    ai::{AiExpandPreview, AiPatchResponse, parse_ai_patch_response},
+    ai::{
+        AiExpandPreview, AiPatchResponse, ExternalRunnerReport, parse_ai_patch_response,
+        write_ai_json_document,
+    },
     model::{ApplyPatchReport, SourceImportPreview, SourceImportReport},
     patch::PatchDocument,
     store::{Workspace, format_timestamp},
@@ -46,14 +49,14 @@ fn main() -> Result<()> {
                 let preview = workspace.preview_ai_expand(&node_id)?;
                 if let Some(request_path) = emit_request {
                     let request_path = resolve_path(&cwd, &request_path);
-                    write_json_document(&request_path, &preview.request)?;
+                    write_ai_json_document(&request_path, &preview.request)?;
                     if matches!(format, OutputFormat::Text) {
                         println!("Wrote AI request to {}", request_path.display());
                     }
                 }
                 if let Some(template_path) = emit_response_template {
                     let template_path = resolve_path(&cwd, &template_path);
-                    write_json_document(&template_path, &preview.response_template)?;
+                    write_ai_json_document(&template_path, &preview.response_template)?;
                     if matches!(format, OutputFormat::Text) {
                         println!("Wrote AI response template to {}", template_path.display());
                     }
@@ -91,6 +94,20 @@ fn main() -> Result<()> {
                         report,
                         dry_run,
                     })?,
+                }
+            }
+            AiCommand::RunExternal {
+                node_id,
+                command,
+                dry_run,
+                format,
+            } => {
+                let mut workspace = Workspace::open_from(&cwd)?;
+                let runner_report =
+                    workspace.run_external_ai_expand(&node_id, &command, dry_run)?;
+                match format {
+                    OutputFormat::Text => print_external_runner_report(&runner_report, dry_run),
+                    OutputFormat::Json => print_json(&runner_report)?,
                 }
             }
         },
@@ -528,17 +545,7 @@ fn print_ai_expand_preview(preview: &AiExpandPreview) {
 }
 
 fn write_patch_document(path: &std::path::Path, patch: &PatchDocument) -> Result<()> {
-    write_json_document(path, patch)
-}
-
-fn write_json_document<T: Serialize>(path: &std::path::Path, value: &T) -> Result<()> {
-    if let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create {}", parent.display()))?;
-    }
-    let json = serde_json::to_string_pretty(value)?;
-    std::fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))?;
-    Ok(())
+    write_ai_json_document(path, patch)
 }
 
 fn print_json<T: Serialize>(value: &T) -> Result<()> {
@@ -551,4 +558,16 @@ struct AiResponseApplyOutput {
     response: AiPatchResponse,
     report: ApplyPatchReport,
     dry_run: bool,
+}
+
+fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {
+    println!("External AI runner completed.");
+    println!("command: {}", report.command);
+    println!("request: {}", report.request_path);
+    println!("response: {}", report.response_path);
+    println!("exit code: {}", report.exit_code);
+    if dry_run {
+        println!("Dry run succeeded.");
+    }
+    print_patch_report(&report.report);
 }

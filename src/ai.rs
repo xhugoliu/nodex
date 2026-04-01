@@ -1,9 +1,13 @@
+use std::process::Command;
+
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::{
     model::{ApplyPatchReport, NodeDetail, SourceChunkRecord},
     patch::{PatchDocument, PatchOp},
+    project::ProjectPaths,
     store::Workspace,
 };
 
@@ -93,6 +97,15 @@ pub struct AiExpandPreview {
     pub response_template: AiPatchResponse,
     pub draft_patch: PatchDocument,
     pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExternalRunnerReport {
+    pub request_path: String,
+    pub response_path: String,
+    pub command: String,
+    pub exit_code: i32,
+    pub report: ApplyPatchReport,
 }
 
 impl Workspace {
@@ -207,6 +220,42 @@ impl Workspace {
     ) -> Result<ApplyPatchReport> {
         validate_response_contract(&response)?;
         self.apply_patch_document(response.patch, "ai_response", dry_run)
+    }
+
+    pub fn run_external_ai_expand(
+        &mut self,
+        node_id: &str,
+        command: &str,
+        dry_run: bool,
+    ) -> Result<ExternalRunnerReport> {
+        let preview = self.preview_ai_expand(node_id)?;
+        let run_id = Uuid::new_v4().to_string();
+        let request_path = self.paths.ai_dir.join(format!("{run_id}.request.json"));
+        let response_path = self.paths.ai_dir.join(format!("{run_id}.response.json"));
+        write_ai_json_document(&request_path, &preview.request)?;
+
+        let status =
+            run_external_command(&self.paths, command, &request_path, &response_path, node_id)?;
+        if !status.success() {
+            bail!(
+                "external AI runner failed with exit code {}",
+                status.code().unwrap_or(-1)
+            );
+        }
+
+        let response_json = std::fs::read_to_string(&response_path)
+            .with_context(|| format!("failed to read {}", response_path.display()))?;
+        let response = parse_ai_patch_response(&response_json)
+            .with_context(|| format!("failed to parse {}", response_path.display()))?;
+        let report = self.apply_ai_patch_response(response, dry_run)?;
+
+        Ok(ExternalRunnerReport {
+            request_path: request_path.display().to_string(),
+            response_path: response_path.display().to_string(),
+            command: command.to_string(),
+            exit_code: status.code().unwrap_or_default(),
+            report,
+        })
     }
 }
 
@@ -394,6 +443,34 @@ pub fn parse_ai_patch_response(response_json: &str) -> Result<AiPatchResponse> {
     Ok(response)
 }
 
+pub fn write_ai_json_document<T: Serialize>(path: &std::path::Path, value: &T) -> Result<()> {
+    if let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create {}", parent.display()))?;
+    }
+    let json = serde_json::to_string_pretty(value)?;
+    std::fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
+fn run_external_command(
+    paths: &ProjectPaths,
+    command: &str,
+    request_path: &std::path::Path,
+    response_path: &std::path::Path,
+    node_id: &str,
+) -> Result<std::process::ExitStatus> {
+    Command::new("zsh")
+        .arg("-lc")
+        .arg(command)
+        .env("NODEX_AI_REQUEST", request_path)
+        .env("NODEX_AI_RESPONSE", response_path)
+        .env("NODEX_AI_WORKSPACE", &paths.root_dir)
+        .env("NODEX_AI_NODE_ID", node_id)
+        .status()
+        .with_context(|| format!("failed to run external AI command `{command}`"))
+}
+
 fn validate_response_contract(response: &AiPatchResponse) -> Result<()> {
     if response.version != AI_CONTRACT_VERSION {
         bail!(
@@ -500,6 +577,54 @@ mod tests {
 
         assert!(report.run_id.is_none());
         assert_eq!(report.preview.len(), 3);
+        Ok(())
+    }
+
+    #[test]
+    fn external_runner_can_round_trip_request_and_response() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let command = r#"python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+request = json.loads(Path(os.environ["NODEX_AI_REQUEST"]).read_text())
+response = {
+    "version": request["contract"]["version"],
+    "kind": request["contract"]["response_kind"],
+    "capability": request["capability"],
+    "request_node_id": request["target_node"]["id"],
+    "status": "ok",
+    "summary": "External runner scaffold response",
+    "generator": {
+        "provider": "test_runner",
+        "model": None,
+        "run_id": "test-run"
+    },
+    "patch": {
+        "version": request["contract"]["patch_version"],
+        "summary": "External runner scaffold response",
+        "ops": [
+            {
+                "type": "add_node",
+                "parent_id": request["target_node"]["id"],
+                "title": "Runner Branch",
+                "kind": "topic",
+                "body": "Generated by external runner"
+            }
+        ]
+    },
+    "notes": ["ok"]
+}
+Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
+PY"#;
+
+        let report = workspace.run_external_ai_expand("root", command, true)?;
+
+        assert_eq!(report.exit_code, 0);
+        assert!(report.report.run_id.is_none());
+        assert_eq!(report.report.preview.len(), 1);
         Ok(())
     }
 }

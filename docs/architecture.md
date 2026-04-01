@@ -82,6 +82,7 @@ AI dry-run 预览层。
 - 生成 prompt bundle 预览
 - 生成可审阅的 patch scaffold
 - 定义稳定的 request / response contract，供未来 runtime 对接
+- 提供 external runner bridge，把 request / response 文件交给本地命令处理
 - 当前不负责真实模型调用
 
 ### `src/project.rs`
@@ -226,6 +227,7 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - 本地 prompt bundle 预览
 - 本地 patch scaffold 预览
 - request bundle 导出与 response contract 回放
+- `ai run-external` 本地执行桥
 
 其中资料导入已经有一版最小实现：
 

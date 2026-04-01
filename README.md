@@ -35,6 +35,7 @@ cargo run -- export outline
 - 显式 evidence 引用：将证据引用与导入关联分离
 - `nodex ai expand <node-id> --dry-run` 本地预览骨架
 - AI request / response contract：可导出 request，并回放外部 response
+- external runner bridge：可通过本地命令完成 request -> response -> patch 预览
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出

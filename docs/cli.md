@@ -59,6 +59,7 @@ cargo run -- export outline
 ```text
 nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai apply-response <file> [--dry-run] [--format text|json]
+nodex ai run-external <node-id> <command> [--dry-run] [--format text|json]
 ```
 
 说明：
@@ -72,6 +73,13 @@ nodex ai apply-response <file> [--dry-run] [--format text|json]
 - `--format json` 会返回结构化 dry-run 结果，便于后续 headless / agent 流程复用
 - `ai apply-response <file> --dry-run` 会校验并预览外部 response 里的 patch
 - `ai apply-response <file>` 会把外部 response 中的 patch 真正应用到当前工作区
+- `ai run-external` 会在 `.nodex/ai/` 下写入 request / response 文件，并通过环境变量调用一个本地命令：
+  - `NODEX_AI_REQUEST`
+  - `NODEX_AI_RESPONSE`
+  - `NODEX_AI_WORKSPACE`
+  - `NODEX_AI_NODE_ID`
+- 外部命令只需要读取 request JSON，并把符合 contract 的 response JSON 写到 `NODEX_AI_RESPONSE`
+- 这条命令当前仍然不内置任何 provider SDK；它只是本地执行桥
 
 ### 初始化
 

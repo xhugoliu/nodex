@@ -134,6 +134,15 @@ pub enum AiCommand {
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
         format: OutputFormat,
     },
+    /// Export request, call one external command, and read back its response.
+    RunExternal {
+        node_id: String,
+        command: String,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]

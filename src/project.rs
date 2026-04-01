@@ -11,6 +11,7 @@ pub struct ProjectPaths {
     pub snapshots_dir: PathBuf,
     pub sources_dir: PathBuf,
     pub exports_dir: PathBuf,
+    pub ai_dir: PathBuf,
 }
 
 impl ProjectPaths {
@@ -22,6 +23,7 @@ impl ProjectPaths {
             snapshots_dir: data_dir.join("snapshots"),
             sources_dir: data_dir.join("sources"),
             exports_dir: data_dir.join("exports"),
+            ai_dir: data_dir.join("ai"),
             root_dir,
             data_dir,
         }
@@ -58,6 +60,8 @@ impl ProjectPaths {
             .with_context(|| format!("failed to create {}", self.sources_dir.display()))?;
         std::fs::create_dir_all(&self.exports_dir)
             .with_context(|| format!("failed to create {}", self.exports_dir.display()))?;
+        std::fs::create_dir_all(&self.ai_dir)
+            .with_context(|| format!("failed to create {}", self.ai_dir.display()))?;
         Ok(())
     }
 }
