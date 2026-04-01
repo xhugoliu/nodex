@@ -36,6 +36,7 @@ cargo run -- export outline
 - `nodex ai expand <node-id> --dry-run` 本地预览骨架
 - AI request / response contract：可导出 request，并回放外部 response
 - external runner bridge：可通过本地命令完成 request -> response -> patch 预览
+- 开发用最小 OpenAI runner：`scripts/openai_runner.py`
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出

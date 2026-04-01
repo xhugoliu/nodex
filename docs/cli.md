@@ -76,10 +76,52 @@ nodex ai run-external <node-id> <command> [--dry-run] [--format text|json]
 - `ai run-external` 会在 `.nodex/ai/` 下写入 request / response 文件，并通过环境变量调用一个本地命令：
   - `NODEX_AI_REQUEST`
   - `NODEX_AI_RESPONSE`
+  - `NODEX_AI_META`
   - `NODEX_AI_WORKSPACE`
   - `NODEX_AI_NODE_ID`
 - 外部命令只需要读取 request JSON，并把符合 contract 的 response JSON 写到 `NODEX_AI_RESPONSE`
+- CLI 会额外生成一份 `.meta.json`，记录：
+  - provider
+  - model
+  - provider run id
+  - retry count
+  - 最后一次错误分类
+  - patch run id（如果真正 apply）
 - 这条命令当前仍然不内置任何 provider SDK；它只是本地执行桥
+- 仓库内提供了一个最小 OpenAI runner：`python3 scripts/openai_runner.py`
+- 开发时可复制根目录 `.env.example` 到 `.env.local`，填入 `OPENAI_API_KEY`
+- 默认模型是 `gpt-5.4-mini`，也可以通过 `OPENAI_MODEL` 覆盖
+- runner 默认会对可重试错误做指数退避重试：
+  - `429` rate limit
+  - `408/409`
+  - `5xx`
+  - 网络错误 / timeout
+- 可通过这些环境变量调节：
+  - `OPENAI_TIMEOUT_SECONDS`
+  - `OPENAI_MAX_RETRIES`
+  - `OPENAI_BACKOFF_SECONDS`
+  - `OPENAI_MAX_BACKOFF_SECONDS`
+- 常见错误会带分类前缀，例如：
+  - `[rate_limit]`
+  - `[quota]`
+  - `[auth]`
+  - `[permission]`
+  - `[invalid_request]`
+  - `[server_error]`
+  - `[network]`
+  - `[timeout]`
+  - `[refusal]`
+  - `[schema_error]`
+  - `[parse_error]`
+
+一个最小开发命令示例：
+
+```bash
+cp .env.example .env.local
+# 编辑 .env.local，填入 OPENAI_API_KEY
+
+cargo run -- ai run-external root "python3 scripts/openai_runner.py" --dry-run
+```
 
 ### 初始化
 

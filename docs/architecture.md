@@ -229,6 +229,12 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - request bundle 导出与 response contract 回放
 - `ai run-external` 本地执行桥
 
+当前也有一版开发用 provider runner：
+
+- `scripts/openai_runner.py`
+- 继续通过 external runner bridge 接入，而不是把 provider SDK 写进 Rust 内核
+- `.nodex/ai/*.meta.json` 保存本地运行审计信息，便于排查 provider 调用过程
+
 其中资料导入已经有一版最小实现：
 
 - `md` / `txt` import

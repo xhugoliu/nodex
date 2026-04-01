@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::process::{Command, Output};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -103,9 +103,53 @@ pub struct AiExpandPreview {
 pub struct ExternalRunnerReport {
     pub request_path: String,
     pub response_path: String,
+    pub metadata_path: String,
     pub command: String,
     pub exit_code: i32,
+    pub metadata: AiRunMetadata,
     pub report: ApplyPatchReport,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiRunMetadata {
+    pub run_id: String,
+    pub capability: String,
+    pub node_id: String,
+    pub command: String,
+    pub dry_run: bool,
+    pub status: String,
+    pub started_at: i64,
+    pub finished_at: i64,
+    pub request_path: String,
+    pub response_path: String,
+    pub exit_code: Option<i32>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub provider_run_id: Option<String>,
+    pub retry_count: u32,
+    pub last_error_category: Option<String>,
+    pub last_error_message: Option<String>,
+    pub last_status_code: Option<i32>,
+    pub patch_run_id: Option<String>,
+    pub patch_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct RunnerSidecarMetadata {
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    provider_run_id: Option<String>,
+    #[serde(default)]
+    retry_count: u32,
+    #[serde(default)]
+    last_error_category: Option<String>,
+    #[serde(default)]
+    last_error_message: Option<String>,
+    #[serde(default)]
+    last_status_code: Option<i32>,
 }
 
 impl Workspace {
@@ -230,16 +274,58 @@ impl Workspace {
     ) -> Result<ExternalRunnerReport> {
         let preview = self.preview_ai_expand(node_id)?;
         let run_id = Uuid::new_v4().to_string();
+        let started_at = timestamp_now();
         let request_path = self.paths.ai_dir.join(format!("{run_id}.request.json"));
         let response_path = self.paths.ai_dir.join(format!("{run_id}.response.json"));
+        let metadata_path = self.paths.ai_dir.join(format!("{run_id}.meta.json"));
         write_ai_json_document(&request_path, &preview.request)?;
 
-        let status =
-            run_external_command(&self.paths, command, &request_path, &response_path, node_id)?;
-        if !status.success() {
+        let output = run_external_command(
+            &self.paths,
+            command,
+            &request_path,
+            &response_path,
+            &metadata_path,
+            node_id,
+        )?;
+        let mut sidecar_metadata = load_runner_sidecar_metadata(&metadata_path)?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let detail = if !stderr.is_empty() {
+                stderr
+            } else if !stdout.is_empty() {
+                stdout
+            } else {
+                "external runner exited without output".to_string()
+            };
+            let (inferred_category, inferred_message) = parse_error_prefix(&detail);
+            if sidecar_metadata.last_error_category.is_none() {
+                sidecar_metadata.last_error_category = inferred_category;
+            }
+            if sidecar_metadata.last_error_message.is_none() {
+                sidecar_metadata.last_error_message = Some(inferred_message);
+            }
+            let metadata = build_run_metadata(
+                &run_id,
+                "expand",
+                node_id,
+                command,
+                dry_run,
+                "failed",
+                started_at,
+                timestamp_now(),
+                &request_path,
+                &response_path,
+                output.status.code(),
+                &sidecar_metadata,
+                None,
+            );
+            write_ai_json_document(&metadata_path, &metadata)?;
             bail!(
-                "external AI runner failed with exit code {}",
-                status.code().unwrap_or(-1)
+                "external AI runner failed with exit code {}: {}",
+                output.status.code().unwrap_or(-1),
+                detail
             );
         }
 
@@ -247,13 +333,38 @@ impl Workspace {
             .with_context(|| format!("failed to read {}", response_path.display()))?;
         let response = parse_ai_patch_response(&response_json)
             .with_context(|| format!("failed to parse {}", response_path.display()))?;
-        let report = self.apply_ai_patch_response(response, dry_run)?;
+        let report = self.apply_ai_patch_response(response.clone(), dry_run)?;
+        sidecar_metadata.provider = Some(response.generator.provider.clone());
+        sidecar_metadata.model = response.generator.model.clone();
+        sidecar_metadata.provider_run_id = response.generator.run_id.clone();
+        let metadata = build_run_metadata(
+            &run_id,
+            "expand",
+            node_id,
+            command,
+            dry_run,
+            if dry_run {
+                "dry_run_succeeded"
+            } else {
+                "applied"
+            },
+            started_at,
+            timestamp_now(),
+            &request_path,
+            &response_path,
+            output.status.code(),
+            &sidecar_metadata,
+            Some(&report),
+        );
+        write_ai_json_document(&metadata_path, &metadata)?;
 
         Ok(ExternalRunnerReport {
             request_path: request_path.display().to_string(),
             response_path: response_path.display().to_string(),
+            metadata_path: metadata_path.display().to_string(),
             command: command.to_string(),
-            exit_code: status.code().unwrap_or_default(),
+            exit_code: output.status.code().unwrap_or_default(),
+            metadata,
             report,
         })
     }
@@ -458,17 +569,85 @@ fn run_external_command(
     command: &str,
     request_path: &std::path::Path,
     response_path: &std::path::Path,
+    metadata_path: &std::path::Path,
     node_id: &str,
-) -> Result<std::process::ExitStatus> {
+) -> Result<Output> {
     Command::new("zsh")
         .arg("-lc")
         .arg(command)
         .env("NODEX_AI_REQUEST", request_path)
         .env("NODEX_AI_RESPONSE", response_path)
+        .env("NODEX_AI_META", metadata_path)
         .env("NODEX_AI_WORKSPACE", &paths.root_dir)
         .env("NODEX_AI_NODE_ID", node_id)
-        .status()
+        .output()
         .with_context(|| format!("failed to run external AI command `{command}`"))
+}
+
+fn load_runner_sidecar_metadata(path: &std::path::Path) -> Result<RunnerSidecarMetadata> {
+    if !path.exists() {
+        return Ok(RunnerSidecarMetadata::default());
+    }
+    let json = std::fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.display()))?;
+    let metadata: RunnerSidecarMetadata = serde_json::from_str(&json)
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    Ok(metadata)
+}
+
+fn parse_error_prefix(detail: &str) -> (Option<String>, String) {
+    if let Some(rest) = detail.strip_prefix('[')
+        && let Some((category, message)) = rest.split_once(']')
+    {
+        return (
+            Some(category.trim().to_string()),
+            message.trim().to_string(),
+        );
+    }
+    (None, detail.to_string())
+}
+
+fn build_run_metadata(
+    run_id: &str,
+    capability: &str,
+    node_id: &str,
+    command: &str,
+    dry_run: bool,
+    status: &str,
+    started_at: i64,
+    finished_at: i64,
+    request_path: &std::path::Path,
+    response_path: &std::path::Path,
+    exit_code: Option<i32>,
+    sidecar: &RunnerSidecarMetadata,
+    report: Option<&ApplyPatchReport>,
+) -> AiRunMetadata {
+    AiRunMetadata {
+        run_id: run_id.to_string(),
+        capability: capability.to_string(),
+        node_id: node_id.to_string(),
+        command: command.to_string(),
+        dry_run,
+        status: status.to_string(),
+        started_at,
+        finished_at,
+        request_path: request_path.display().to_string(),
+        response_path: response_path.display().to_string(),
+        exit_code,
+        provider: sidecar.provider.clone(),
+        model: sidecar.model.clone(),
+        provider_run_id: sidecar.provider_run_id.clone(),
+        retry_count: sidecar.retry_count,
+        last_error_category: sidecar.last_error_category.clone(),
+        last_error_message: sidecar.last_error_message.clone(),
+        last_status_code: sidecar.last_status_code,
+        patch_run_id: report.and_then(|report| report.run_id.clone()),
+        patch_summary: report.and_then(|report| report.summary.clone()),
+    }
+}
+
+fn timestamp_now() -> i64 {
+    chrono::Utc::now().timestamp()
 }
 
 fn validate_response_contract(response: &AiPatchResponse) -> Result<()> {
@@ -514,7 +693,7 @@ mod tests {
     use anyhow::Result;
     use tempfile::tempdir;
 
-    use crate::{ai::parse_ai_patch_response, store::Workspace};
+    use crate::{ai::{AiRunMetadata, parse_ai_patch_response}, store::Workspace};
 
     #[test]
     fn ai_expand_preview_builds_prompt_and_patch_scaffold() -> Result<()> {
@@ -623,8 +802,43 @@ PY"#;
         let report = workspace.run_external_ai_expand("root", command, true)?;
 
         assert_eq!(report.exit_code, 0);
+        assert!(report.metadata_path.ends_with(".meta.json"));
+        assert_eq!(report.metadata.status, "dry_run_succeeded");
+        assert_eq!(report.metadata.provider.as_deref(), Some("test_runner"));
         assert!(report.report.run_id.is_none());
         assert_eq!(report.report.preview.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn external_runner_failure_surfaces_stderr_category() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let command = r#"python3 - <<'PY'
+import sys
+sys.stderr.write("[rate_limit] retry budget exhausted\n")
+raise SystemExit(23)
+PY"#;
+
+        let error = workspace
+            .run_external_ai_expand("root", command, true)
+            .expect_err("runner should fail");
+
+        assert!(error.to_string().contains("[rate_limit]"));
+        assert!(error.to_string().contains("exit code 23"));
+        let metadata_path = std::fs::read_dir(&workspace.paths.ai_dir)?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.file_name()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|name| name.ends_with(".meta.json"))
+            })
+            .expect("expected a .meta.json file to be written");
+        let metadata_json = std::fs::read_to_string(metadata_path)?;
+        let metadata: AiRunMetadata = serde_json::from_str(&metadata_json)?;
+        assert_eq!(metadata.status, "failed");
+        assert_eq!(metadata.last_error_category.as_deref(), Some("rate_limit"));
         Ok(())
     }
 }

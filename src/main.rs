@@ -565,7 +565,18 @@ fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {
     println!("command: {}", report.command);
     println!("request: {}", report.request_path);
     println!("response: {}", report.response_path);
+    println!("metadata: {}", report.metadata_path);
     println!("exit code: {}", report.exit_code);
+    if let Some(provider) = &report.metadata.provider {
+        println!("provider: {}", provider);
+    }
+    if let Some(model) = &report.metadata.model {
+        println!("model: {}", model);
+    }
+    if let Some(run_id) = &report.metadata.provider_run_id {
+        println!("provider run id: {}", run_id);
+    }
+    println!("retry count: {}", report.metadata.retry_count);
     if dry_run {
         println!("Dry run succeeded.");
     }
