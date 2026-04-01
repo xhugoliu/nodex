@@ -63,7 +63,8 @@ cargo run -- export outline
 - [Patch 模型](./docs/patch-model.md)
 - [数据模型](./docs/data-model.md)
 - [架构说明](./docs/architecture.md)
-- [路线图](./docs/roadmap.md)
+- [长期路线图](./docs/roadmap.md)
+- [短期执行清单](./docs/next-steps.md)
 
 ## Agent Guide
 

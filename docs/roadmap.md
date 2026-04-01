@@ -4,43 +4,21 @@
 
 ## 当前阶段
 
-当前已经落地的是第一阶段的最小内核：
+当前已经完成阶段一的最小内核，并且为后续几个阶段都跑出了一条最小验证切口。
 
-- 项目初始化
-- SQLite schema
-- 基础 patch 应用
-- 快照保存与恢复
-- Markdown 大纲导出
+目前可以把项目理解成：
 
-此外，阶段二已经开始，有一版最小的 `source import`：
+- 阶段一：CLI 内核已经站住
+- 阶段二：资料导入已经有最小落地
+- 阶段三：AI patch 已经有 dry-run / external runner 的最小闭环
+- 阶段四：来源与证据已经有最小语义分层
+- 阶段五：Tauri 桌面壳已经有最小工作台
 
-- 支持 `md` / `txt`
-- 复制来源文件到 `./.nodex/sources/`
-- 生成初始节点树
-- 生成基础来源切片并关联到导入节点
-
-阶段五也已经开始了一层最小桌面壳：
-
-- Tauri app 骨架
-- 打开文件夹后自动“打开或初始化工作区”
-- 单屏三栏工作台：树 / 详情摘要 / 统一编辑器
-- 节点编辑 patch 起草与 patch 预览 / 应用
-- 由原生 app menu 承载的低频入口：
-  - source import preview / import
-  - snapshot 保存 / 恢复
-  - 历史 patch 载入
-  - 语言切换
-- 当前桌面里也已经能对选中节点起草 AI expand dry-run patch，并显示本次运行元数据
-
-这对应的核心问题是：
+这对应的核心判断仍然是：
 
 > patch-first 的本地工作区模型是否站得住
 
-阶段四也已经开始了一层最小 evidence 语义：
-
-- patch 支持 `cite_source_chunk` / `uncite_source_chunk`
-- 显式 evidence 引用与导入时的 source chunk 关联分离
-- `node show` / `source show` 可查看 evidence 引用
+更细的短期执行顺序请看 [短期执行清单](./next-steps.md)，各阶段当前落地情况见下文。
 
 ## 阶段一：CLI 内核
 
@@ -50,22 +28,15 @@
 - 让 patch 成为统一的编辑入口
 - 让状态历史可恢复
 
-当前已完成：
+当前基础：
 
-- `nodex init`
-- `nodex node add/update/move/delete/list`
-- `nodex node cite-chunk/uncite-chunk`
-- `nodex patch inspect/apply/history`
-- `nodex snapshot save/list/restore`
-- `nodex export outline`
-- `node show` / `source list` / `source show` / `patch history` / `snapshot list` 的基础 JSON 输出
+- 已形成一套 patch-first CLI 内核，覆盖节点编辑、patch 应用、snapshot、导出和基础查询输出
+- CLI 已足够承担工作区验证、核心能力回归和后续壳层复用入口
 
-阶段一还可以继续补：
+后续延伸：
 
-- 更完整的 JSON 输出模式
-- 更完整的错误码和退出码
-- patch 文件模板生成
-- 更好的树视图
+- 更稳定的 JSON 输出和错误码
+- patch 模板与更好的树视图
 
 ## 阶段二：资料导入
 
@@ -81,13 +52,10 @@
 - 生成初始主题树
 - 为节点保留来源关联占位
 
-当前已落地的最小版本：
+当前基础：
 
-- `nodex source import <file>`
-- 支持 `md` / `txt`
-- 生成初始节点树
-- 为导入生成的节点保留切片级来源关联
-- `source show` / `node show` 可查看双向来源链路
+- 已支持 Markdown / TXT 导入、source 文件落盘、初始主题树生成和切片级关联
+- source 和 node 两侧都已有基础来源链路可查看
 
 关键问题：
 
@@ -107,15 +75,11 @@
 - `nodex ai explore <node-id> --by risk|question|action|evidence`
 - patch 预览后再应用
 
-当前已落地的最小版本：
+当前基础：
 
-- `nodex ai expand <node-id> --dry-run`
-- 本地组装 expand 所需的节点、source 与 evidence 上下文
-- 返回 prompt bundle 和 patch scaffold 预览，不调用真实模型
-- 可导出 request bundle，并通过 `ai apply-response` 回放外部 response
-- 可通过 `ai run-external` 调用本地 runner，打通 request -> response -> patch 预览
-- 开发用 `scripts/openai_runner.py` 已可通过 external runner 接入真实 OpenAI Responses API
-- `.nodex/ai/*.meta.json` 已记录 provider / model / provider run id / retry 次数等运行审计信息
+- 已有 `ai expand` 的最小 dry-run 能力，可在本地组装上下文并预览 patch scaffold
+- 已形成 request / response contract、external runner bridge 和最小 provider runner
+- 已能保存本地 AI 运行审计信息，供后续排查和索引扩展
 
 关键问题：
 
@@ -136,11 +100,10 @@
 - Evidence 视图
 - 基于来源的问答
 
-当前已落地的最小版本：
+当前基础：
 
-- `cite_source_chunk` / `uncite_source_chunk`
-- 显式 evidence 引用与基础 source/chunk 关联分离
-- `node show` / `source show` 可查看切片被哪些节点显式引用
+- 已把显式 evidence 引用与一般 source / chunk 关联分层
+- 已能从 node 和 source 两侧查看基础 evidence 链路
 
 关键问题：
 
@@ -162,19 +125,11 @@
 - 来源查看器
 - 快照恢复入口
 
-当前已落地的最小版本：
+当前基础：
 
-- `desktop/src-tauri` + `desktop/src` 最小壳工程
-- 前端已切到 `React + Vite + TypeScript + Tailwind CSS`
-- 复用共享 Rust 内核，而不是前端单独维护状态语义
-- 原生 app menu
-- 打开文件夹后自动“打开或初始化工作区”
-- 单屏三栏桌面工作台
-- 中栏压缩后的详情摘要与底部控制台
-- 右栏统一节点编辑器与 patch 编辑器
-- source import / snapshot / 历史 patch / 语言切换通过原生菜单进入
-- 可从 source detail 为上下文节点起草 `cite_source_chunk` / `uncite_source_chunk`
-- 可从当前节点起草 AI expand patch，并在控制台查看 provider / model / retry 等运行元数据
+- 已有复用共享 Rust 内核的最小 Tauri 桌面壳
+- 已形成树、详情和编辑器组成的基础工作台，并保留 patch preview / apply 边界
+- 已接通 source import、snapshot、history、evidence draft 和 AI draft 的最小入口
 
 关键问题：
 
