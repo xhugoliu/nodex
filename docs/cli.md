@@ -67,6 +67,8 @@ nodex ai run-external <node-id> <command> [--dry-run] [--format text|json]
 - 当前只实现 `--dry-run`
 - 这条命令不会调用真实模型，也不需要 API key
 - 它会在本地组装 AI expand 请求上下文，并生成一份可审阅的 patch scaffold
+- 请求上下文会做保守裁剪，不会把所有 source / evidence chunk 无限制拼进去
+- prompt 会显式要求模型避免泛化标题，优先给出贴近节点语义的分支
 - `--emit-request` 会导出稳定的 request bundle，供外部 AI runtime 消费
 - `--emit-response-template` 会导出一份 contract 正确的 response template，方便外部流程替换其中的 patch
 - `--format text` 会输出 prompt bundle、patch 预览和说明
@@ -87,6 +89,7 @@ nodex ai run-external <node-id> <command> [--dry-run] [--format text|json]
   - retry count
   - 最后一次错误分类
   - patch run id（如果真正 apply）
+- 成功和失败都会尽量写 `.meta.json`，方便之后排查一次调用到底发生了什么
 - 这条命令当前仍然不内置任何 provider SDK；它只是本地执行桥
 - 仓库内提供了一个最小 OpenAI runner：`python3 scripts/openai_runner.py`
 - 开发时可复制根目录 `.env.example` 到 `.env.local`，填入 `OPENAI_API_KEY`

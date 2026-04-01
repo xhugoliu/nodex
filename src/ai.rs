@@ -12,6 +12,12 @@ use crate::{
 };
 
 const AI_CONTRACT_VERSION: u32 = 1;
+const MAX_PREVIEW_CHILDREN: usize = 8;
+const MAX_LINKED_SOURCES: usize = 2;
+const MAX_LINKED_CHUNKS_PER_SOURCE: usize = 2;
+const MAX_EVIDENCE_SOURCES: usize = 2;
+const MAX_EVIDENCE_CHUNKS_PER_SOURCE: usize = 3;
+const AI_CONTEXT_EXCERPT_LIMIT: usize = 180;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiNodeContext {
@@ -20,7 +26,9 @@ pub struct AiNodeContext {
     pub kind: String,
     pub body: Option<String>,
     pub parent_title: Option<String>,
+    pub child_count: usize,
     pub child_titles: Vec<String>,
+    pub omitted_child_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +45,23 @@ pub struct AiSourceContext {
     pub source_id: String,
     pub original_name: String,
     pub relation: String,
+    pub total_chunks: usize,
+    pub omitted_chunk_count: usize,
     pub chunks: Vec<AiChunkContext>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiContextSummary {
+    pub linked_sources_total: usize,
+    pub linked_sources_shown: usize,
+    pub linked_chunks_total: usize,
+    pub linked_chunks_shown: usize,
+    pub linked_chunks_omitted: usize,
+    pub evidence_sources_total: usize,
+    pub evidence_sources_shown: usize,
+    pub evidence_chunks_total: usize,
+    pub evidence_chunks_shown: usize,
+    pub evidence_chunks_omitted: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +78,7 @@ pub struct AiExpandRequest {
     pub capability: String,
     pub workspace_name: String,
     pub target_node: AiNodeContext,
+    pub context_summary: AiContextSummary,
     pub linked_sources: Vec<AiSourceContext>,
     pub cited_evidence: Vec<AiSourceContext>,
     pub system_prompt: String,
@@ -89,6 +114,7 @@ pub struct AiExpandPreview {
     pub mode: String,
     pub workspace_name: String,
     pub target_node: AiNodeContext,
+    pub context_summary: AiContextSummary,
     pub linked_sources: Vec<AiSourceContext>,
     pub cited_evidence: Vec<AiSourceContext>,
     pub system_prompt: String,
@@ -157,43 +183,60 @@ impl Workspace {
         let workspace_name = self.workspace_name()?;
         let detail = self.node_detail(node_id)?;
         let target_node = build_node_context(&detail);
-        let linked_sources = detail
+        let linked_sources_total = detail.sources.len();
+        let linked_chunks_total = detail
             .sources
             .iter()
-            .map(|source_detail| AiSourceContext {
-                source_id: source_detail.source.id.clone(),
-                original_name: source_detail.source.original_name.clone(),
-                relation: if source_detail.chunks.is_empty() {
-                    "source_link".to_string()
-                } else {
-                    "source_chunks".to_string()
-                },
-                chunks: source_detail
-                    .chunks
-                    .iter()
-                    .map(build_chunk_context)
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
-        let cited_evidence = detail
+            .map(|source_detail| source_detail.chunks.len())
+            .sum::<usize>();
+        let linked_sources = build_source_contexts(
+            detail.sources.iter().map(|source_detail| {
+                (
+                    source_detail.source.id.clone(),
+                    source_detail.source.original_name.clone(),
+                    if source_detail.chunks.is_empty() {
+                        "source_link".to_string()
+                    } else {
+                        "source_chunks".to_string()
+                    },
+                    source_detail.chunks.clone(),
+                )
+            }),
+            MAX_LINKED_SOURCES,
+            MAX_LINKED_CHUNKS_PER_SOURCE,
+        );
+        let evidence_sources_total = detail.evidence.len();
+        let evidence_chunks_total = detail
             .evidence
             .iter()
-            .map(|evidence_detail| AiSourceContext {
-                source_id: evidence_detail.source.id.clone(),
-                original_name: evidence_detail.source.original_name.clone(),
-                relation: "evidence".to_string(),
-                chunks: evidence_detail
-                    .chunks
-                    .iter()
-                    .map(build_chunk_context)
-                    .collect(),
-            })
-            .collect::<Vec<_>>();
+            .map(|evidence_detail| evidence_detail.chunks.len())
+            .sum::<usize>();
+        let cited_evidence = build_source_contexts(
+            detail.evidence.iter().map(|evidence_detail| {
+                (
+                    evidence_detail.source.id.clone(),
+                    evidence_detail.source.original_name.clone(),
+                    "evidence".to_string(),
+                    evidence_detail.chunks.clone(),
+                )
+            }),
+            MAX_EVIDENCE_SOURCES,
+            MAX_EVIDENCE_CHUNKS_PER_SOURCE,
+        );
+        let context_summary = build_context_summary(
+            linked_sources_total,
+            linked_chunks_total,
+            &linked_sources,
+            evidence_sources_total,
+            evidence_chunks_total,
+            &cited_evidence,
+        );
 
         let system_prompt = build_system_prompt();
         let user_prompt = build_user_prompt(
             &workspace_name,
             &target_node,
+            &context_summary,
             &linked_sources,
             &cited_evidence,
         );
@@ -205,6 +248,7 @@ impl Workspace {
             capability: "expand".to_string(),
             workspace_name: workspace_name.clone(),
             target_node: target_node.clone(),
+            context_summary: context_summary.clone(),
             linked_sources: linked_sources.clone(),
             cited_evidence: cited_evidence.clone(),
             system_prompt: system_prompt.clone(),
@@ -239,6 +283,9 @@ impl Workspace {
             "The draft patch is a deterministic scaffold meant for review, editing, or future model replacement.".to_string(),
             "Use --emit-request to export a stable request bundle for an external runtime."
                 .to_string(),
+            format!(
+                "Context is clipped to at most {MAX_LINKED_SOURCES} linked sources / {MAX_LINKED_CHUNKS_PER_SOURCE} chunks each and {MAX_EVIDENCE_SOURCES} evidence sources / {MAX_EVIDENCE_CHUNKS_PER_SOURCE} chunks each."
+            ),
         ];
 
         Ok(AiExpandPreview {
@@ -246,6 +293,7 @@ impl Workspace {
             mode: "dry_run".to_string(),
             workspace_name,
             target_node,
+            context_summary,
             linked_sources,
             cited_evidence,
             system_prompt,
@@ -371,17 +419,22 @@ impl Workspace {
 }
 
 fn build_node_context(detail: &NodeDetail) -> AiNodeContext {
+    let child_count = detail.children.len();
+    let child_titles = detail
+        .children
+        .iter()
+        .take(MAX_PREVIEW_CHILDREN)
+        .map(|child| child.title.clone())
+        .collect::<Vec<_>>();
     AiNodeContext {
         id: detail.node.id.clone(),
         title: detail.node.title.clone(),
         kind: detail.node.kind.clone(),
         body: detail.node.body.clone(),
         parent_title: detail.parent.as_ref().map(|node| node.title.clone()),
-        child_titles: detail
-            .children
-            .iter()
-            .map(|child| child.title.clone())
-            .collect(),
+        child_count,
+        child_titles,
+        omitted_child_count: child_count.saturating_sub(MAX_PREVIEW_CHILDREN),
     }
 }
 
@@ -389,9 +442,90 @@ fn build_chunk_context(chunk: &SourceChunkRecord) -> AiChunkContext {
     AiChunkContext {
         chunk_id: chunk.id.clone(),
         label: chunk.label.clone(),
-        excerpt: excerpt_text(&chunk.text, 240),
+        excerpt: excerpt_text(&chunk.text, AI_CONTEXT_EXCERPT_LIMIT),
         start_line: chunk.start_line,
         end_line: chunk.end_line,
+    }
+}
+
+fn build_source_contexts<I>(
+    items: I,
+    max_sources: usize,
+    max_chunks_per_source: usize,
+) -> Vec<AiSourceContext>
+where
+    I: IntoIterator<Item = (String, String, String, Vec<SourceChunkRecord>)>,
+{
+    items
+        .into_iter()
+        .take(max_sources)
+        .map(|(source_id, original_name, relation, chunks)| {
+            let total_chunks = chunks.len();
+            let trimmed_chunks = chunks
+                .iter()
+                .take(max_chunks_per_source)
+                .map(build_chunk_context)
+                .collect::<Vec<_>>();
+            AiSourceContext {
+                source_id,
+                original_name,
+                relation,
+                total_chunks,
+                omitted_chunk_count: total_chunks.saturating_sub(max_chunks_per_source),
+                chunks: trimmed_chunks,
+            }
+        })
+        .collect()
+}
+
+fn build_context_summary(
+    linked_sources_total: usize,
+    linked_chunks_total: usize,
+    linked_sources: &[AiSourceContext],
+    evidence_sources_total: usize,
+    evidence_chunks_total: usize,
+    cited_evidence: &[AiSourceContext],
+) -> AiContextSummary {
+    let linked_chunks_shown = linked_sources
+        .iter()
+        .map(|source| source.chunks.len())
+        .sum::<usize>();
+    let linked_chunks_omitted = linked_sources
+        .iter()
+        .map(|source| source.omitted_chunk_count)
+        .sum::<usize>()
+        + linked_chunks_total.saturating_sub(
+            linked_sources
+                .iter()
+                .map(|source| source.total_chunks)
+                .sum::<usize>(),
+        );
+    let evidence_chunks_shown = cited_evidence
+        .iter()
+        .map(|source| source.chunks.len())
+        .sum::<usize>();
+    let evidence_chunks_omitted = cited_evidence
+        .iter()
+        .map(|source| source.omitted_chunk_count)
+        .sum::<usize>()
+        + evidence_chunks_total.saturating_sub(
+            cited_evidence
+                .iter()
+                .map(|source| source.total_chunks)
+                .sum::<usize>(),
+        );
+
+    AiContextSummary {
+        linked_sources_total,
+        linked_sources_shown: linked_sources.len(),
+        linked_chunks_total,
+        linked_chunks_shown,
+        linked_chunks_omitted,
+        evidence_sources_total,
+        evidence_sources_shown: cited_evidence.len(),
+        evidence_chunks_total,
+        evidence_chunks_shown,
+        evidence_chunks_omitted,
     }
 }
 
@@ -403,6 +537,9 @@ fn build_system_prompt() -> String {
         "For expand requests, prefer add_node operations under the target node.",
         "Do not rewrite unrelated branches or replace the whole workspace state.",
         "If you cite evidence, keep source links intact and use the existing patch semantics.",
+        "Prefer branch titles that are specific to the node subject, not generic placeholders.",
+        "Avoid generic children like Background, Key Points, or Next Steps unless the node content clearly demands them.",
+        "Keep sibling branches distinct, structurally parallel, and immediately useful for further expansion.",
     ]
     .join("\n")
 }
@@ -421,27 +558,75 @@ fn build_output_instructions() -> String {
 fn build_user_prompt(
     workspace_name: &str,
     target_node: &AiNodeContext,
+    context_summary: &AiContextSummary,
     linked_sources: &[AiSourceContext],
     cited_evidence: &[AiSourceContext],
 ) -> String {
+    let style_hint = expansion_style_hint(target_node);
     let mut sections = vec![
         format!("Workspace: {workspace_name}"),
-        format!("Target node id: {}", target_node.id),
-        format!("Target node title: {}", target_node.title),
-        format!("Target node kind: {}", target_node.kind),
-        format!(
-            "Parent: {}",
-            target_node.parent_title.as_deref().unwrap_or("(none)")
-        ),
-        format!(
-            "Existing children: {}",
-            if target_node.child_titles.is_empty() {
-                "(none)".to_string()
-            } else {
-                target_node.child_titles.join(", ")
-            }
-        ),
-        format!("Body: {}", target_node.body.as_deref().unwrap_or("(none)")),
+        [
+            "Target node:",
+            &format!("- id: {}", target_node.id),
+            &format!("- title: {}", target_node.title),
+            &format!("- kind: {}", target_node.kind),
+            &format!(
+                "- parent: {}",
+                target_node.parent_title.as_deref().unwrap_or("(none)")
+            ),
+            &format!(
+                "- body: {}",
+                target_node.body.as_deref().unwrap_or("(none)")
+            ),
+        ]
+        .join("\n"),
+        [
+            "Existing structure:",
+            &format!("- child count: {}", target_node.child_count),
+            &format!(
+                "- shown children: {}",
+                if target_node.child_titles.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    target_node.child_titles.join(", ")
+                }
+            ),
+            &format!("- omitted children: {}", target_node.omitted_child_count),
+        ]
+        .join("\n"),
+        [
+            "Expansion guidance:",
+            "- Propose 3 to 5 child nodes that deepen this specific node.",
+            "- Titles should be concrete and tied to the node subject.",
+            "- Avoid repeating existing child titles.",
+            "- Avoid generic buckets unless the content strongly requires them.",
+            &format!("- Style hint: {style_hint}"),
+        ]
+        .join("\n"),
+        [
+            "Context budget:",
+            &format!(
+                "- linked sources: showing {} of {}",
+                context_summary.linked_sources_shown, context_summary.linked_sources_total
+            ),
+            &format!(
+                "- linked chunks: showing {} of {}, omitted {}",
+                context_summary.linked_chunks_shown,
+                context_summary.linked_chunks_total,
+                context_summary.linked_chunks_omitted
+            ),
+            &format!(
+                "- evidence sources: showing {} of {}",
+                context_summary.evidence_sources_shown, context_summary.evidence_sources_total
+            ),
+            &format!(
+                "- evidence chunks: showing {} of {}, omitted {}",
+                context_summary.evidence_chunks_shown,
+                context_summary.evidence_chunks_total,
+                context_summary.evidence_chunks_omitted
+            ),
+        ]
+        .join("\n"),
     ];
 
     if linked_sources.is_empty() {
@@ -457,11 +642,14 @@ fn build_user_prompt(
     }
 
     sections.push(
-        "Task: expand the target node into 3 to 5 useful child nodes that improve structure without rewriting unrelated parts."
-            .to_string(),
-    );
-    sections.push(
-        "Return a version 1 patch document with a concise summary and ordered ops.".to_string(),
+        [
+            "Output requirements:",
+            "- Return a version 1 patch document.",
+            "- Prefer add_node ops under the target node.",
+            "- Keep the summary concise and human-readable.",
+            "- The patch should be directly reviewable and applyable.",
+        ]
+        .join("\n"),
     );
 
     sections.join("\n\n")
@@ -471,9 +659,19 @@ fn format_source_section(title: &str, sources: &[AiSourceContext]) -> String {
     let mut lines = vec![format!("{title}:")];
     for source in sources {
         lines.push(format!(
-            "- {} [{}] relation={}",
-            source.original_name, source.source_id, source.relation
+            "- {} [{}] relation={} showing {} of {} chunks",
+            source.original_name,
+            source.source_id,
+            source.relation,
+            source.chunks.len(),
+            source.total_chunks
         ));
+        if source.omitted_chunk_count > 0 {
+            lines.push(format!(
+                "  - omitted chunks: {}",
+                source.omitted_chunk_count
+            ));
+        }
         if source.chunks.is_empty() {
             lines.push("  - chunks: (none)".to_string());
         } else {
@@ -491,7 +689,7 @@ fn format_source_section(title: &str, sources: &[AiSourceContext]) -> String {
 }
 
 fn build_expand_patch_scaffold(target_node: &AiNodeContext) -> PatchDocument {
-    let suggestions = suggested_branch_titles(&target_node.kind);
+    let suggestions = suggested_branch_titles(target_node);
     let existing_titles = target_node
         .child_titles
         .iter()
@@ -537,13 +735,75 @@ fn build_expand_patch_scaffold(target_node: &AiNodeContext) -> PatchDocument {
     }
 }
 
-fn suggested_branch_titles(kind: &str) -> Vec<&'static str> {
-    match kind {
-        "question" => vec!["Background", "Possible Answers", "Next Questions"],
-        "action" => vec!["Subtasks", "Dependencies", "Risks"],
-        "evidence" => vec!["Claim", "Support", "Gaps"],
-        "source" => vec!["Overview", "Key Sections", "Open Threads"],
-        _ => vec!["Background", "Key Points", "Next Steps"],
+fn suggested_branch_titles(target_node: &AiNodeContext) -> Vec<&'static str> {
+    let title_and_body = format!(
+        "{}\n{}",
+        target_node.title.to_ascii_lowercase(),
+        target_node
+            .body
+            .as_deref()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+    );
+
+    if title_and_body.contains("plan")
+        || title_and_body.contains("roadmap")
+        || title_and_body.contains("launch")
+    {
+        return vec!["Goals", "Constraints", "Execution"];
+    }
+    if title_and_body.contains("risk") || title_and_body.contains("issue") {
+        return vec!["Failure Modes", "Impact", "Mitigations"];
+    }
+    if title_and_body.contains("research")
+        || title_and_body.contains("paper")
+        || title_and_body.contains("study")
+    {
+        return vec!["Key Claims", "Evidence", "Open Questions"];
+    }
+
+    match target_node.kind.as_str() {
+        "question" => vec!["Possible Answers", "Evidence Needed", "Open Questions"],
+        "action" => vec!["Immediate Steps", "Dependencies", "Risks"],
+        "evidence" => vec!["Claim", "Supporting Evidence", "Counterpoints"],
+        "source" => vec!["Main Themes", "Important Evidence", "Open Threads"],
+        _ => vec!["Core Tension", "Important Angles", "Decision Points"],
+    }
+}
+
+fn expansion_style_hint(target_node: &AiNodeContext) -> &'static str {
+    let title_and_body = format!(
+        "{}\n{}",
+        target_node.title.to_ascii_lowercase(),
+        target_node
+            .body
+            .as_deref()
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+    );
+
+    if title_and_body.contains("plan")
+        || title_and_body.contains("roadmap")
+        || title_and_body.contains("launch")
+    {
+        return "Break the node into goals, constraints, and execution tracks.";
+    }
+    if title_and_body.contains("risk") || title_and_body.contains("issue") {
+        return "Break the node into failure modes, impact, and mitigations.";
+    }
+    if title_and_body.contains("research")
+        || title_and_body.contains("paper")
+        || title_and_body.contains("study")
+    {
+        return "Break the node into claims, evidence, and open questions.";
+    }
+
+    match target_node.kind.as_str() {
+        "question" => "Prefer hypotheses, evidence needs, and open uncertainties.",
+        "action" => "Prefer execution slices, dependencies, and delivery risks.",
+        "evidence" => "Prefer claim, support, and counterpoint branches.",
+        "source" => "Prefer themes, evidence, and unresolved threads from the source.",
+        _ => "Prefer concrete, subject-specific angles that invite further expansion.",
     }
 }
 
@@ -693,7 +953,11 @@ mod tests {
     use anyhow::Result;
     use tempfile::tempdir;
 
-    use crate::{ai::{AiRunMetadata, parse_ai_patch_response}, store::Workspace};
+    use crate::{
+        ai::{AiRunMetadata, parse_ai_patch_response},
+        patch::{PatchDocument, PatchOp},
+        store::Workspace,
+    };
 
     #[test]
     fn ai_expand_preview_builds_prompt_and_patch_scaffold() -> Result<()> {
@@ -719,7 +983,15 @@ mod tests {
         assert_eq!(preview.mode, "dry_run");
         assert_eq!(preview.target_node.id, problem_id);
         assert!(preview.user_prompt.contains("Problem"));
+        assert!(preview.user_prompt.contains("Avoid generic"));
+        assert!(preview.user_prompt.contains("Style hint"));
+        assert!(preview.user_prompt.contains("Context budget"));
         assert_eq!(preview.draft_patch.ops.len(), 3);
+        assert!(preview.draft_patch.preview_lines().iter().all(|line| {
+            !line.contains("Background")
+                && !line.contains("Key Points")
+                && !line.contains("Next Steps")
+        }));
         assert_eq!(preview.request.kind, "nodex_ai_expand_request");
         assert_eq!(preview.response_template.kind, "nodex_ai_patch_response");
         assert!(
@@ -743,6 +1015,76 @@ mod tests {
         assert_eq!(parsed.kind, "nodex_ai_patch_response");
         assert_eq!(parsed.status, "ok");
         assert_eq!(parsed.patch.version, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn ai_expand_preview_clips_evidence_context() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## One\nAlpha.\n\n## Two\nBeta.\n\n## Three\nGamma.\n\n## Four\nDelta.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_ids = source_detail
+            .chunks
+            .iter()
+            .map(|chunk| chunk.chunk.id.clone())
+            .collect::<Vec<_>>();
+        workspace.apply_patch_document(
+            PatchDocument {
+                version: 1,
+                summary: Some("Prepare idea node".to_string()),
+                ops: vec![
+                    PatchOp::AddNode {
+                        id: Some("idea".to_string()),
+                        parent_id: "root".to_string(),
+                        title: "Launch Plan".to_string(),
+                        kind: Some("topic".to_string()),
+                        body: Some("Need a sharper execution plan.".to_string()),
+                        position: None,
+                    },
+                    PatchOp::AttachSource {
+                        node_id: "idea".to_string(),
+                        source_id: import_report.source_id.clone(),
+                    },
+                    PatchOp::CiteSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_ids[0].clone(),
+                    },
+                    PatchOp::CiteSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_ids[1].clone(),
+                    },
+                    PatchOp::CiteSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_ids[2].clone(),
+                    },
+                    PatchOp::CiteSourceChunk {
+                        node_id: "idea".to_string(),
+                        chunk_id: chunk_ids[3].clone(),
+                    },
+                ],
+            },
+            "test",
+            false,
+        )?;
+
+        let preview = workspace.preview_ai_expand("idea")?;
+
+        assert_eq!(preview.cited_evidence.len(), 1);
+        assert_eq!(preview.context_summary.evidence_sources_total, 1);
+        assert_eq!(preview.context_summary.evidence_chunks_total, 4);
+        assert_eq!(preview.context_summary.evidence_chunks_shown, 3);
+        assert_eq!(preview.context_summary.evidence_chunks_omitted, 1);
+        assert_eq!(preview.cited_evidence[0].total_chunks, 4);
+        assert_eq!(preview.cited_evidence[0].chunks.len(), 3);
+        assert_eq!(preview.cited_evidence[0].omitted_chunk_count, 1);
+        assert!(preview.user_prompt.contains("omitted chunks: 1"));
         Ok(())
     }
 

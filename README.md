@@ -37,6 +37,7 @@ cargo run -- export outline
 - AI request / response contract：可导出 request，并回放外部 response
 - external runner bridge：可通过本地命令完成 request -> response -> patch 预览
 - 开发用最小 OpenAI runner：`scripts/openai_runner.py`
+- `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
