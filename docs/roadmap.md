@@ -106,6 +106,13 @@
 - `nodex ai explore <node-id> --by risk|question|action|evidence`
 - patch 预览后再应用
 
+当前已落地的最小版本：
+
+- `nodex ai expand <node-id> --dry-run`
+- 本地组装 expand 所需的节点、source 与 evidence 上下文
+- 返回 prompt bundle 和 patch scaffold 预览，不调用真实模型
+- 可导出 request bundle，并通过 `ai apply-response` 回放外部 response
+
 关键问题：
 
 - 如何约束模型只输出合法 patch

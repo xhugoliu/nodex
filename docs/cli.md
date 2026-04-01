@@ -54,6 +54,25 @@ cargo run -- export outline
 
 ## 命令总览
 
+### AI
+
+```text
+nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
+nodex ai apply-response <file> [--dry-run] [--format text|json]
+```
+
+说明：
+
+- 当前只实现 `--dry-run`
+- 这条命令不会调用真实模型，也不需要 API key
+- 它会在本地组装 AI expand 请求上下文，并生成一份可审阅的 patch scaffold
+- `--emit-request` 会导出稳定的 request bundle，供外部 AI runtime 消费
+- `--emit-response-template` 会导出一份 contract 正确的 response template，方便外部流程替换其中的 patch
+- `--format text` 会输出 prompt bundle、patch 预览和说明
+- `--format json` 会返回结构化 dry-run 结果，便于后续 headless / agent 流程复用
+- `ai apply-response <file> --dry-run` 会校验并预览外部 response 里的 patch
+- `ai apply-response <file>` 会把外部 response 中的 patch 真正应用到当前工作区
+
 ### 初始化
 
 ```text
@@ -181,7 +200,7 @@ nodex export outline [--output path]
 
 当前 CLI 还没有实现：
 
-- AI 生成 patch
+- 真实 AI 生成 patch
 - PDF 导入
 - 完整来源与证据视图
 

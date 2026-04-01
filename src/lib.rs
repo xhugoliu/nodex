@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod model;
 pub mod patch;
 pub mod project;

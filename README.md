@@ -33,6 +33,8 @@ cargo run -- export outline
 - Markdown / TXT source import 与基础来源切片关联
 - source / node 双向查看来源链路
 - 显式 evidence 引用：将证据引用与导入关联分离
+- `nodex ai expand <node-id> --dry-run` 本地预览骨架
+- AI request / response contract：可导出 request，并回放外部 response
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
@@ -44,7 +46,7 @@ cargo run -- export outline
 
 当前还没落地：
 
-- AI 生成 patch
+- 真实 AI 生成 patch
 - PDF 导入与来源切片
 - 完整来源追踪与证据视图
 - 完整 Tauri 图形界面

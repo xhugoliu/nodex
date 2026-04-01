@@ -17,6 +17,11 @@ pub struct Cli {
 pub enum Command {
     /// Initialize a Nodex workspace in the current directory.
     Init,
+    /// Prepare AI-assisted patch drafts.
+    Ai {
+        #[command(subcommand)]
+        command: AiCommand,
+    },
     /// Work with nodes through convenience commands backed by the patch engine.
     Node {
         #[command(subcommand)]
@@ -105,6 +110,30 @@ pub enum ListFormat {
 pub enum OutputFormat {
     Text,
     Json,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum AiCommand {
+    /// Prepare a dry-run expand request for one node.
+    Expand {
+        node_id: String,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        emit_request: Option<PathBuf>,
+        #[arg(long)]
+        emit_response_template: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Validate and preview or apply one AI patch response file.
+    ApplyResponse {
+        path: PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]

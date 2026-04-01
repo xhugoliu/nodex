@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::Parser;
 use nodex::{
+    ai::{AiExpandPreview, AiPatchResponse, parse_ai_patch_response},
     model::{ApplyPatchReport, SourceImportPreview, SourceImportReport},
     patch::PatchDocument,
     store::{Workspace, format_timestamp},
@@ -12,7 +13,7 @@ use nodex::{
 use serde::Serialize;
 
 use crate::cli::{
-    Cli, Command, ExportCommand, ListFormat, NodeCommand, OutputFormat, PatchCommand,
+    AiCommand, Cli, Command, ExportCommand, ListFormat, NodeCommand, OutputFormat, PatchCommand,
     SnapshotCommand, SourceCommand,
 };
 
@@ -30,6 +31,69 @@ fn main() -> Result<()> {
             println!("Root topic: {}", workspace.workspace_name()?);
             println!("Try: cargo run -- patch apply examples/expand-root.json --dry-run");
         }
+        Command::Ai { command } => match command {
+            AiCommand::Expand {
+                node_id,
+                dry_run,
+                emit_request,
+                emit_response_template,
+                format,
+            } => {
+                let workspace = Workspace::open_from(&cwd)?;
+                if !dry_run {
+                    anyhow::bail!("real AI execution is not implemented yet; rerun with --dry-run");
+                }
+                let preview = workspace.preview_ai_expand(&node_id)?;
+                if let Some(request_path) = emit_request {
+                    let request_path = resolve_path(&cwd, &request_path);
+                    write_json_document(&request_path, &preview.request)?;
+                    if matches!(format, OutputFormat::Text) {
+                        println!("Wrote AI request to {}", request_path.display());
+                    }
+                }
+                if let Some(template_path) = emit_response_template {
+                    let template_path = resolve_path(&cwd, &template_path);
+                    write_json_document(&template_path, &preview.response_template)?;
+                    if matches!(format, OutputFormat::Text) {
+                        println!("Wrote AI response template to {}", template_path.display());
+                    }
+                }
+                match format {
+                    OutputFormat::Text => print_ai_expand_preview(&preview),
+                    OutputFormat::Json => print_json(&preview)?,
+                }
+            }
+            AiCommand::ApplyResponse {
+                path,
+                dry_run,
+                format,
+            } => {
+                let mut workspace = Workspace::open_from(&cwd)?;
+                let response = read_ai_response(&cwd, &path)?;
+                let report = workspace.apply_ai_patch_response(response.clone(), dry_run)?;
+                match format {
+                    OutputFormat::Text => {
+                        println!(
+                            "AI response: {} for node {}",
+                            response.capability, response.request_node_id
+                        );
+                        println!("provider: {}", response.generator.provider);
+                        if let Some(model) = &response.generator.model {
+                            println!("model: {model}");
+                        }
+                        if dry_run {
+                            println!("Dry run succeeded.");
+                        }
+                        print_patch_report(&report);
+                    }
+                    OutputFormat::Json => print_json(&AiResponseApplyOutput {
+                        response,
+                        report,
+                        dry_run,
+                    })?,
+                }
+            }
+        },
         Command::Node { command } => {
             let mut workspace = Workspace::open_from(&cwd)?;
             match command {
@@ -362,6 +426,14 @@ fn read_patch(cwd: &std::path::Path, path: &PathBuf) -> Result<PatchDocument> {
     Ok(patch)
 }
 
+fn read_ai_response(cwd: &std::path::Path, path: &PathBuf) -> Result<AiPatchResponse> {
+    let absolute_path = resolve_path(cwd, path);
+    let response_json = std::fs::read_to_string(&absolute_path)
+        .with_context(|| format!("failed to read {}", absolute_path.display()))?;
+    parse_ai_patch_response(&response_json)
+        .with_context(|| format!("failed to parse {}", absolute_path.display()))
+}
+
 fn resolve_path(cwd: &std::path::Path, path: &PathBuf) -> PathBuf {
     if path.is_absolute() {
         path.clone()
@@ -421,18 +493,62 @@ fn print_source_import_preview(preview: &SourceImportPreview) {
     print_patch_preview(&preview.patch);
 }
 
+fn print_ai_expand_preview(preview: &AiExpandPreview) {
+    println!(
+        "AI dry run: {} for {} [{}]",
+        preview.capability, preview.target_node.title, preview.target_node.id
+    );
+    println!("workspace: {}", preview.workspace_name);
+    println!("mode: {}", preview.mode);
+    println!("kind: {}", preview.target_node.kind);
+    println!(
+        "children: {}",
+        if preview.target_node.child_titles.is_empty() {
+            "(none)".to_string()
+        } else {
+            preview.target_node.child_titles.join(", ")
+        }
+    );
+    println!("linked sources: {}", preview.linked_sources.len());
+    println!("cited evidence sources: {}", preview.cited_evidence.len());
+    println!();
+    println!("[system prompt]");
+    println!("{}", preview.system_prompt);
+    println!();
+    println!("[user prompt]");
+    println!("{}", preview.user_prompt);
+    println!();
+    println!("[draft patch]");
+    print_patch_preview(&preview.draft_patch);
+    println!();
+    println!("[notes]");
+    for note in &preview.notes {
+        println!("- {note}");
+    }
+}
+
 fn write_patch_document(path: &std::path::Path, patch: &PatchDocument) -> Result<()> {
+    write_json_document(path, patch)
+}
+
+fn write_json_document<T: Serialize>(path: &std::path::Path, value: &T) -> Result<()> {
     if let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    let patch_json = serde_json::to_string_pretty(patch)?;
-    std::fs::write(path, patch_json)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    let json = serde_json::to_string_pretty(value)?;
+    std::fs::write(path, json).with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 
 fn print_json<T: Serialize>(value: &T) -> Result<()> {
     println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct AiResponseApplyOutput {
+    response: AiPatchResponse,
+    report: ApplyPatchReport,
+    dry_run: bool,
 }

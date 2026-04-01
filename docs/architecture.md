@@ -22,7 +22,7 @@ Nodex 的长期目标不是“做一个只活在 CLI 里的工具”，而是：
 
 职责：
 
-- 暴露 `model / patch / project / source / store` 给 CLI 和桌面壳复用
+- 暴露 `ai / model / patch / project / source / store` 给 CLI 和桌面壳复用
 
 ### `src/main.rs`
 
@@ -71,6 +71,18 @@ CLI 命令入口和输出分发。
 - 识别当前支持的 source 格式
 - 把 Markdown / TXT 解析成初始节点树
 - 生成基础 source chunk 草案
+
+### `src/ai.rs`
+
+AI dry-run 预览层。
+
+职责：
+
+- 在本地组装 `ai expand` 所需的节点、source 与 evidence 上下文
+- 生成 prompt bundle 预览
+- 生成可审阅的 patch scaffold
+- 定义稳定的 request / response contract，供未来 runtime 对接
+- 当前不负责真实模型调用
 
 ### `src/project.rs`
 
@@ -138,7 +150,7 @@ CLI 命令入口和输出分发。
             v                           v
            +-----------------------------+
            |         shared core         |
-           | model / patch / store       |
+           | ai / model / patch / store  |
            | source / project            |
            +--------------+--------------+
                           |
@@ -203,10 +215,17 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 
 从当前路线看，真正还没落地的核心部分主要是：
 
-- AI 生成 patch
+- 真实 AI 生成 patch
 - 更完整的来源与证据模型
 - PDF 导入
 - 完整脑图式 Tauri 图形界面
+
+当前已经有一层最小 AI dry-run 骨架：
+
+- `nodex ai expand <node-id> --dry-run`
+- 本地 prompt bundle 预览
+- 本地 patch scaffold 预览
+- request bundle 导出与 response contract 回放
 
 其中资料导入已经有一版最小实现：
 
