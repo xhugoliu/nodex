@@ -1,5 +1,6 @@
 import type {
   ApplyPatchReport,
+  ExternalRunnerReport,
   ParentCandidate,
   PatchOperation,
   TreeNode,
@@ -35,6 +36,31 @@ export function renderPatchReport(
     report.summary ? t("reports.summary", { value: report.summary }) : null,
     ...report.preview.map((line) => `- ${line}`),
     report.run_id ? t("reports.runId", { id: report.run_id }) : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+export function renderExternalRunnerReport(
+  result: ExternalRunnerReport,
+  t: Translator,
+) {
+  return [
+    t("reports.aiDraftReady"),
+    result.metadata.provider
+      ? t("reports.provider", { value: result.metadata.provider })
+      : null,
+    result.metadata.model
+      ? t("reports.model", { value: result.metadata.model })
+      : null,
+    result.metadata.provider_run_id
+      ? t("reports.providerRunId", { value: result.metadata.provider_run_id })
+      : null,
+    t("reports.retryCount", { count: result.metadata.retry_count }),
+    t("reports.requestFile", { value: result.request_path }),
+    t("reports.responseFile", { value: result.response_path }),
+    t("reports.metaFile", { value: result.metadata_path }),
+    ...result.report.preview.map((line) => `- ${line}`),
   ]
     .filter(Boolean)
     .join("\n");

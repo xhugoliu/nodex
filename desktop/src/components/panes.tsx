@@ -268,6 +268,7 @@ export function EditorPane(props: {
   onToggleAdvancedPatchEditor: () => void;
   onClearPatchEditor: () => void;
   onDraftUpdate: () => void;
+  onDraftAiExpand: () => void;
   onDraftAddChild: () => void;
   onDraftMove: () => void;
   onDraftDelete: () => void;
@@ -321,6 +322,22 @@ export function EditorPane(props: {
                   </div>
                 </div>
               ) : null}
+
+              <section className="space-y-3">
+                <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                  {props.t("nodeEditing.aiExpand")}
+                </div>
+                <div className="mb-3 text-sm text-[color:var(--muted)]">
+                  {props.t("nodeEditing.aiExpandMeta", {
+                    title: props.selectedNodeDetail.node.title,
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button className={ghostButtonClass} onClick={props.onDraftAiExpand}>
+                    {props.t("nodeEditing.draftAiExpand")}
+                  </button>
+                </div>
+              </section>
 
               <section className="space-y-3">
                 <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">

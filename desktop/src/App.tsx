@@ -11,6 +11,7 @@ import {
   inspectPatchDraft,
   listParentCandidates,
   optionalText,
+  renderExternalRunnerReport,
   renderPatchReport,
   type ConsoleTone,
 } from "./app-helpers";
@@ -29,6 +30,7 @@ import {
 import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
   ApplyPatchReport,
+  ExternalRunnerReport,
   LanguagePreference,
   Locale,
   NodeDetail,
@@ -544,6 +546,27 @@ export default function App() {
     }
   }
 
+  async function draftAiExpandPatch() {
+    if (!ensureNodeSelected() || !ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      setShowAdvancedPatchEditor(false);
+      const result = await invokeCommand<ExternalRunnerReport>("draft_ai_expand_patch", {
+        start_path: workspacePath,
+        node_id: selectedNodeId,
+      });
+      setPatchEditor(JSON.stringify(result.patch, null, 2));
+      setConsoleMessage(
+        renderExternalRunnerReport(result, t),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function draftUpdateNodePatch() {
     if (!ensureNodeSelected() || !ensureWorkspace()) {
       return;
@@ -769,6 +792,9 @@ export default function App() {
             onClearPatchEditor={clearPatchEditor}
             onDraftUpdate={() => {
               void draftUpdateNodePatch();
+            }}
+            onDraftAiExpand={() => {
+              void draftAiExpandPatch();
             }}
             onDraftAddChild={() => {
               void draftAddChildPatch();

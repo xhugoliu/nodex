@@ -133,6 +133,7 @@ pub struct ExternalRunnerReport {
     pub command: String,
     pub exit_code: i32,
     pub metadata: AiRunMetadata,
+    pub patch: PatchDocument,
     pub report: ApplyPatchReport,
 }
 
@@ -413,6 +414,7 @@ impl Workspace {
             command: command.to_string(),
             exit_code: output.status.code().unwrap_or_default(),
             metadata,
+            patch: response.patch,
             report,
         })
     }
@@ -1085,6 +1087,130 @@ mod tests {
         assert_eq!(preview.cited_evidence[0].chunks.len(), 3);
         assert_eq!(preview.cited_evidence[0].omitted_chunk_count, 1);
         assert!(preview.user_prompt.contains("omitted chunks: 1"));
+        Ok(())
+    }
+
+    #[test]
+    fn style_hint_prefers_plan_structure_for_launch_nodes() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        workspace.add_node(
+            "Launch Plan".to_string(),
+            "root".to_string(),
+            "topic".to_string(),
+            Some("Need a sharper launch roadmap.".to_string()),
+            None,
+        )?;
+        let node_id = workspace
+            .list_nodes()?
+            .into_iter()
+            .find(|node| node.title == "Launch Plan")
+            .expect("Launch Plan node should exist")
+            .id;
+
+        let preview = workspace.preview_ai_expand(&node_id)?;
+        let preview_lines = preview.draft_patch.preview_lines();
+
+        assert!(
+            preview
+                .user_prompt
+                .contains("goals, constraints, and execution")
+        );
+        assert!(preview_lines.iter().any(|line| line.contains("\"Goals\"")));
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Constraints\""))
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Execution\""))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn style_hint_prefers_risk_structure_for_risk_nodes() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        workspace.add_node(
+            "Risk Register".to_string(),
+            "root".to_string(),
+            "topic".to_string(),
+            Some("Top risks for delivery.".to_string()),
+            None,
+        )?;
+        let node_id = workspace
+            .list_nodes()?
+            .into_iter()
+            .find(|node| node.title == "Risk Register")
+            .expect("Risk Register node should exist")
+            .id;
+
+        let preview = workspace.preview_ai_expand(&node_id)?;
+        let preview_lines = preview.draft_patch.preview_lines();
+
+        assert!(
+            preview
+                .user_prompt
+                .contains("failure modes, impact, and mitigations")
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Failure Modes\""))
+        );
+        assert!(preview_lines.iter().any(|line| line.contains("\"Impact\"")));
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Mitigations\""))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn style_hint_prefers_research_structure_for_research_nodes() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        workspace.add_node(
+            "Research Notes".to_string(),
+            "root".to_string(),
+            "topic".to_string(),
+            Some("Summarize claims from the study.".to_string()),
+            None,
+        )?;
+        let node_id = workspace
+            .list_nodes()?
+            .into_iter()
+            .find(|node| node.title == "Research Notes")
+            .expect("Research Notes node should exist")
+            .id;
+
+        let preview = workspace.preview_ai_expand(&node_id)?;
+        let preview_lines = preview.draft_patch.preview_lines();
+
+        assert!(
+            preview
+                .user_prompt
+                .contains("claims, evidence, and open questions")
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Key Claims\""))
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Evidence\""))
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Open Questions\""))
+        );
         Ok(())
     }
 

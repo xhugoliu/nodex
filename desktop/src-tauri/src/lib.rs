@@ -2,6 +2,7 @@ use std::{path::Path, sync::Mutex};
 
 use anyhow::{Context, Result};
 use nodex::{
+    ai::ExternalRunnerReport,
     model::{
         ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
         SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
@@ -240,6 +241,15 @@ fn normalize_source_detail(mut detail: SourceDetail) -> SourceDetail {
     detail
 }
 
+fn normalize_external_runner_report(mut report: ExternalRunnerReport) -> ExternalRunnerReport {
+    report.request_path = display_path_text(&report.request_path);
+    report.response_path = display_path_text(&report.response_path);
+    report.metadata_path = display_path_text(&report.metadata_path);
+    report.metadata.request_path = display_path_text(&report.metadata.request_path);
+    report.metadata.response_path = display_path_text(&report.metadata.response_path);
+    report
+}
+
 fn display_path(path: &Path) -> String {
     display_path_text(&path.display().to_string())
 }
@@ -332,6 +342,40 @@ fn uncite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument
         summary: Some(format!("Remove cited chunk {chunk_id} from node {node_id}")),
         ops: vec![PatchOp::UnciteSourceChunk { node_id, chunk_id }],
     }
+}
+
+#[command]
+fn draft_ai_expand_patch(
+    start_path: String,
+    node_id: String,
+) -> Result<ExternalRunnerReport, String> {
+    let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    let command = desktop_ai_runner_command().map_err(|err| err.to_string())?;
+    workspace
+        .run_external_ai_expand(&node_id, &command, true)
+        .map(normalize_external_runner_report)
+        .map_err(|err| err.to_string())
+}
+
+fn desktop_ai_runner_command() -> Result<String> {
+    if let Ok(command) = std::env::var("NODEX_DESKTOP_AI_COMMAND")
+        && !command.trim().is_empty()
+    {
+        return Ok(command);
+    }
+
+    let runner_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/openai_runner.py")
+        .canonicalize()
+        .context("failed to resolve scripts/openai_runner.py for desktop AI expand")?;
+    Ok(format!(
+        "python3 {}",
+        shell_quote(&display_path(runner_path.as_path()))
+    ))
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
 }
 
 fn build_native_menu<R: Runtime>(
@@ -819,6 +863,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             apply_patch,
             draft_add_node_patch,
+            draft_ai_expand_patch,
             draft_cite_source_chunk_patch,
             draft_delete_node_patch,
             draft_move_node_patch,

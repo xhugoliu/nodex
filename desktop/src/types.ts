@@ -38,6 +38,40 @@ export interface ApplyPatchReport {
   preview: string[];
 }
 
+export interface AiRunMetadata {
+  run_id: string;
+  capability: string;
+  node_id: string;
+  command: string;
+  dry_run: boolean;
+  status: string;
+  started_at: number;
+  finished_at: number;
+  request_path: string;
+  response_path: string;
+  exit_code: number | null;
+  provider: string | null;
+  model: string | null;
+  provider_run_id: string | null;
+  retry_count: number;
+  last_error_category: string | null;
+  last_error_message: string | null;
+  last_status_code: number | null;
+  patch_run_id: string | null;
+  patch_summary: string | null;
+}
+
+export interface ExternalRunnerReport {
+  request_path: string;
+  response_path: string;
+  metadata_path: string;
+  command: string;
+  exit_code: number;
+  metadata: AiRunMetadata;
+  patch: PatchDocument;
+  report: ApplyPatchReport;
+}
+
 export interface SourceRecord {
   id: string;
   original_path: string;
