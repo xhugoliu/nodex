@@ -220,7 +220,7 @@ patch 可以来自：
 - CLI convenience commands，例如 `nodex node add`
 - CLI 内部生成的结构化计划，例如 `nodex source import` 创建初始节点树
   当前也可以通过 `source import --dry-run` 或 `--emit-patch` 先预览这份 patch
-- 未来的 AI 结构化输出
+- 当前的 AI request / response contract 与 external runner 输出
 
 ### 2. 预览
 
@@ -267,6 +267,12 @@ nodex patch apply <file> --dry-run
 - patch 原文会归档到 `./.nodex/runs/`
 - patch 元信息会写入 `patch_runs` 表
 - 节点状态会更新到 SQLite
+
+当前最小 AI 流程也是走这条边界：
+
+- `nodex ai expand <node-id> --dry-run` 先生成 request 与 patch scaffold
+- `nodex ai run-external` 通过外部 runner 拿到 response
+- response 中的 `patch` 最终仍然复用同一套 patch 校验和 apply 逻辑
 
 ## 当前限制
 

@@ -38,7 +38,7 @@ cargo run -- export outline
 - external runner bridge：可通过本地命令完成 request -> response -> patch 预览
 - 开发用最小 OpenAI runner：`scripts/openai_runner.py`
 - `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
-- 桌面壳可为当前节点直接起草 AI expand dry-run patch
+- 桌面壳可为当前节点直接起草 AI expand，并显示本次运行元数据
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
@@ -50,7 +50,7 @@ cargo run -- export outline
 
 当前还没落地：
 
-- 真实 AI 生成 patch
+- 更完整的 AI 能力：`explore` / 来源问答 / 更强的结果解释与比较
 - PDF 导入与来源切片
 - 完整来源追踪与证据视图
 - 完整 Tauri 图形界面

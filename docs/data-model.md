@@ -13,6 +13,7 @@
   snapshots/
   sources/
   exports/
+  ai/
 ```
 
 当前这些目录的职责分别是：
@@ -22,6 +23,7 @@
 - `snapshots/`：归档快照 JSON
 - `sources/`：归档导入过的原始资料文件
 - `exports/`：导出结果
+- `ai/`：归档 AI 运行过程中的 request / response / `.meta.json`
 
 ## 当前数据库表
 
@@ -230,6 +232,7 @@
 
 - `patch_runs`
 - 已有 `snapshots` 记录本身
+- `.nodex/ai/` 下的 AI 运行文件
 
 所以快照现在更接近“内容状态快照”：
 
@@ -243,7 +246,26 @@
 
 - 更完整的节点与来源引用关系
 - 导出记录
-- AI 运行记录
+- 更完整的 AI 运行记录索引
+
+## 当前 AI 运行文件
+
+当前 AI 运行记录还没有进 SQLite 表，而是先以本地文件形式保存到：
+
+```text
+.nodex/ai/
+  <run-id>.request.json
+  <run-id>.response.json
+  <run-id>.meta.json
+```
+
+当前语义：
+
+- `request.json`：一次 AI expand 请求的上下文与 contract
+- `response.json`：外部 runner 或 provider 返回的结构化 response
+- `meta.json`：本地运行审计信息，例如 provider、model、provider run id、retry 次数、最后一次错误分类、patch run id
+
+当前这些 AI 文件不会写入 snapshot，也还不属于 SQLite schema 的一部分。
 
 建议未来继续坚持两层存储：
 

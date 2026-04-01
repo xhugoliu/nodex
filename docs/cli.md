@@ -64,9 +64,11 @@ nodex ai run-external <node-id> <command> [--dry-run] [--format text|json]
 
 说明：
 
-- 当前只实现 `--dry-run`
-- 这条命令不会调用真实模型，也不需要 API key
-- 它会在本地组装 AI expand 请求上下文，并生成一份可审阅的 patch scaffold
+- 当前只有 `expand` 这一个 AI 能力入口
+- `ai expand` 本身只负责 dry-run request 预览，不直接调用模型
+- `ai run-external` 则可以通过外部 runner 触发真实模型调用，并在不传 `--dry-run` 时真正应用 patch
+- 这套能力既支持“纯本地 dry-run”，也支持“真实 provider -> response -> patch”的最小闭环
+- `ai expand` 会在本地组装 AI expand 请求上下文，并生成一份可审阅的 patch scaffold
 - 请求上下文会做保守裁剪，不会把所有 source / evidence chunk 无限制拼进去
 - prompt 会显式要求模型避免泛化标题，优先给出贴近节点语义的分支
 - `--emit-request` 会导出稳定的 request bundle，供外部 AI runtime 消费
@@ -253,7 +255,8 @@ nodex export outline [--output path]
 
 当前 CLI 还没有实现：
 
-- 真实 AI 生成 patch
+- `ai explore`
+- 来源问答
 - PDF 导入
 - 完整来源与证据视图
 

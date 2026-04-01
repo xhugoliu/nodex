@@ -30,6 +30,7 @@
   - snapshot 保存 / 恢复
   - 历史 patch 载入
   - 语言切换
+- 当前桌面里也已经能对选中节点起草 AI expand dry-run patch，并显示本次运行元数据
 
 这对应的核心问题是：
 
@@ -113,6 +114,8 @@
 - 返回 prompt bundle 和 patch scaffold 预览，不调用真实模型
 - 可导出 request bundle，并通过 `ai apply-response` 回放外部 response
 - 可通过 `ai run-external` 调用本地 runner，打通 request -> response -> patch 预览
+- 开发用 `scripts/openai_runner.py` 已可通过 external runner 接入真实 OpenAI Responses API
+- `.nodex/ai/*.meta.json` 已记录 provider / model / provider run id / retry 次数等运行审计信息
 
 关键问题：
 
@@ -171,6 +174,7 @@
 - 右栏统一节点编辑器与 patch 编辑器
 - source import / snapshot / 历史 patch / 语言切换通过原生菜单进入
 - 可从 source detail 为上下文节点起草 `cite_source_chunk` / `uncite_source_chunk`
+- 可从当前节点起草 AI expand patch，并在控制台查看 provider / model / retry 等运行元数据
 
 关键问题：
 

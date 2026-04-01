@@ -74,7 +74,7 @@ CLI 命令入口和输出分发。
 
 ### `src/ai.rs`
 
-AI dry-run 预览层。
+AI request / response 编排层。
 
 职责：
 
@@ -83,7 +83,7 @@ AI dry-run 预览层。
 - 生成可审阅的 patch scaffold
 - 定义稳定的 request / response contract，供未来 runtime 对接
 - 提供 external runner bridge，把 request / response 文件交给本地命令处理
-- 当前不负责真实模型调用
+- 当前共享内核不直接内置 provider SDK，但已经支持通过 external runner 间接接入真实模型
 
 ### `src/project.rs`
 
@@ -110,6 +110,7 @@ AI dry-run 预览层。
   - snapshot 保存 / 恢复
   - 历史 patch 载入
   - 语言切换
+- 也负责为桌面前端暴露 AI expand dry-run draft 入口
 - 把菜单动作和工作区状态变化通过事件发回前端
 
 ### `desktop/src`
@@ -124,6 +125,7 @@ AI dry-run 预览层。
   - 中栏：详情摘要与底部控制台
   - 右栏：统一节点编辑器与 patch 编辑器
 - 负责把节点编辑动作起草为 patch
+- 负责把 AI expand 结果作为 patch 草案载入编辑器
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里
@@ -216,7 +218,7 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 
 从当前路线看，真正还没落地的核心部分主要是：
 
-- 真实 AI 生成 patch
+- 更完整的 AI 能力：`explore` / 来源问答 / 结果比较与解释
 - 更完整的来源与证据模型
 - PDF 导入
 - 完整脑图式 Tauri 图形界面
@@ -228,6 +230,7 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - 本地 patch scaffold 预览
 - request bundle 导出与 response contract 回放
 - `ai run-external` 本地执行桥
+- desktop 中的 AI expand draft 入口
 
 当前也有一版开发用 provider runner：
 
