@@ -146,6 +146,7 @@ export function InspectorPane(props: {
   onToggleConsoleDetails: () => void;
   onSelectNode: (nodeId: string) => void;
   onSelectSource: (sourceId: string) => void;
+  onLoadAiRunPatch: (runId: string) => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
 }) {
@@ -170,6 +171,7 @@ export function InspectorPane(props: {
               contextSourceId={props.contextSourceId}
               t={props.t}
               onSelectSource={props.onSelectSource}
+              onLoadAiRunPatch={props.onLoadAiRunPatch}
             />
           ) : props.selectedSourceDetail ? (
             <CompactSourceDetail
@@ -764,6 +766,7 @@ function CompactNodeDetail(props: {
   contextSourceId: string | null;
   t: Translator;
   onSelectSource: (sourceId: string) => void;
+  onLoadAiRunPatch: (runId: string) => void;
 }) {
   const showKindBadge = props.detail.node.kind !== "topic";
   const childrenSummary = props.detail.children.length
@@ -959,8 +962,20 @@ function CompactNodeDetail(props: {
                       {run.model ? ` / ${run.model}` : ""}
                     </div>
                   </div>
-                  <div className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-[color:var(--muted)]">
-                    {run.dry_run ? props.t("detail.aiRunDryRun") : props.t("detail.aiRunApplied")}
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                      {run.dry_run
+                        ? props.t("detail.aiRunDryRun")
+                        : props.t("detail.aiRunApplied")}
+                    </div>
+                    {run.status !== "failed" ? (
+                      <button
+                        className={ghostButtonClass}
+                        onClick={() => props.onLoadAiRunPatch(run.id)}
+                      >
+                        {props.t("detail.loadAiRunPatch")}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>

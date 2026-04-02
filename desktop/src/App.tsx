@@ -756,6 +756,24 @@ export default function App() {
     setConsoleMessage(t("messages.patchEditorCleared"), "success");
   }
 
+  async function loadAiRunPatch(runId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      setShowAdvancedPatchEditor(false);
+      const patch = await invokeCommand<PatchDocument>("get_ai_run_patch", {
+        start_path: workspacePath,
+        run_id: runId,
+      });
+      setPatchEditor(JSON.stringify(patch, null, 2));
+      setConsoleMessage(t("messages.loadedAiRunPatch", { runId }), "success");
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   return (
     <div className="flex h-screen w-full flex-col gap-3 overflow-hidden px-3 py-3">
       {workspaceOverview ? (
@@ -792,6 +810,9 @@ export default function App() {
             }}
             onSelectSource={(sourceId) => {
               void fetchSourceDetail(sourceId);
+            }}
+            onLoadAiRunPatch={(runId) => {
+              void loadAiRunPatch(runId);
             }}
             onDraftCiteChunk={(chunkId) => {
               void draftSourceChunkCitation(chunkId, false);

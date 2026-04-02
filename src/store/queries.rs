@@ -142,6 +142,19 @@ impl Workspace {
         Ok(records)
     }
 
+    pub fn ai_run_record_by_id(&self, run_id: &str) -> Result<Option<AiRunRecord>> {
+        self.conn
+            .query_row(
+                "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
+                 FROM ai_runs
+                 WHERE id = ?1",
+                [run_id],
+                read_ai_run_record,
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
     pub fn write_outline(&self, output: Option<&Path>) -> Result<std::path::PathBuf> {
         let outline = self.export_outline()?;
         let target = match output {

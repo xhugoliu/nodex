@@ -2,7 +2,7 @@ use std::{path::Path, sync::Mutex};
 
 use anyhow::{Context, Result};
 use nodex::{
-    ai::ExternalRunnerReport,
+    ai::{ExternalRunnerReport, parse_ai_patch_response},
     model::{
         AiRunRecord, ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
         SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
@@ -754,6 +754,29 @@ fn get_ai_run_history(start_path: String, node_id: Option<String>) -> Result<Vec
 }
 
 #[command]
+fn get_ai_run_patch(start_path: String, run_id: String) -> Result<PatchDocument, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    let record = workspace
+        .ai_run_record_by_id(&run_id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| format!("AI run {run_id} was not found"))?;
+
+    if let Some(patch_run_id) = record.patch_run_id.as_deref() {
+        return workspace
+            .patch_document_by_run_id(patch_run_id)
+            .map_err(|err| err.to_string());
+    }
+
+    let response_json = std::fs::read_to_string(&record.response_path)
+        .with_context(|| format!("failed to read {}", record.response_path))
+        .map_err(|err| err.to_string())?;
+    let response = parse_ai_patch_response(&response_json)
+        .with_context(|| format!("failed to parse {}", record.response_path))
+        .map_err(|err| err.to_string())?;
+    Ok(response.patch)
+}
+
+#[command]
 fn preview_source_import(
     start_path: String,
     source_path: String,
@@ -925,6 +948,7 @@ pub fn run() {
             draft_update_node_patch,
             get_node_detail,
             get_ai_run_history,
+            get_ai_run_patch,
             get_patch_document,
             get_source_detail,
             import_source,
