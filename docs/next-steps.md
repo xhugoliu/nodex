@@ -27,7 +27,7 @@
 
 当前最值得压实的产品路径是：
 
-> 选中一个节点 -> AI 帮你继续拓展 -> 用户能看懂理由和证据 -> 预览 patch -> 再决定是否应用
+> 选中一个节点 -> 用真实 provider 起草 AI draft -> 用户能看懂理由和证据 -> 预览 patch -> 再决定是否应用
 
 短期内，判断优先级时优先看这条路径是否更顺，而不是入口是否更多、界面是否更大。
 
@@ -42,35 +42,51 @@
 
 ## 当前执行顺序
 
-### 1. 串顺桌面主流程
+### 1. 把真实 provider 路径做成产品态
 
 状态：当前优先级最高
+
+目标：
+
+- 不再停留在“桥接能力已存在但用户感知不强”的状态
+- 把现有 external runner + 最小 OpenAI runner 做成清晰可用的真实运行路径
+- 保持 external runner 边界，不急着把 provider SDK 写进 Rust 内核
+
+当前基础：
+
+- 真实 OpenAI provider 已可通过 `ai run-external` 和桌面 draft 入口跑通
+- 已有 request / response contract、解释层、evidence 最小语义、运行审计和 `ai_runs` 索引
+
+下一轮最小切口：
+
+- 让当前 provider 是否已配置、正在使用哪个 runner / model 更可见
+- 让一次 AI draft 的 request / response / patch / 最终 apply 状态更容易串起来看
+- 让失败原因和下一步动作更清楚，而不是只暴露底层错误
+
+短期只关心这条流程是否顺手：
+
+- 选节点
+- 用真实 provider 起草 expand / explore
+- 查看理由和证据
+- 预览 patch
+- 应用 patch
+- 回看历史
+
+### 2. 串顺桌面主流程
+
+状态：和 1 配套推进，但不抢前面优先级
 
 目标：
 
 - 用现有 Tauri 壳把核心链路串顺
 - 不急着把 GUI 做大
 
-当前基础：
+当前最小关注点：
 
-- 桌面里已经能起草 expand / explore、查看解释信息，并在节点详情回看最近 AI 运行记录
-- 节点详情里的 AI 运行记录现在也能直接回放 patch 草案到右侧编辑器
+- 当前节点上下文在 draft / apply / refresh 之后保持稳定
+- 节点详情里的最近 AI 运行记录、patch 编辑器和 apply 结果之间切换更自然
 
-下一轮最小切口：
-
-- 让一次 AI draft 的 request / response / patch / 最终 apply 状态在桌面里更容易串起来看
-- 保持 apply / refresh 之后的当前节点上下文与最近运行记录刷新
-
-短期只关心这条流程是否顺手：
-
-- 选节点
-- 起草 expand / explore
-- 查看理由和证据
-- 预览 patch
-- 应用 patch
-- 回看历史
-
-### 2. 再补来源能力
+### 3. 再补来源能力
 
 状态：前面主路径顺了之后再进入
 
@@ -80,7 +96,7 @@
 - 来源问答
 - 更完整的 evidence 视图
 
-### 3. 最后再做更完整的脑图 GUI
+### 4. 最后再做更完整的脑图 GUI
 
 状态：当前不是短期重点
 

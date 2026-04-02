@@ -240,6 +240,8 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - 继续通过 external runner bridge 接入，而不是把 provider SDK 写进 Rust 内核
 - `.nodex/ai/*.meta.json` 保存本地运行审计信息，便于排查 provider 调用过程
 
+短期更适合继续补的，不是把 provider SDK 直接塞进共享内核，而是把这条真实 provider 路径的配置、状态、失败反馈和 apply 链路做得更可见、更顺手。
+
 其中资料导入已经有一版最小实现：
 
 - `md` / `txt` import

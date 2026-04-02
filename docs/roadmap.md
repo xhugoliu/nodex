@@ -82,6 +82,12 @@
 - 已把最小 explainability contract 接到 AI response：理由摘要、直接证据、推断建议
 - 已能保存本地 AI 运行审计信息，并把最小运行索引写进 SQLite，供后续排查和查询扩展
 
+当前短期重点：
+
+- 不是再发明一条新的 provider 接入路径
+- 而是把现有 external runner + 最小 OpenAI runner 做成更清晰的真实运行体验
+- 包括配置状态、运行状态、失败反馈和 patch apply 链路的可见性
+
 关键问题：
 
 - 如何约束模型只输出合法 patch
