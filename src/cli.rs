@@ -112,11 +112,50 @@ pub enum OutputFormat {
     Json,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AiExploreBy {
+    Risk,
+    Question,
+    Action,
+    Evidence,
+}
+
+impl AiExploreBy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Risk => "risk",
+            Self::Question => "question",
+            Self::Action => "action",
+            Self::Evidence => "evidence",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AiCapability {
+    Expand,
+    Explore,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum AiCommand {
     /// Prepare a dry-run expand request for one node.
     Expand {
         node_id: String,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        emit_request: Option<PathBuf>,
+        #[arg(long)]
+        emit_response_template: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Prepare a dry-run explore request for one node and one exploration angle.
+    Explore {
+        node_id: String,
+        #[arg(long, value_enum)]
+        by: AiExploreBy,
         #[arg(long)]
         dry_run: bool,
         #[arg(long)]
@@ -138,6 +177,10 @@ pub enum AiCommand {
     RunExternal {
         node_id: String,
         command: String,
+        #[arg(long, value_enum, default_value_t = AiCapability::Expand)]
+        capability: AiCapability,
+        #[arg(long, value_enum)]
+        by: Option<AiExploreBy>,
         #[arg(long)]
         dry_run: bool,
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]

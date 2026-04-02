@@ -269,6 +269,7 @@ export function EditorPane(props: {
   onClearPatchEditor: () => void;
   onDraftUpdate: () => void;
   onDraftAiExpand: () => void;
+  onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
   onDraftAddChild: () => void;
   onDraftMove: () => void;
   onDraftDelete: () => void;
@@ -335,6 +336,37 @@ export function EditorPane(props: {
                 <div className="flex flex-wrap gap-2">
                   <button className={ghostButtonClass} onClick={props.onDraftAiExpand}>
                     {props.t("nodeEditing.draftAiExpand")}
+                  </button>
+                </div>
+                <div className="pt-2 text-sm text-[color:var(--muted)]">
+                  {props.t("nodeEditing.aiExploreMeta", {
+                    title: props.selectedNodeDetail.node.title,
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className={ghostButtonClass}
+                    onClick={() => props.onDraftAiExplore("risk")}
+                  >
+                    {props.t("nodeEditing.draftAiExploreRisk")}
+                  </button>
+                  <button
+                    className={ghostButtonClass}
+                    onClick={() => props.onDraftAiExplore("question")}
+                  >
+                    {props.t("nodeEditing.draftAiExploreQuestion")}
+                  </button>
+                  <button
+                    className={ghostButtonClass}
+                    onClick={() => props.onDraftAiExplore("action")}
+                  >
+                    {props.t("nodeEditing.draftAiExploreAction")}
+                  </button>
+                  <button
+                    className={ghostButtonClass}
+                    onClick={() => props.onDraftAiExplore("evidence")}
+                  >
+                    {props.t("nodeEditing.draftAiExploreEvidence")}
                   </button>
                 </div>
               </section>

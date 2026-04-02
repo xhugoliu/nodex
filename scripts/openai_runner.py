@@ -223,19 +223,72 @@ def validate_request_contract(request_payload: dict) -> None:
             category="invalid_request",
             message=f"request JSON is missing required keys: {', '.join(missing)}",
         )
-    if request_payload["kind"] != "nodex_ai_expand_request":
+    request_kind = request_payload["kind"]
+    capability = request_payload.get("capability")
+    if request_kind not in {"nodex_ai_expand_request", "nodex_ai_explore_request"}:
         raise RunnerFailure(
             category="invalid_request",
             message=(
-                f"request kind {request_payload['kind']!r} is unsupported; "
-                "expected 'nodex_ai_expand_request'"
+                f"request kind {request_kind!r} is unsupported; "
+                "expected 'nodex_ai_expand_request' or 'nodex_ai_explore_request'"
             ),
         )
+    if capability not in {"expand", "explore"}:
+        raise RunnerFailure(
+            category="invalid_request",
+            message=(
+                f"request capability {capability!r} is unsupported; "
+                "expected 'expand' or 'explore'"
+            ),
+        )
+    if request_kind == "nodex_ai_expand_request" and capability != "expand":
+        raise RunnerFailure(
+            category="invalid_request",
+            message="expand requests must set capability='expand'",
+        )
+    if request_kind == "nodex_ai_explore_request":
+        if capability != "explore":
+            raise RunnerFailure(
+                category="invalid_request",
+                message="explore requests must set capability='explore'",
+            )
+        explore_by = request_payload.get("explore_by")
+        if explore_by not in {"risk", "question", "action", "evidence"}:
+            raise RunnerFailure(
+                category="invalid_request",
+                message=(
+                    "explore requests must include explore_by in "
+                    "{risk, question, action, evidence}"
+                ),
+            )
 
 
 def build_response_schema() -> dict:
     def string_or_null() -> dict:
         return {"type": ["string", "null"]}
+
+    evidence_reference = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "source_id": {"type": "string"},
+            "source_name": {"type": "string"},
+            "chunk_id": {"type": "string"},
+            "label": string_or_null(),
+            "start_line": {"type": "integer"},
+            "end_line": {"type": "integer"},
+            "why_it_matters": {"type": "string"},
+        },
+        "required": [
+            "source_id",
+            "source_name",
+            "chunk_id",
+            "label",
+            "start_line",
+            "end_line",
+            "why_it_matters",
+        ],
+    }
 
     def patch_op_schema(op_type: str, required: list[str], optional: dict) -> dict:
         properties = {"type": {"type": "string", "enum": [op_type]}}
@@ -342,12 +395,32 @@ def build_response_schema() -> dict:
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            "version": {"type": "integer", "enum": [1]},
+            "version": {"type": "integer", "enum": [2]},
             "kind": {"type": "string", "enum": ["nodex_ai_patch_response"]},
-            "capability": {"type": "string", "enum": ["expand"]},
+            "capability": {"type": "string", "enum": ["expand", "explore"]},
             "request_node_id": {"type": "string"},
             "status": {"type": "string", "enum": ["ok"]},
             "summary": string_or_null(),
+            "explanation": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "rationale_summary": {"type": "string"},
+                    "direct_evidence": {
+                        "type": "array",
+                        "items": evidence_reference,
+                    },
+                    "inferred_suggestions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": [
+                    "rationale_summary",
+                    "direct_evidence",
+                    "inferred_suggestions",
+                ],
+            },
             "generator": {
                 "type": "object",
                 "additionalProperties": False,
@@ -384,6 +457,7 @@ def build_response_schema() -> dict:
             "request_node_id",
             "status",
             "summary",
+            "explanation",
             "generator",
             "patch",
             "notes",
@@ -604,6 +678,7 @@ def validate_contract_response(
         "request_node_id",
         "status",
         "summary",
+        "explanation",
         "generator",
         "patch",
         "notes",
@@ -636,6 +711,66 @@ def validate_contract_response(
             category="schema_error",
             message=f"runner returned non-ok status {contract_response.get('status')!r}",
         )
+
+    explanation = contract_response.get("explanation")
+    if not isinstance(explanation, dict):
+        raise RunnerFailure(
+            category="schema_error",
+            message="response explanation must be an object",
+        )
+    rationale_summary = explanation.get("rationale_summary")
+    if not isinstance(rationale_summary, str) or not rationale_summary.strip():
+        raise RunnerFailure(
+            category="schema_error",
+            message="response explanation.rationale_summary must be a non-empty string",
+        )
+    direct_evidence = explanation.get("direct_evidence")
+    if not isinstance(direct_evidence, list):
+        raise RunnerFailure(
+            category="schema_error",
+            message="response explanation.direct_evidence must be an array",
+        )
+    for index, item in enumerate(direct_evidence, start=1):
+        if not isinstance(item, dict):
+            raise RunnerFailure(
+                category="schema_error",
+                message=f"direct evidence item {index} must be an object",
+            )
+        required_evidence_fields = [
+            "source_id",
+            "source_name",
+            "chunk_id",
+            "label",
+            "start_line",
+            "end_line",
+            "why_it_matters",
+        ]
+        missing_fields = [
+            field for field in required_evidence_fields if field not in item
+        ]
+        if missing_fields:
+            raise RunnerFailure(
+                category="schema_error",
+                message=(
+                    f"direct evidence item {index} is missing fields: "
+                    f"{', '.join(missing_fields)}"
+                ),
+            )
+    inferred_suggestions = explanation.get("inferred_suggestions")
+    if not isinstance(inferred_suggestions, list):
+        raise RunnerFailure(
+            category="schema_error",
+            message="response explanation.inferred_suggestions must be an array",
+        )
+    for index, item in enumerate(inferred_suggestions, start=1):
+        if not isinstance(item, str) or not item.strip():
+            raise RunnerFailure(
+                category="schema_error",
+                message=(
+                    f"response explanation.inferred_suggestions[{index}] "
+                    "must be a non-empty string"
+                ),
+            )
 
     patch = contract_response.get("patch")
     if not isinstance(patch, dict):

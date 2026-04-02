@@ -58,25 +58,43 @@ cargo run -- export outline
 
 ```text
 nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
+nodex ai explore <node-id> --by risk|question|action|evidence --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai apply-response <file> [--dry-run] [--format text|json]
-nodex ai run-external <node-id> <command> [--dry-run] [--format text|json]
+nodex ai run-external <node-id> <command> [--capability expand|explore] [--by risk|question|action|evidence] [--dry-run] [--format text|json]
 ```
 
 说明：
 
-- 当前只有 `expand` 这一个 AI 能力入口
 - `ai expand` 本身只负责 dry-run request 预览，不直接调用模型
+- `ai explore` 也同样只负责 dry-run request 预览，但会额外要求 `--by`
+- 当前 `ai explore` 支持这些角度：
+  - `risk`
+  - `question`
+  - `action`
+  - `evidence`
 - `ai run-external` 则可以通过外部 runner 触发真实模型调用，并在不传 `--dry-run` 时真正应用 patch
 - 这套能力既支持“纯本地 dry-run”，也支持“真实 provider -> response -> patch”的最小闭环
 - `ai expand` 会在本地组装 AI expand 请求上下文，并生成一份可审阅的 patch scaffold
+- `ai explore` 会复用同一套 request / response / patch 边界，只是在 prompt 与 scaffold 上按 `--by` 角度收束
+- 当前 AI request / response contract version 为 `2`
+- response contract 现在除了 patch，还要求返回一层结构化解释：
+  - `explanation.rationale_summary`
+  - `explanation.direct_evidence`
+  - `explanation.inferred_suggestions`
 - 请求上下文会做保守裁剪，不会把所有 source / evidence chunk 无限制拼进去
 - prompt 会显式要求模型避免泛化标题，优先给出贴近节点语义的分支
 - `--emit-request` 会导出稳定的 request bundle，供外部 AI runtime 消费
 - `--emit-response-template` 会导出一份 contract 正确的 response template，方便外部流程替换其中的 patch
-- `--format text` 会输出 prompt bundle、patch 预览和说明
+- `--format text` 会输出 prompt bundle、patch 预览、解释骨架和说明
 - `--format json` 会返回结构化 dry-run 结果，便于后续 headless / agent 流程复用
-- `ai apply-response <file> --dry-run` 会校验并预览外部 response 里的 patch
+- `ai apply-response <file> --dry-run` 会校验并预览外部 response 里的 patch 与 explanation
 - `ai apply-response <file>` 会把外部 response 中的 patch 真正应用到当前工作区
+- `ai apply-response` 和 `ai run-external --format text` 会直接显示：
+  - 理由摘要
+  - 直接证据
+  - 推断建议
+- `ai run-external --capability explore --by risk` 可以直接走完整的 explore 外部 runner 路径
+- `--by` 只有在 `--capability explore` 时才合法
 - `ai run-external` 会在 `.nodex/ai/` 下写入 request / response 文件，并通过环境变量调用一个本地命令：
   - `NODEX_AI_REQUEST`
   - `NODEX_AI_RESPONSE`
@@ -255,7 +273,6 @@ nodex export outline [--output path]
 
 当前 CLI 还没有实现：
 
-- `ai explore`
 - 来源问答
 - PDF 导入
 - 完整来源与证据视图

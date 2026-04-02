@@ -110,7 +110,7 @@ AI request / response 编排层。
   - snapshot 保存 / 恢复
   - 历史 patch 载入
   - 语言切换
-- 也负责为桌面前端暴露 AI expand dry-run draft 入口
+- 也负责为桌面前端暴露 AI expand / explore dry-run draft 入口
 - 把菜单动作和工作区状态变化通过事件发回前端
 
 ### `desktop/src`
@@ -125,7 +125,7 @@ AI request / response 编排层。
   - 中栏：详情摘要与底部控制台
   - 右栏：统一节点编辑器与 patch 编辑器
 - 负责把节点编辑动作起草为 patch
-- 负责把 AI expand 结果作为 patch 草案载入编辑器
+- 负责把 AI expand / explore 结果作为 patch 草案载入编辑器
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里
@@ -218,7 +218,7 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 
 从当前路线看，真正还没落地的核心部分主要是：
 
-- 更完整的 AI 能力：`explore` / 来源问答 / 结果比较与解释
+- 更完整的 AI 能力：来源问答 / 结果比较与解释 / 更稳定的 explore 策略
 - 更完整的来源与证据模型
 - PDF 导入
 - 完整脑图式 Tauri 图形界面
@@ -226,11 +226,12 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 当前已经有一层最小 AI dry-run 骨架：
 
 - `nodex ai expand <node-id> --dry-run`
+- `nodex ai explore <node-id> --by ... --dry-run`
 - 本地 prompt bundle 预览
 - 本地 patch scaffold 预览
 - request bundle 导出与 response contract 回放
 - `ai run-external` 本地执行桥
-- desktop 中的 AI expand draft 入口
+- desktop 中的 AI expand / explore draft 入口
 
 当前也有一版开发用 provider runner：
 

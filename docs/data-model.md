@@ -261,7 +261,7 @@
 
 当前语义：
 
-- `request.json`：一次 AI expand 请求的上下文与 contract
+- `request.json`：一次 AI draft 请求的上下文与 contract，当前可能来自 `expand` 或 `explore`
 - `response.json`：外部 runner 或 provider 返回的结构化 response
 - `meta.json`：本地运行审计信息，例如 provider、model、provider run id、retry 次数、最后一次错误分类、patch run id
 

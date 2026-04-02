@@ -77,8 +77,9 @@
 
 当前基础：
 
-- 已有 `ai expand` 的最小 dry-run 能力，可在本地组装上下文并预览 patch scaffold
+- 已有 `ai expand` / `ai explore` 的最小 dry-run 能力，可在本地组装上下文并预览 patch scaffold
 - 已形成 request / response contract、external runner bridge 和最小 provider runner
+- 已把最小 explainability contract 接到 AI response：理由摘要、直接证据、推断建议
 - 已能保存本地 AI 运行审计信息，供后续排查和索引扩展
 
 关键问题：

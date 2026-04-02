@@ -47,6 +47,10 @@ export function renderExternalRunnerReport(
 ) {
   return [
     t("reports.aiDraftReady"),
+    t("reports.capability", { value: result.metadata.capability }),
+    result.metadata.explore_by
+      ? t("reports.exploreBy", { value: result.metadata.explore_by })
+      : null,
     result.metadata.provider
       ? t("reports.provider", { value: result.metadata.provider })
       : null,
@@ -60,6 +64,29 @@ export function renderExternalRunnerReport(
     t("reports.requestFile", { value: result.request_path }),
     t("reports.responseFile", { value: result.response_path }),
     t("reports.metaFile", { value: result.metadata_path }),
+    t("reports.rationale", { value: result.explanation.rationale_summary }),
+    result.explanation.direct_evidence.length
+      ? t("reports.directEvidenceCount", {
+          count: result.explanation.direct_evidence.length,
+        })
+      : t("reports.directEvidenceNone"),
+    ...result.explanation.direct_evidence.map((item) =>
+      `- ${t("reports.evidenceItem", {
+        source: item.source_name,
+        start: item.start_line,
+        end: item.end_line,
+        why: item.why_it_matters,
+      })}`,
+    ),
+    result.explanation.inferred_suggestions.length
+      ? t("reports.inferredSuggestionCount", {
+          count: result.explanation.inferred_suggestions.length,
+        })
+      : t("reports.inferredSuggestionNone"),
+    ...result.explanation.inferred_suggestions.map(
+      (item) => `- ${t("reports.inferredSuggestion", { value: item })}`,
+    ),
+    ...result.notes.map((note) => `- ${t("reports.note", { value: note })}`),
     ...result.report.preview.map((line) => `- ${line}`),
   ]
     .filter(Boolean)

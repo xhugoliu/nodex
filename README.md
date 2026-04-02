@@ -34,11 +34,13 @@ cargo run -- export outline
 - source / node 双向查看来源链路
 - 显式 evidence 引用：将证据引用与导入关联分离
 - `nodex ai expand <node-id> --dry-run` 本地预览骨架
+- `nodex ai explore <node-id> --by ... --dry-run` 最小按角度探索入口
 - AI request / response contract：可导出 request，并回放外部 response
+- `ai expand` 最小解释层：`rationale_summary` / `direct_evidence` / `inferred_suggestions`
 - external runner bridge：可通过本地命令完成 request -> response -> patch 预览
 - 开发用最小 OpenAI runner：`scripts/openai_runner.py`
 - `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
-- 桌面壳可为当前节点直接起草 AI expand，并显示本次运行元数据
+- 桌面壳可为当前节点直接起草 AI expand / explore，并显示本次运行元数据
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出
@@ -50,7 +52,7 @@ cargo run -- export outline
 
 当前还没落地：
 
-- 更完整的 AI 能力：`explore` / 来源问答 / 更强的结果解释与比较
+- 更完整的 AI 能力：来源问答 / 更强的结果解释与比较 / 更稳定的 explore 策略
 - PDF 导入与来源切片
 - 完整来源追踪与证据视图
 - 完整 Tauri 图形界面

@@ -11,7 +11,7 @@ use crate::{
     store::Workspace,
 };
 
-const AI_CONTRACT_VERSION: u32 = 1;
+const AI_CONTRACT_VERSION: u32 = 2;
 const MAX_PREVIEW_CHILDREN: usize = 8;
 const MAX_LINKED_SOURCES: usize = 2;
 const MAX_LINKED_CHUNKS_PER_SOURCE: usize = 2;
@@ -76,6 +76,8 @@ pub struct AiExpandRequest {
     pub version: u32,
     pub kind: String,
     pub capability: String,
+    #[serde(default)]
+    pub explore_by: Option<String>,
     pub workspace_name: String,
     pub target_node: AiNodeContext,
     pub context_summary: AiContextSummary,
@@ -95,6 +97,26 @@ pub struct AiGeneratorInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiEvidenceReference {
+    pub source_id: String,
+    pub source_name: String,
+    pub chunk_id: String,
+    pub label: Option<String>,
+    pub start_line: i64,
+    pub end_line: i64,
+    pub why_it_matters: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiPatchExplanation {
+    pub rationale_summary: String,
+    #[serde(default)]
+    pub direct_evidence: Vec<AiEvidenceReference>,
+    #[serde(default)]
+    pub inferred_suggestions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiPatchResponse {
     pub version: u32,
     pub kind: String,
@@ -102,6 +124,7 @@ pub struct AiPatchResponse {
     pub request_node_id: String,
     pub status: String,
     pub summary: Option<String>,
+    pub explanation: AiPatchExplanation,
     pub generator: AiGeneratorInfo,
     pub patch: PatchDocument,
     #[serde(default)]
@@ -111,6 +134,7 @@ pub struct AiPatchResponse {
 #[derive(Debug, Clone, Serialize)]
 pub struct AiExpandPreview {
     pub capability: String,
+    pub explore_by: Option<String>,
     pub mode: String,
     pub workspace_name: String,
     pub target_node: AiNodeContext,
@@ -133,6 +157,8 @@ pub struct ExternalRunnerReport {
     pub command: String,
     pub exit_code: i32,
     pub metadata: AiRunMetadata,
+    pub explanation: AiPatchExplanation,
+    pub notes: Vec<String>,
     pub patch: PatchDocument,
     pub report: ApplyPatchReport,
 }
@@ -141,6 +167,7 @@ pub struct ExternalRunnerReport {
 pub struct AiRunMetadata {
     pub run_id: String,
     pub capability: String,
+    pub explore_by: Option<String>,
     pub node_id: String,
     pub command: String,
     pub dry_run: bool,
@@ -181,6 +208,20 @@ struct RunnerSidecarMetadata {
 
 impl Workspace {
     pub fn preview_ai_expand(&self, node_id: &str) -> Result<AiExpandPreview> {
+        self.preview_ai_draft(node_id, "expand", None)
+    }
+
+    pub fn preview_ai_explore(&self, node_id: &str, explore_by: &str) -> Result<AiExpandPreview> {
+        self.preview_ai_draft(node_id, "explore", Some(explore_by))
+    }
+
+    fn preview_ai_draft(
+        &self,
+        node_id: &str,
+        capability: &str,
+        explore_by: Option<&str>,
+    ) -> Result<AiExpandPreview> {
+        let explore_by = normalize_explore_by(capability, explore_by)?;
         let workspace_name = self.workspace_name()?;
         let detail = self.node_detail(node_id)?;
         let target_node = build_node_context(&detail);
@@ -240,13 +281,18 @@ impl Workspace {
             &context_summary,
             &linked_sources,
             &cited_evidence,
+            capability,
+            explore_by,
         );
         let output_instructions = build_output_instructions();
-        let draft_patch = build_expand_patch_scaffold(&target_node);
+        let draft_patch = build_draft_patch_scaffold(&target_node, capability, explore_by);
+        let explanation_scaffold =
+            build_preview_explanation(&target_node, &cited_evidence, capability, explore_by);
         let request = AiExpandRequest {
             version: AI_CONTRACT_VERSION,
-            kind: "nodex_ai_expand_request".to_string(),
-            capability: "expand".to_string(),
+            kind: request_kind_for_capability(capability).to_string(),
+            capability: capability.to_string(),
+            explore_by: explore_by.map(str::to_string),
             workspace_name: workspace_name.clone(),
             target_node: target_node.clone(),
             context_summary: context_summary.clone(),
@@ -264,10 +310,11 @@ impl Workspace {
         let response_template = AiPatchResponse {
             version: AI_CONTRACT_VERSION,
             kind: "nodex_ai_patch_response".to_string(),
-            capability: "expand".to_string(),
+            capability: capability.to_string(),
             request_node_id: target_node.id.clone(),
             status: "ok".to_string(),
             summary: draft_patch.summary.clone(),
+            explanation: explanation_scaffold,
             generator: AiGeneratorInfo {
                 provider: "external_runtime".to_string(),
                 model: None,
@@ -278,19 +325,27 @@ impl Workspace {
                 "Replace the scaffold patch with model output before applying.".to_string(),
             ],
         };
-        let notes = vec![
+        let mut notes = vec![
             "No API key is required for this preview.".to_string(),
             "No model call was performed; this command only prepares local AI context.".to_string(),
             "The draft patch is a deterministic scaffold meant for review, editing, or future model replacement.".to_string(),
+            "The response template now includes rationale, direct evidence, and inferred suggestions."
+                .to_string(),
             "Use --emit-request to export a stable request bundle for an external runtime."
                 .to_string(),
             format!(
                 "Context is clipped to at most {MAX_LINKED_SOURCES} linked sources / {MAX_LINKED_CHUNKS_PER_SOURCE} chunks each and {MAX_EVIDENCE_SOURCES} evidence sources / {MAX_EVIDENCE_CHUNKS_PER_SOURCE} chunks each."
             ),
         ];
+        if let Some(explore_by) = explore_by {
+            notes.push(format!(
+                "This draft uses the explore angle `{explore_by}` while preserving the same patch review/apply boundary."
+            ));
+        }
 
         Ok(AiExpandPreview {
-            capability: "expand".to_string(),
+            capability: capability.to_string(),
+            explore_by: explore_by.map(str::to_string),
             mode: "dry_run".to_string(),
             workspace_name,
             target_node,
@@ -321,7 +376,29 @@ impl Workspace {
         command: &str,
         dry_run: bool,
     ) -> Result<ExternalRunnerReport> {
-        let preview = self.preview_ai_expand(node_id)?;
+        self.run_external_ai_draft(node_id, "expand", None, command, dry_run)
+    }
+
+    pub fn run_external_ai_explore(
+        &mut self,
+        node_id: &str,
+        explore_by: &str,
+        command: &str,
+        dry_run: bool,
+    ) -> Result<ExternalRunnerReport> {
+        self.run_external_ai_draft(node_id, "explore", Some(explore_by), command, dry_run)
+    }
+
+    fn run_external_ai_draft(
+        &mut self,
+        node_id: &str,
+        capability: &str,
+        explore_by: Option<&str>,
+        command: &str,
+        dry_run: bool,
+    ) -> Result<ExternalRunnerReport> {
+        let explore_by = normalize_explore_by(capability, explore_by)?;
+        let preview = self.preview_ai_draft(node_id, capability, explore_by)?;
         let run_id = Uuid::new_v4().to_string();
         let started_at = timestamp_now();
         let request_path = self.paths.ai_dir.join(format!("{run_id}.request.json"));
@@ -357,7 +434,8 @@ impl Workspace {
             }
             let metadata = build_run_metadata(
                 &run_id,
-                "expand",
+                capability,
+                explore_by,
                 node_id,
                 command,
                 dry_run,
@@ -388,7 +466,8 @@ impl Workspace {
         sidecar_metadata.provider_run_id = response.generator.run_id.clone();
         let metadata = build_run_metadata(
             &run_id,
-            "expand",
+            capability,
+            explore_by,
             node_id,
             command,
             dry_run,
@@ -414,6 +493,8 @@ impl Workspace {
             command: command.to_string(),
             exit_code: output.status.code().unwrap_or_default(),
             metadata,
+            explanation: response.explanation,
+            notes: response.notes,
             patch: response.patch,
             report,
         })
@@ -534,11 +615,12 @@ fn build_context_summary(
 fn build_system_prompt() -> String {
     [
         "You are Nodex AI.",
-        "Return only a valid Nodex patch document in JSON.",
+        "Return only a valid Nodex AI patch response in JSON.",
         "The patch must preserve the existing tree and prefer local, incremental edits.",
-        "For expand requests, prefer add_node operations under the target node.",
+        "For expand or explore requests, prefer add_node operations under the target node.",
         "Do not rewrite unrelated branches or replace the whole workspace state.",
         "If you cite evidence, keep source links intact and use the existing patch semantics.",
+        "Explain the patch with a short rationale, explicit direct evidence, and separate inferred suggestions.",
         "Prefer branch titles that are specific to the node subject, not generic placeholders.",
         "Avoid generic children like Background, Key Points, or Next Steps unless the node content clearly demands them.",
         "Keep sibling branches distinct, structurally parallel, and immediately useful for further expansion.",
@@ -549,9 +631,12 @@ fn build_system_prompt() -> String {
 fn build_output_instructions() -> String {
     [
         "Return one JSON document that matches the nodex_ai_patch_response schema.",
-        "Set kind=nodex_ai_patch_response and version=1.",
+        "Set kind=nodex_ai_patch_response and version=2.",
         "Put the proposed Nodex patch in the patch field.",
         "Keep patch.version=1 and only use supported Nodex patch ops.",
+        "Fill explanation.rationale_summary with a concise reason for the proposed edit plan.",
+        "Use explanation.direct_evidence only for chunk-backed support you can point to directly.",
+        "Use explanation.inferred_suggestions for useful next-step ideas that are not directly backed by a cited chunk.",
         "Do not wrap the response in markdown fences.",
     ]
     .join("\n")
@@ -563,8 +648,10 @@ fn build_user_prompt(
     context_summary: &AiContextSummary,
     linked_sources: &[AiSourceContext],
     cited_evidence: &[AiSourceContext],
+    capability: &str,
+    explore_by: Option<&str>,
 ) -> String {
-    let style_hint = expansion_style_hint(target_node);
+    let style_hint = drafting_style_hint(target_node, capability, explore_by);
     let mut sections = vec![
         format!("Workspace: {workspace_name}"),
         [
@@ -597,11 +684,28 @@ fn build_user_prompt(
         ]
         .join("\n"),
         [
-            "Expansion guidance:",
-            "- Propose 3 to 5 child nodes that deepen this specific node.",
+            if capability == "explore" {
+                "Explore guidance:"
+            } else {
+                "Expansion guidance:"
+            },
+            if capability == "explore" {
+                "- Propose 3 to 5 child nodes that explore this node through one deliberate angle."
+            } else {
+                "- Propose 3 to 5 child nodes that deepen this specific node."
+            },
             "- Titles should be concrete and tied to the node subject.",
             "- Avoid repeating existing child titles.",
             "- Avoid generic buckets unless the content strongly requires them.",
+            &format!(
+                "- capability: {}",
+                if capability == "explore" {
+                    "explore"
+                } else {
+                    "expand"
+                }
+            ),
+            &format!("- explore angle: {}", explore_by.unwrap_or("(none)")),
             &format!("- Style hint: {style_hint}"),
         ]
         .join("\n"),
@@ -649,6 +753,9 @@ fn build_user_prompt(
             "- Return a version 1 patch document.",
             "- Prefer add_node ops under the target node.",
             "- Keep the summary concise and human-readable.",
+            "- Explain why this draft is reasonable in explanation.rationale_summary.",
+            "- Put chunk-backed support into explanation.direct_evidence.",
+            "- Put unsupported but useful ideas into explanation.inferred_suggestions.",
             "- The patch should be directly reviewable and applyable.",
         ]
         .join("\n"),
@@ -690,8 +797,12 @@ fn format_source_section(title: &str, sources: &[AiSourceContext]) -> String {
     lines.join("\n")
 }
 
-fn build_expand_patch_scaffold(target_node: &AiNodeContext) -> PatchDocument {
-    let suggestions = suggested_branch_titles(target_node);
+fn build_draft_patch_scaffold(
+    target_node: &AiNodeContext,
+    capability: &str,
+    explore_by: Option<&str>,
+) -> PatchDocument {
+    let suggestions = suggested_branch_titles(target_node, capability, explore_by);
     let existing_titles = target_node
         .child_titles
         .iter()
@@ -716,10 +827,15 @@ fn build_expand_patch_scaffold(target_node: &AiNodeContext) -> PatchDocument {
                 id: None,
                 parent_id: target_node.id.clone(),
                 title: candidate,
-                kind: Some("topic".to_string()),
+                kind: Some(suggested_child_kind(capability, explore_by).to_string()),
                 body: Some(format!(
-                    "Local dry-run scaffold branch {} for expanding \"{}\".",
+                    "Local dry-run scaffold branch {} for {} \"{}\".",
                     index + 1,
+                    if capability == "explore" {
+                        "exploring"
+                    } else {
+                        "expanding"
+                    },
                     target_node.title
                 )),
                 position: None,
@@ -730,14 +846,118 @@ fn build_expand_patch_scaffold(target_node: &AiNodeContext) -> PatchDocument {
     PatchDocument {
         version: 1,
         summary: Some(format!(
-            "AI dry-run scaffold for expanding node {}",
-            target_node.id
+            "AI dry-run scaffold for {} node {}{}",
+            capability,
+            target_node.id,
+            explore_by
+                .map(|value| format!(" by {}", value))
+                .unwrap_or_default()
         )),
         ops,
     }
 }
 
-fn suggested_branch_titles(target_node: &AiNodeContext) -> Vec<&'static str> {
+fn request_kind_for_capability(capability: &str) -> &'static str {
+    match capability {
+        "expand" => "nodex_ai_expand_request",
+        "explore" => "nodex_ai_explore_request",
+        _ => "nodex_ai_patch_request",
+    }
+}
+
+fn normalize_explore_by<'a>(
+    capability: &str,
+    explore_by: Option<&'a str>,
+) -> Result<Option<&'a str>> {
+    match capability {
+        "expand" => Ok(None),
+        "explore" => {
+            let value = explore_by
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .with_context(|| "explore drafts require a non-empty `by` angle")?;
+            match value {
+                "risk" | "question" | "action" | "evidence" => Ok(Some(value)),
+                _ => bail!(
+                    "unsupported explore angle `{}`; expected one of risk|question|action|evidence",
+                    value
+                ),
+            }
+        }
+        _ => bail!("unsupported AI capability `{capability}`"),
+    }
+}
+
+fn build_preview_explanation(
+    target_node: &AiNodeContext,
+    cited_evidence: &[AiSourceContext],
+    capability: &str,
+    explore_by: Option<&str>,
+) -> AiPatchExplanation {
+    let direct_evidence = cited_evidence
+        .iter()
+        .flat_map(|source| {
+            source.chunks.iter().map(|chunk| AiEvidenceReference {
+                source_id: source.source_id.clone(),
+                source_name: source.original_name.clone(),
+                chunk_id: chunk.chunk_id.clone(),
+                label: chunk.label.clone(),
+                start_line: chunk.start_line,
+                end_line: chunk.end_line,
+                why_it_matters: format!(
+                    "This chunk is already cited on \"{}\" and should be treated as direct support if the final draft depends on it.",
+                    target_node.title
+                ),
+            })
+        })
+        .take(MAX_EVIDENCE_CHUNKS_PER_SOURCE)
+        .collect::<Vec<_>>();
+
+    let inferred_suggestions = if direct_evidence.is_empty() {
+        vec![
+            "No cited evidence is available in this local dry-run scaffold, so the draft branches are still unverified suggestions.".to_string(),
+            "If you use linked context without a cited chunk, describe that reasoning as inference rather than direct evidence.".to_string(),
+        ]
+    } else {
+        vec![
+            "Treat uncited branch ideas as inferred suggestions until you attach or cite supporting chunks.".to_string(),
+            "If a branch depends on general context beyond the cited chunks above, keep that claim in inferred_suggestions.".to_string(),
+        ]
+    };
+
+    AiPatchExplanation {
+        rationale_summary: format!(
+            "Local dry-run scaffold for {} \"{}\"{}. Replace this rationale with model-generated reasoning before applying.",
+            if capability == "explore" {
+                "exploring"
+            } else {
+                "expanding"
+            },
+            target_node.title,
+            explore_by
+                .map(|value| format!(" by {}", value))
+                .unwrap_or_default()
+        ),
+        direct_evidence,
+        inferred_suggestions,
+    }
+}
+
+fn suggested_branch_titles(
+    target_node: &AiNodeContext,
+    capability: &str,
+    explore_by: Option<&str>,
+) -> Vec<&'static str> {
+    if capability == "explore" {
+        return match explore_by {
+            Some("risk") => vec!["Risk Triggers", "Failure Modes", "Mitigations"],
+            Some("question") => vec!["Clarifying Questions", "Unknowns", "Tests To Run"],
+            Some("action") => vec!["Immediate Actions", "Dependencies", "Execution Order"],
+            Some("evidence") => vec!["Direct Support", "Evidence Gaps", "Counterpoints"],
+            _ => vec!["Important Angles", "Open Questions", "Next Moves"],
+        };
+    }
+
     let title_and_body = format!(
         "{}\n{}",
         target_node.title.to_ascii_lowercase(),
@@ -773,7 +993,35 @@ fn suggested_branch_titles(target_node: &AiNodeContext) -> Vec<&'static str> {
     }
 }
 
-fn expansion_style_hint(target_node: &AiNodeContext) -> &'static str {
+fn suggested_child_kind(capability: &str, explore_by: Option<&str>) -> &'static str {
+    if capability == "explore" {
+        return match explore_by {
+            Some("question") => "question",
+            Some("action") => "action",
+            Some("evidence") => "evidence",
+            _ => "topic",
+        };
+    }
+    "topic"
+}
+
+fn drafting_style_hint(
+    target_node: &AiNodeContext,
+    capability: &str,
+    explore_by: Option<&str>,
+) -> &'static str {
+    if capability == "explore" {
+        return match explore_by {
+            Some("risk") => "Focus on triggers, concrete failure modes, and mitigations.",
+            Some("question") => {
+                "Focus on unanswered questions, missing context, and the next checks to run."
+            }
+            Some("action") => "Focus on immediate actions, dependencies, and execution sequence.",
+            Some("evidence") => "Focus on direct support, gaps in support, and counterevidence.",
+            _ => "Explore the node through one deliberate angle rather than broad expansion.",
+        };
+    }
+
     let title_and_body = format!(
         "{}\n{}",
         target_node.title.to_ascii_lowercase(),
@@ -872,6 +1120,7 @@ fn parse_error_prefix(detail: &str) -> (Option<String>, String) {
 fn build_run_metadata(
     run_id: &str,
     capability: &str,
+    explore_by: Option<&str>,
     node_id: &str,
     command: &str,
     dry_run: bool,
@@ -887,6 +1136,7 @@ fn build_run_metadata(
     AiRunMetadata {
         run_id: run_id.to_string(),
         capability: capability.to_string(),
+        explore_by: explore_by.map(str::to_string),
         node_id: node_id.to_string(),
         command: command.to_string(),
         dry_run,
@@ -937,6 +1187,43 @@ fn validate_response_contract(response: &AiPatchResponse) -> Result<()> {
             "AI response status {} is not applyable; expected ok",
             response.status
         );
+    }
+    if response.explanation.rationale_summary.trim().is_empty() {
+        bail!("AI response explanation.rationale_summary must not be empty");
+    }
+    for (index, item) in response.explanation.direct_evidence.iter().enumerate() {
+        if item.source_id.trim().is_empty() {
+            bail!(
+                "AI response explanation.direct_evidence[{}].source_id must not be empty",
+                index
+            );
+        }
+        if item.source_name.trim().is_empty() {
+            bail!(
+                "AI response explanation.direct_evidence[{}].source_name must not be empty",
+                index
+            );
+        }
+        if item.chunk_id.trim().is_empty() {
+            bail!(
+                "AI response explanation.direct_evidence[{}].chunk_id must not be empty",
+                index
+            );
+        }
+        if item.why_it_matters.trim().is_empty() {
+            bail!(
+                "AI response explanation.direct_evidence[{}].why_it_matters must not be empty",
+                index
+            );
+        }
+    }
+    for (index, item) in response.explanation.inferred_suggestions.iter().enumerate() {
+        if item.trim().is_empty() {
+            bail!(
+                "AI response explanation.inferred_suggestions[{}] must not be empty",
+                index
+            );
+        }
     }
     Ok(())
 }
@@ -989,6 +1276,22 @@ mod tests {
         assert!(preview.user_prompt.contains("Style hint"));
         assert!(preview.user_prompt.contains("Context budget"));
         assert_eq!(preview.draft_patch.ops.len(), 3);
+        assert_eq!(preview.response_template.version, 2);
+        assert!(
+            preview
+                .response_template
+                .explanation
+                .rationale_summary
+                .contains("Local dry-run scaffold")
+        );
+        assert!(
+            preview
+                .response_template
+                .explanation
+                .inferred_suggestions
+                .iter()
+                .any(|line| line.contains("inference"))
+        );
         assert!(preview.draft_patch.preview_lines().iter().all(|line| {
             !line.contains("Background")
                 && !line.contains("Key Points")
@@ -1086,7 +1389,55 @@ mod tests {
         assert_eq!(preview.cited_evidence[0].total_chunks, 4);
         assert_eq!(preview.cited_evidence[0].chunks.len(), 3);
         assert_eq!(preview.cited_evidence[0].omitted_chunk_count, 1);
+        assert_eq!(
+            preview.response_template.explanation.direct_evidence.len(),
+            3
+        );
         assert!(preview.user_prompt.contains("omitted chunks: 1"));
+        Ok(())
+    }
+
+    #[test]
+    fn ai_explore_preview_uses_requested_angle() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        workspace.add_node(
+            "Launch Plan".to_string(),
+            "root".to_string(),
+            "topic".to_string(),
+            Some("Need sharper execution sequencing.".to_string()),
+            None,
+        )?;
+        let node_id = workspace
+            .list_nodes()?
+            .into_iter()
+            .find(|node| node.title == "Launch Plan")
+            .expect("Launch Plan node should exist")
+            .id;
+
+        let preview = workspace.preview_ai_explore(&node_id, "action")?;
+        let preview_lines = preview.draft_patch.preview_lines();
+
+        assert_eq!(preview.capability, "explore");
+        assert_eq!(preview.explore_by.as_deref(), Some("action"));
+        assert_eq!(preview.request.kind, "nodex_ai_explore_request");
+        assert_eq!(preview.request.explore_by.as_deref(), Some("action"));
+        assert!(preview.user_prompt.contains("explore angle: action"));
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Immediate Actions\""))
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Dependencies\""))
+        );
+        assert!(
+            preview_lines
+                .iter()
+                .any(|line| line.contains("\"Execution Order\""))
+        );
         Ok(())
     }
 
@@ -1244,6 +1595,13 @@ response = {
     "request_node_id": request["target_node"]["id"],
     "status": "ok",
     "summary": "External runner scaffold response",
+    "explanation": {
+        "rationale_summary": "Expand the node with one runner-generated branch.",
+        "direct_evidence": [],
+        "inferred_suggestions": [
+            "The branch is a runner scaffold and should be reviewed before apply."
+        ]
+    },
     "generator": {
         "provider": "test_runner",
         "model": None,
@@ -1273,6 +1631,72 @@ PY"#;
         assert!(report.metadata_path.ends_with(".meta.json"));
         assert_eq!(report.metadata.status, "dry_run_succeeded");
         assert_eq!(report.metadata.provider.as_deref(), Some("test_runner"));
+        assert_eq!(
+            report.explanation.rationale_summary,
+            "Expand the node with one runner-generated branch."
+        );
+        assert_eq!(report.notes, vec!["ok".to_string()]);
+        assert!(report.report.run_id.is_none());
+        assert_eq!(report.report.preview.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn external_runner_can_round_trip_explore_request_and_response() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let command = r#"python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+request = json.loads(Path(os.environ["NODEX_AI_REQUEST"]).read_text())
+response = {
+    "version": request["contract"]["version"],
+    "kind": request["contract"]["response_kind"],
+    "capability": request["capability"],
+    "request_node_id": request["target_node"]["id"],
+    "status": "ok",
+    "summary": "External runner explore response",
+    "explanation": {
+        "rationale_summary": "Explore the node through an action-focused angle.",
+        "direct_evidence": [],
+        "inferred_suggestions": [
+            "Use the action angle to draft sequencing branches."
+        ]
+    },
+    "generator": {
+        "provider": "test_runner",
+        "model": None,
+        "run_id": "test-explore-run"
+    },
+    "patch": {
+        "version": request["contract"]["patch_version"],
+        "summary": "External runner explore response",
+        "ops": [
+            {
+                "type": "add_node",
+                "parent_id": request["target_node"]["id"],
+                "title": "Immediate Actions",
+                "kind": "action",
+                "body": "Generated by external runner"
+            }
+        ]
+    },
+    "notes": ["ok"]
+}
+Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
+PY"#;
+
+        let report = workspace.run_external_ai_explore("root", "action", command, true)?;
+
+        assert_eq!(report.exit_code, 0);
+        assert_eq!(report.metadata.capability, "explore");
+        assert_eq!(report.metadata.explore_by.as_deref(), Some("action"));
+        assert_eq!(
+            report.explanation.rationale_summary,
+            "Explore the node through an action-focused angle."
+        );
         assert!(report.report.run_id.is_none());
         assert_eq!(report.report.preview.len(), 1);
         Ok(())

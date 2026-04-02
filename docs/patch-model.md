@@ -271,6 +271,7 @@ nodex patch apply <file> --dry-run
 当前最小 AI 流程也是走这条边界：
 
 - `nodex ai expand <node-id> --dry-run` 先生成 request 与 patch scaffold
+- `nodex ai explore <node-id> --by ... --dry-run` 也复用同一套 request 与 patch scaffold 边界
 - `nodex ai run-external` 通过外部 runner 拿到 response
 - response 中的 `patch` 最终仍然复用同一套 patch 校验和 apply 逻辑
 

@@ -567,6 +567,30 @@ export default function App() {
     }
   }
 
+  async function draftAiExplorePatch(
+    by: "risk" | "question" | "action" | "evidence",
+  ) {
+    if (!ensureNodeSelected() || !ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      setShowAdvancedPatchEditor(false);
+      const result = await invokeCommand<ExternalRunnerReport>(
+        "draft_ai_explore_patch",
+        {
+          start_path: workspacePath,
+          node_id: selectedNodeId,
+          by,
+        },
+      );
+      setPatchEditor(JSON.stringify(result.patch, null, 2));
+      setConsoleMessage(renderExternalRunnerReport(result, t), "success");
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function draftUpdateNodePatch() {
     if (!ensureNodeSelected() || !ensureWorkspace()) {
       return;
@@ -795,6 +819,9 @@ export default function App() {
             }}
             onDraftAiExpand={() => {
               void draftAiExpandPatch();
+            }}
+            onDraftAiExplore={(by) => {
+              void draftAiExplorePatch(by);
             }}
             onDraftAddChild={() => {
               void draftAddChildPatch();

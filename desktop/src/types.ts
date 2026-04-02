@@ -38,9 +38,26 @@ export interface ApplyPatchReport {
   preview: string[];
 }
 
+export interface AiEvidenceReference {
+  source_id: string;
+  source_name: string;
+  chunk_id: string;
+  label: string | null;
+  start_line: number;
+  end_line: number;
+  why_it_matters: string;
+}
+
+export interface AiPatchExplanation {
+  rationale_summary: string;
+  direct_evidence: AiEvidenceReference[];
+  inferred_suggestions: string[];
+}
+
 export interface AiRunMetadata {
   run_id: string;
   capability: string;
+  explore_by: string | null;
   node_id: string;
   command: string;
   dry_run: boolean;
@@ -68,6 +85,8 @@ export interface ExternalRunnerReport {
   command: string;
   exit_code: number;
   metadata: AiRunMetadata;
+  explanation: AiPatchExplanation;
+  notes: string[];
   patch: PatchDocument;
   report: ApplyPatchReport;
 }

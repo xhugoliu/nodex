@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use nodex::{
     ai::{
-        AiExpandPreview, AiPatchResponse, ExternalRunnerReport, parse_ai_patch_response,
-        write_ai_json_document,
+        AiExpandPreview, AiPatchExplanation, AiPatchResponse, ExternalRunnerReport,
+        parse_ai_patch_response, write_ai_json_document,
     },
     model::{ApplyPatchReport, SourceImportPreview, SourceImportReport},
     patch::PatchDocument,
@@ -16,8 +16,8 @@ use nodex::{
 use serde::Serialize;
 
 use crate::cli::{
-    AiCommand, Cli, Command, ExportCommand, ListFormat, NodeCommand, OutputFormat, PatchCommand,
-    SnapshotCommand, SourceCommand,
+    AiCapability, AiCommand, Cli, Command, ExportCommand, ListFormat, NodeCommand, OutputFormat,
+    PatchCommand, SnapshotCommand, SourceCommand,
 };
 
 fn main() -> Result<()> {
@@ -47,20 +47,38 @@ fn main() -> Result<()> {
                     anyhow::bail!("real AI execution is not implemented yet; rerun with --dry-run");
                 }
                 let preview = workspace.preview_ai_expand(&node_id)?;
-                if let Some(request_path) = emit_request {
-                    let request_path = resolve_path(&cwd, &request_path);
-                    write_ai_json_document(&request_path, &preview.request)?;
-                    if matches!(format, OutputFormat::Text) {
-                        println!("Wrote AI request to {}", request_path.display());
-                    }
+                write_ai_preview_exports(
+                    &cwd,
+                    &preview,
+                    emit_request,
+                    emit_response_template,
+                    format,
+                )?;
+                match format {
+                    OutputFormat::Text => print_ai_expand_preview(&preview),
+                    OutputFormat::Json => print_json(&preview)?,
                 }
-                if let Some(template_path) = emit_response_template {
-                    let template_path = resolve_path(&cwd, &template_path);
-                    write_ai_json_document(&template_path, &preview.response_template)?;
-                    if matches!(format, OutputFormat::Text) {
-                        println!("Wrote AI response template to {}", template_path.display());
-                    }
+            }
+            AiCommand::Explore {
+                node_id,
+                by,
+                dry_run,
+                emit_request,
+                emit_response_template,
+                format,
+            } => {
+                let workspace = Workspace::open_from(&cwd)?;
+                if !dry_run {
+                    anyhow::bail!("real AI execution is not implemented yet; rerun with --dry-run");
                 }
+                let preview = workspace.preview_ai_explore(&node_id, by.as_str())?;
+                write_ai_preview_exports(
+                    &cwd,
+                    &preview,
+                    emit_request,
+                    emit_response_template,
+                    format,
+                )?;
                 match format {
                     OutputFormat::Text => print_ai_expand_preview(&preview),
                     OutputFormat::Json => print_json(&preview)?,
@@ -87,6 +105,13 @@ fn main() -> Result<()> {
                         if dry_run {
                             println!("Dry run succeeded.");
                         }
+                        print_ai_patch_explanation(&response.explanation);
+                        if !response.notes.is_empty() {
+                            println!("[notes]");
+                            for note in &response.notes {
+                                println!("- {note}");
+                            }
+                        }
                         print_patch_report(&report);
                     }
                     OutputFormat::Json => print_json(&AiResponseApplyOutput {
@@ -99,12 +124,31 @@ fn main() -> Result<()> {
             AiCommand::RunExternal {
                 node_id,
                 command,
+                capability,
+                by,
                 dry_run,
                 format,
             } => {
                 let mut workspace = Workspace::open_from(&cwd)?;
-                let runner_report =
-                    workspace.run_external_ai_expand(&node_id, &command, dry_run)?;
+                let runner_report = match capability {
+                    AiCapability::Expand => {
+                        if by.is_some() {
+                            anyhow::bail!("`--by` is only valid when `--capability explore`");
+                        }
+                        workspace.run_external_ai_expand(&node_id, &command, dry_run)?
+                    }
+                    AiCapability::Explore => {
+                        let by = by.context(
+                            "`--capability explore` requires `--by risk|question|action|evidence`",
+                        )?;
+                        workspace.run_external_ai_explore(
+                            &node_id,
+                            by.as_str(),
+                            &command,
+                            dry_run,
+                        )?
+                    }
+                };
                 match format {
                     OutputFormat::Text => print_external_runner_report(&runner_report, dry_run),
                     OutputFormat::Json => print_json(&runner_report)?,
@@ -451,6 +495,30 @@ fn read_ai_response(cwd: &std::path::Path, path: &PathBuf) -> Result<AiPatchResp
         .with_context(|| format!("failed to parse {}", absolute_path.display()))
 }
 
+fn write_ai_preview_exports(
+    cwd: &std::path::Path,
+    preview: &AiExpandPreview,
+    emit_request: Option<PathBuf>,
+    emit_response_template: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    if let Some(request_path) = emit_request {
+        let request_path = resolve_path(cwd, &request_path);
+        write_ai_json_document(&request_path, &preview.request)?;
+        if matches!(format, OutputFormat::Text) {
+            println!("Wrote AI request to {}", request_path.display());
+        }
+    }
+    if let Some(template_path) = emit_response_template {
+        let template_path = resolve_path(cwd, &template_path);
+        write_ai_json_document(&template_path, &preview.response_template)?;
+        if matches!(format, OutputFormat::Text) {
+            println!("Wrote AI response template to {}", template_path.display());
+        }
+    }
+    Ok(())
+}
+
 fn resolve_path(cwd: &std::path::Path, path: &PathBuf) -> PathBuf {
     if path.is_absolute() {
         path.clone()
@@ -517,6 +585,9 @@ fn print_ai_expand_preview(preview: &AiExpandPreview) {
     );
     println!("workspace: {}", preview.workspace_name);
     println!("mode: {}", preview.mode);
+    if let Some(explore_by) = &preview.explore_by {
+        println!("explore by: {}", explore_by);
+    }
     println!("kind: {}", preview.target_node.kind);
     println!(
         "children: {}",
@@ -538,9 +609,41 @@ fn print_ai_expand_preview(preview: &AiExpandPreview) {
     println!("[draft patch]");
     print_patch_preview(&preview.draft_patch);
     println!();
+    println!("[explanation scaffold]");
+    print_ai_patch_explanation(&preview.response_template.explanation);
+    println!();
     println!("[notes]");
     for note in &preview.notes {
         println!("- {note}");
+    }
+}
+
+fn print_ai_patch_explanation(explanation: &AiPatchExplanation) {
+    println!("rationale: {}", explanation.rationale_summary);
+    if explanation.direct_evidence.is_empty() {
+        println!("direct evidence: (none)");
+    } else {
+        println!("direct evidence: {}", explanation.direct_evidence.len());
+        for item in &explanation.direct_evidence {
+            let label = item.label.as_deref().unwrap_or("(no label)");
+            println!(
+                "- {} [{}-{}] {}",
+                item.source_name, item.start_line, item.end_line, label
+            );
+            println!("  chunk: {}", item.chunk_id);
+            println!("  why: {}", item.why_it_matters);
+        }
+    }
+    if explanation.inferred_suggestions.is_empty() {
+        println!("inferred suggestions: (none)");
+    } else {
+        println!(
+            "inferred suggestions: {}",
+            explanation.inferred_suggestions.len()
+        );
+        for item in &explanation.inferred_suggestions {
+            println!("- {item}");
+        }
     }
 }
 
@@ -577,6 +680,13 @@ fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {
         println!("provider run id: {}", run_id);
     }
     println!("retry count: {}", report.metadata.retry_count);
+    print_ai_patch_explanation(&report.explanation);
+    if !report.notes.is_empty() {
+        println!("[notes]");
+        for note in &report.notes {
+            println!("- {note}");
+        }
+    }
     if dry_run {
         println!("Dry run succeeded.");
     }

@@ -349,12 +349,40 @@ fn draft_ai_expand_patch(
     start_path: String,
     node_id: String,
 ) -> Result<ExternalRunnerReport, String> {
+    draft_ai_patch(start_path, node_id, "expand", None)
+}
+
+#[command]
+fn draft_ai_explore_patch(
+    start_path: String,
+    node_id: String,
+    by: String,
+) -> Result<ExternalRunnerReport, String> {
+    draft_ai_patch(start_path, node_id, "explore", Some(by))
+}
+
+fn draft_ai_patch(
+    start_path: String,
+    node_id: String,
+    capability: &str,
+    by: Option<String>,
+) -> Result<ExternalRunnerReport, String> {
     let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     let command = desktop_ai_runner_command().map_err(|err| err.to_string())?;
-    workspace
-        .run_external_ai_expand(&node_id, &command, true)
-        .map(normalize_external_runner_report)
-        .map_err(|err| err.to_string())
+    let report = match capability {
+        "expand" => workspace.run_external_ai_expand(&node_id, &command, true),
+        "explore" => workspace.run_external_ai_explore(
+            &node_id,
+            by.as_deref()
+                .ok_or_else(|| "desktop explore drafts require a `by` angle".to_string())?,
+            &command,
+            true,
+        ),
+        _ => Err(anyhow::anyhow!("unsupported desktop AI capability `{capability}`")),
+    }
+    .map(normalize_external_runner_report)
+    .map_err(|err| err.to_string())?;
+    Ok(report)
 }
 
 fn desktop_ai_runner_command() -> Result<String> {
@@ -864,6 +892,7 @@ pub fn run() {
             apply_patch,
             draft_add_node_patch,
             draft_ai_expand_patch,
+            draft_ai_explore_patch,
             draft_cite_source_chunk_patch,
             draft_delete_node_patch,
             draft_move_node_patch,
