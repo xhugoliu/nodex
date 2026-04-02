@@ -29,6 +29,7 @@ import {
 } from "./components/panes";
 import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
+  AiRunRecord,
   ApplyPatchReport,
   ExternalRunnerReport,
   LanguagePreference,
@@ -79,6 +80,7 @@ export default function App() {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedNodeDetail, setSelectedNodeDetail] =
     useState<NodeDetail | null>(null);
+  const [selectedNodeAiRuns, setSelectedNodeAiRuns] = useState<AiRunRecord[]>([]);
   const [selectedSourceDetail, setSelectedSourceDetail] =
     useState<SourceDetail | null>(null);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
@@ -148,6 +150,7 @@ export default function App() {
       setUpdateNodeKind("");
       setUpdateNodeBody("");
       setMoveNodeParent("");
+      setSelectedNodeAiRuns([]);
       return;
     }
 
@@ -182,6 +185,7 @@ export default function App() {
               setSelectedNodeId(null);
               setSelectedSourceId(null);
               setSelectedNodeDetail(null);
+              setSelectedNodeAiRuns([]);
               setSelectedSourceDetail(null);
               setContextNodeId(null);
               setContextSourceId(null);
@@ -337,6 +341,7 @@ export default function App() {
     setSelectedNodeId(null);
     setSelectedSourceId(null);
     setSelectedNodeDetail(null);
+    setSelectedNodeAiRuns([]);
     setSelectedSourceDetail(null);
     setContextNodeId(null);
     setContextSourceId(null);
@@ -392,15 +397,22 @@ export default function App() {
       const sourceContextId = selectedSourceDetail
         ? selectedSourceId
         : contextSourceId;
-      const detail = await invokeCommand<NodeDetail>("get_node_detail", {
-        start_path: path,
-        node_id: nodeId,
-      });
+      const [detail, aiRuns] = await Promise.all([
+        invokeCommand<NodeDetail>("get_node_detail", {
+          start_path: path,
+          node_id: nodeId,
+        }),
+        invokeCommand<AiRunRecord[]>("get_ai_run_history", {
+          start_path: path,
+          node_id: nodeId,
+        }),
+      ]);
       setContextNodeId(nodeId);
       setContextSourceId(sourceContextId);
       setSelectedNodeId(nodeId);
       setSelectedSourceId(null);
       setSelectedNodeDetail(detail);
+      setSelectedNodeAiRuns(aiRuns);
       setSelectedSourceDetail(null);
       return true;
     } catch (error) {
@@ -432,6 +444,7 @@ export default function App() {
       setSelectedNodeId(null);
       setSelectedSourceDetail(detail);
       setSelectedNodeDetail(null);
+      setSelectedNodeAiRuns([]);
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -763,6 +776,7 @@ export default function App() {
           <InspectorPane
             hasWorkspace
             selectedNodeDetail={selectedNodeDetail}
+            selectedNodeAiRuns={selectedNodeAiRuns}
             selectedSourceDetail={selectedSourceDetail}
             contextNodeId={contextNodeId}
             contextSourceId={contextSourceId}

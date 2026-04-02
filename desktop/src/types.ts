@@ -78,6 +78,30 @@ export interface AiRunMetadata {
   patch_summary: string | null;
 }
 
+export interface AiRunRecord {
+  id: string;
+  capability: string;
+  explore_by: string | null;
+  node_id: string;
+  command: string;
+  dry_run: boolean;
+  status: string;
+  started_at: number;
+  finished_at: number;
+  request_path: string;
+  response_path: string;
+  exit_code: number | null;
+  provider: string | null;
+  model: string | null;
+  provider_run_id: string | null;
+  retry_count: number;
+  last_error_category: string | null;
+  last_error_message: string | null;
+  last_status_code: number | null;
+  patch_run_id: string | null;
+  patch_summary: string | null;
+}
+
 export interface ExternalRunnerReport {
   request_path: string;
   response_path: string;

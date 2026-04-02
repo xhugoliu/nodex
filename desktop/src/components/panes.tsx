@@ -5,6 +5,7 @@ import {
   type Translator,
 } from "../app-helpers";
 import type {
+  AiRunRecord,
   NodeDetail,
   ParentCandidate,
   SourceDetail,
@@ -134,6 +135,7 @@ export function WorkspaceStartPane(props: {
 export function InspectorPane(props: {
   hasWorkspace: boolean;
   selectedNodeDetail: NodeDetail | null;
+  selectedNodeAiRuns: AiRunRecord[];
   selectedSourceDetail: SourceDetail | null;
   contextNodeId: string | null;
   contextSourceId: string | null;
@@ -164,6 +166,7 @@ export function InspectorPane(props: {
           {props.selectedNodeDetail ? (
             <CompactNodeDetail
               detail={props.selectedNodeDetail}
+              aiRuns={props.selectedNodeAiRuns}
               contextSourceId={props.contextSourceId}
               t={props.t}
               onSelectSource={props.onSelectSource}
@@ -757,6 +760,7 @@ function summarizeChunkLabels(
 
 function CompactNodeDetail(props: {
   detail: NodeDetail;
+  aiRuns: AiRunRecord[];
   contextSourceId: string | null;
   t: Translator;
   onSelectSource: (sourceId: string) => void;
@@ -918,6 +922,55 @@ function CompactNodeDetail(props: {
             })}
           </div>
         </div>
+      </section>
+
+      <section className="rounded-lg bg-[rgba(17,24,39,0.03)] p-3 space-y-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.aiRunsSection")}
+        </div>
+        {props.aiRuns.length ? (
+          <div className="space-y-2">
+            {props.aiRuns.slice(0, 5).map((run) => (
+              <div
+                key={run.id}
+                className="rounded-xl border border-[color:var(--line)] bg-white/80 px-3 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-medium text-[color:var(--text)]">
+                        {run.capability}
+                        {run.explore_by ? ` / ${run.explore_by}` : ""}
+                      </div>
+                      <span className="rounded-full border border-[color:var(--line-soft)] bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                        {run.status}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-[color:var(--muted)]">
+                      {formatTimestamp(run.started_at)}
+                    </div>
+                    <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                      {run.patch_summary ||
+                        run.last_error_message ||
+                        props.t("detail.none")}
+                    </div>
+                    <div className="mt-2 text-xs leading-5 text-[color:var(--muted)]">
+                      {run.provider || props.t("detail.none")}
+                      {run.model ? ` / ${run.model}` : ""}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-[10px] uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                    {run.dry_run ? props.t("detail.aiRunDryRun") : props.t("detail.aiRunApplied")}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("detail.noAiRuns")}
+          </div>
+        )}
       </section>
 
       <section className="rounded-lg border border-[color:var(--line-soft)] bg-white/70 p-3 space-y-1">

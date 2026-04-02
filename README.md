@@ -42,6 +42,7 @@ cargo run -- export outline
 - 开发用最小 OpenAI runner：`scripts/openai_runner.py`
 - `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
 - 桌面壳可为当前节点直接起草 AI expand / explore，并显示本次运行元数据
+- 桌面节点详情可回看当前节点最近的 AI 运行记录
 - patch 历史归档
 - snapshot 保存与恢复
 - Markdown outline 导出

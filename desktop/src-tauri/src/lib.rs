@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use nodex::{
     ai::ExternalRunnerReport,
     model::{
-        ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
+        AiRunRecord, ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
         SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
     },
     patch::{PatchDocument, PatchOp},
@@ -239,6 +239,17 @@ fn normalize_node_detail(mut detail: NodeDetail) -> NodeDetail {
 fn normalize_source_detail(mut detail: SourceDetail) -> SourceDetail {
     detail.source = normalize_source_record(detail.source);
     detail
+}
+
+fn normalize_ai_run_records(records: Vec<AiRunRecord>) -> Vec<AiRunRecord> {
+    records
+        .into_iter()
+        .map(|mut record| {
+            record.request_path = display_path_text(&record.request_path);
+            record.response_path = display_path_text(&record.response_path);
+            record
+        })
+        .collect()
 }
 
 fn normalize_external_runner_report(mut report: ExternalRunnerReport) -> ExternalRunnerReport {
@@ -734,6 +745,15 @@ fn get_source_detail(start_path: String, source_id: String) -> Result<SourceDeta
 }
 
 #[command]
+fn get_ai_run_history(start_path: String, node_id: Option<String>) -> Result<Vec<AiRunRecord>, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    workspace
+        .ai_run_history(node_id.as_deref())
+        .map(normalize_ai_run_records)
+        .map_err(|err| err.to_string())
+}
+
+#[command]
 fn preview_source_import(
     start_path: String,
     source_path: String,
@@ -904,6 +924,7 @@ pub fn run() {
             draft_uncite_source_chunk_patch,
             draft_update_node_patch,
             get_node_detail,
+            get_ai_run_history,
             get_patch_document,
             get_source_detail,
             import_source,
