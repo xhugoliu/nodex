@@ -6,7 +6,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use crate::model::{
-    ApplyPatchReport, EvidenceCitationDetail, EvidenceNodeSummary, Node, NodeDetail,
+    AiRunRecord, ApplyPatchReport, EvidenceCitationDetail, EvidenceNodeSummary, Node, NodeDetail,
     NodeEvidenceChunkRecord, NodeEvidenceDetail, NodeSourceChunkRecord, NodeSourceDetail,
     NodeSourceRecord, NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState,
     SourceChunkDetail, SourceChunkRecord, SourceDetail, SourceImportPreview, SourceImportReport,
@@ -21,7 +21,7 @@ mod queries;
 mod snapshots;
 mod source_import;
 
-const CURRENT_SCHEMA_VERSION: &str = "3";
+const CURRENT_SCHEMA_VERSION: &str = "4";
 
 pub struct Workspace {
     pub paths: ProjectPaths,
@@ -102,6 +102,33 @@ impl Workspace {
                 file_name TEXT NOT NULL,
                 applied_at INTEGER NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS ai_runs (
+                id TEXT PRIMARY KEY,
+                capability TEXT NOT NULL,
+                explore_by TEXT,
+                node_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                dry_run INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                started_at INTEGER NOT NULL,
+                finished_at INTEGER NOT NULL,
+                request_path TEXT NOT NULL,
+                response_path TEXT NOT NULL,
+                exit_code INTEGER,
+                provider TEXT,
+                model TEXT,
+                provider_run_id TEXT,
+                retry_count INTEGER NOT NULL,
+                last_error_category TEXT,
+                last_error_message TEXT,
+                last_status_code INTEGER,
+                patch_run_id TEXT,
+                patch_summary TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_ai_runs_node_started
+                ON ai_runs(node_id, started_at DESC, id DESC);
 
             CREATE TABLE IF NOT EXISTS snapshots (
                 id TEXT PRIMARY KEY,
@@ -1302,7 +1329,7 @@ mod tests {
 
         assert_eq!(
             workspace.metadata_value("schema_version")?.as_deref(),
-            Some("3")
+            Some("4")
         );
         assert_eq!(evidence.len(), 1);
         assert_eq!(evidence[0].citation_kind, "direct");

@@ -449,6 +449,7 @@ impl Workspace {
                 None,
             );
             write_ai_json_document(&metadata_path, &metadata)?;
+            self.upsert_ai_run_index(&metadata)?;
             bail!(
                 "external AI runner failed with exit code {}: {}",
                 output.status.code().unwrap_or(-1),
@@ -485,6 +486,7 @@ impl Workspace {
             Some(&report),
         );
         write_ai_json_document(&metadata_path, &metadata)?;
+        self.upsert_ai_run_index(&metadata)?;
 
         Ok(ExternalRunnerReport {
             request_path: request_path.display().to_string(),
@@ -1634,6 +1636,7 @@ Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
 PY"#;
 
         let report = workspace.run_external_ai_expand("root", command, true)?;
+        let history = workspace.ai_run_history(Some("root"))?;
 
         assert_eq!(report.exit_code, 0);
         assert!(report.metadata_path.ends_with(".meta.json"));
@@ -1646,6 +1649,9 @@ PY"#;
         assert_eq!(report.notes, vec!["ok".to_string()]);
         assert!(report.report.run_id.is_none());
         assert_eq!(report.report.preview.len(), 1);
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].status, "dry_run_succeeded");
+        assert_eq!(history[0].node_id, "root");
         Ok(())
     }
 
@@ -1737,8 +1743,15 @@ PY"#;
             .expect("expected a .meta.json file to be written");
         let metadata_json = std::fs::read_to_string(metadata_path)?;
         let metadata: AiRunMetadata = serde_json::from_str(&metadata_json)?;
+        let history = workspace.ai_run_history(Some("root"))?;
         assert_eq!(metadata.status, "failed");
         assert_eq!(metadata.last_error_category.as_deref(), Some("rate_limit"));
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].status, "failed");
+        assert_eq!(
+            history[0].last_error_category.as_deref(),
+            Some("rate_limit")
+        );
         Ok(())
     }
 }

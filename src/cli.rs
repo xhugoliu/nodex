@@ -195,6 +195,13 @@ pub enum AiCommand {
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
         format: OutputFormat,
     },
+    /// Show indexed AI run history.
+    History {
+        #[arg(long)]
+        node_id: Option<String>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
     /// Export request, call one external command, and read back its response.
     RunExternal {
         node_id: String,

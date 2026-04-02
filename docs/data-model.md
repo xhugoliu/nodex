@@ -95,6 +95,41 @@
 
 快照当前存的是“完整状态”，不是增量 patch。
 
+### `ai_runs`
+
+保存 AI 运行的最小索引记录。
+
+字段：
+
+- `id`
+- `capability`
+- `explore_by`
+- `node_id`
+- `command`
+- `dry_run`
+- `status`
+- `started_at`
+- `finished_at`
+- `request_path`
+- `response_path`
+- `exit_code`
+- `provider`
+- `model`
+- `provider_run_id`
+- `retry_count`
+- `last_error_category`
+- `last_error_message`
+- `last_status_code`
+- `patch_run_id`
+- `patch_summary`
+
+当前用途：
+
+- 查询某个节点最近跑过哪些 AI draft
+- 查看哪次成功、哪次失败
+- 查看失败原因和最后一次错误分类
+- 查看哪次最终落成了 patch run
+
 ### `sources`
 
 保存导入过的来源文件记录。

@@ -62,6 +62,31 @@ pub struct ApplyPatchReport {
     pub preview: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct AiRunRecord {
+    pub id: String,
+    pub capability: String,
+    pub explore_by: Option<String>,
+    pub node_id: String,
+    pub command: String,
+    pub dry_run: bool,
+    pub status: String,
+    pub started_at: i64,
+    pub finished_at: i64,
+    pub request_path: String,
+    pub response_path: String,
+    pub exit_code: Option<i32>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub provider_run_id: Option<String>,
+    pub retry_count: u32,
+    pub last_error_category: Option<String>,
+    pub last_error_message: Option<String>,
+    pub last_status_code: Option<i32>,
+    pub patch_run_id: Option<String>,
+    pub patch_summary: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SourceRecord {
     pub id: String,

@@ -60,6 +60,7 @@ cargo run -- export outline
 nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai explore <node-id> --by risk|question|action|evidence --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai apply-response <file> [--dry-run] [--format text|json]
+nodex ai history [--node-id <id>] [--format text|json]
 nodex ai run-external <node-id> <command> [--capability expand|explore] [--by risk|question|action|evidence] [--dry-run] [--format text|json]
 ```
 
@@ -89,6 +90,8 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - `--format json` 会返回结构化 dry-run 结果，便于后续 headless / agent 流程复用
 - `ai apply-response <file> --dry-run` 会校验并预览外部 response 里的 patch 与 explanation
 - `ai apply-response <file>` 会把外部 response 中的 patch 真正应用到当前工作区
+- `ai history` 会读取 SQLite 里的 AI 运行索引，而不是重新扫描 `.nodex/ai/*.json`
+- `ai history --node-id <id>` 可只看某个节点的运行记录
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据
@@ -109,6 +112,7 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - retry count
   - 最后一次错误分类
   - patch run id（如果真正 apply）
+- `ai run-external` 成功或失败后，都会把这次运行的最小索引写进 SQLite `ai_runs` 表
 - 成功和失败都会尽量写 `.meta.json`，方便之后排查一次调用到底发生了什么
 - 这条命令当前仍然不内置任何 provider SDK；它只是本地执行桥
 - 仓库内提供了一个最小 OpenAI runner：`python3 scripts/openai_runner.py`

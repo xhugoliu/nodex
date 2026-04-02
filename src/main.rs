@@ -121,6 +121,55 @@ fn main() -> Result<()> {
                     })?,
                 }
             }
+            AiCommand::History { node_id, format } => {
+                let workspace = Workspace::open_from(&cwd)?;
+                let history = workspace.ai_run_history(node_id.as_deref())?;
+                match format {
+                    OutputFormat::Text => {
+                        if history.is_empty() {
+                            println!("No AI runs have been indexed yet.");
+                        } else {
+                            for entry in history {
+                                let explore_by = entry
+                                    .explore_by
+                                    .as_deref()
+                                    .map(|value| format!(" by {value}"))
+                                    .unwrap_or_default();
+                                println!(
+                                    "{}  {}  {}{}  {}  {}",
+                                    entry.id,
+                                    format_timestamp(entry.started_at),
+                                    entry.capability,
+                                    explore_by,
+                                    entry.status,
+                                    entry.node_id
+                                );
+                                println!("  command: {}", entry.command);
+                                println!(
+                                    "  mode: {}",
+                                    if entry.dry_run { "dry-run" } else { "apply" }
+                                );
+                                if let Some(provider) = &entry.provider {
+                                    println!("  provider: {}", provider);
+                                }
+                                if let Some(model) = &entry.model {
+                                    println!("  model: {}", model);
+                                }
+                                if let Some(category) = &entry.last_error_category {
+                                    println!("  error: {}", category);
+                                }
+                                if let Some(message) = &entry.last_error_message {
+                                    println!("  detail: {}", message);
+                                }
+                                if let Some(run_id) = &entry.patch_run_id {
+                                    println!("  patch run: {}", run_id);
+                                }
+                            }
+                        }
+                    }
+                    OutputFormat::Json => print_json(&history)?,
+                }
+            }
             AiCommand::RunExternal {
                 node_id,
                 command,
