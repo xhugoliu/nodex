@@ -104,6 +104,7 @@
 当前基础：
 
 - 已把显式 evidence 引用与一般 source / chunk 关联分层
+- 已补上 citation rationale 与 `direct` / `inferred` 的最小区分
 - 已能从 node 和 source 两侧查看基础 evidence 链路
 
 关键问题：

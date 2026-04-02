@@ -6,10 +6,11 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use crate::model::{
-    ApplyPatchReport, Node, NodeDetail, NodeEvidenceChunkRecord, NodeEvidenceDetail,
-    NodeSourceChunkRecord, NodeSourceDetail, NodeSourceRecord, NodeSummary, PatchRunRecord,
-    SnapshotRecord, SnapshotState, SourceChunkDetail, SourceChunkRecord, SourceDetail,
-    SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
+    ApplyPatchReport, EvidenceCitationDetail, EvidenceNodeSummary, Node, NodeDetail,
+    NodeEvidenceChunkRecord, NodeEvidenceDetail, NodeSourceChunkRecord, NodeSourceDetail,
+    NodeSourceRecord, NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState,
+    SourceChunkDetail, SourceChunkRecord, SourceDetail, SourceImportPreview, SourceImportReport,
+    SourceRecord, TreeNode,
 };
 use crate::patch::{PatchDocument, PatchOp};
 use crate::project::ProjectPaths;
@@ -20,7 +21,7 @@ mod queries;
 mod snapshots;
 mod source_import;
 
-const CURRENT_SCHEMA_VERSION: &str = "2";
+const CURRENT_SCHEMA_VERSION: &str = "3";
 
 pub struct Workspace {
     pub paths: ProjectPaths,
@@ -144,10 +145,13 @@ impl Workspace {
             CREATE TABLE IF NOT EXISTS node_evidence_chunks (
                 node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
                 chunk_id TEXT NOT NULL REFERENCES source_chunks(id) ON DELETE CASCADE,
+                citation_kind TEXT NOT NULL DEFAULT 'direct',
+                rationale TEXT,
                 PRIMARY KEY (node_id, chunk_id)
             );
             ",
         )?;
+        self.ensure_node_evidence_schema()?;
         Ok(())
     }
 
@@ -183,6 +187,34 @@ impl Workspace {
             params!["root", workspace_name, now],
         )?;
         Ok(())
+    }
+
+    fn ensure_node_evidence_schema(&self) -> Result<()> {
+        if !self.table_has_column("node_evidence_chunks", "citation_kind")? {
+            self.conn.execute(
+                "ALTER TABLE node_evidence_chunks ADD COLUMN citation_kind TEXT NOT NULL DEFAULT 'direct'",
+                [],
+            )?;
+        }
+        if !self.table_has_column("node_evidence_chunks", "rationale")? {
+            self.conn.execute(
+                "ALTER TABLE node_evidence_chunks ADD COLUMN rationale TEXT",
+                [],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn table_has_column(&self, table_name: &str, column_name: &str) -> Result<bool> {
+        let pragma = format!("PRAGMA table_info({table_name})");
+        let mut stmt = self.conn.prepare(&pragma)?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        for row in rows {
+            if row? == column_name {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -452,6 +484,8 @@ mod tests {
                 PatchOp::CiteSourceChunk {
                     node_id: "idea".to_string(),
                     chunk_id: chunk_id.clone(),
+                    citation_kind: None,
+                    rationale: None,
                 },
             ],
         };
@@ -465,6 +499,8 @@ mod tests {
         assert_eq!(detail.evidence.len(), 1);
         assert_eq!(detail.evidence[0].source.id, import_report.source_id);
         assert_eq!(detail.evidence[0].chunks.len(), 1);
+        assert_eq!(detail.evidence[0].citations[0].citation_kind, "direct");
+        assert!(detail.evidence[0].citations[0].rationale.is_none());
         assert_eq!(
             detail.evidence[0].chunks[0].label.as_deref(),
             Some("Problem")
@@ -481,6 +517,15 @@ mod tests {
             .iter()
             .map(|node| node.title.clone())
             .collect::<Vec<_>>();
+        assert_eq!(
+            refreshed_source.chunks[0].evidence_links[0].citation_kind,
+            "direct"
+        );
+        assert!(
+            refreshed_source.chunks[0].evidence_links[0]
+                .rationale
+                .is_none()
+        );
         assert!(linked_titles.contains(&"Problem".to_string()));
         assert!(!linked_titles.contains(&"Idea".to_string()));
         assert!(evidence_titles.contains(&"Idea".to_string()));
@@ -503,9 +548,23 @@ mod tests {
         let problem_id = source_detail.chunks[0].linked_nodes[0].id.clone();
         let chunk_id = source_detail.chunks[0].chunk.id.clone();
 
-        let cite_report = workspace.cite_source_chunk(problem_id.clone(), chunk_id.clone())?;
+        let cite_report = workspace.cite_source_chunk(
+            problem_id.clone(),
+            chunk_id.clone(),
+            "inferred".to_string(),
+            Some("This chunk supports the draft indirectly.".to_string()),
+        )?;
         assert!(cite_report.run_id.is_some());
-        assert_eq!(workspace.node_detail(&problem_id)?.evidence.len(), 1);
+        let cited_detail = workspace.node_detail(&problem_id)?;
+        assert_eq!(cited_detail.evidence.len(), 1);
+        assert_eq!(
+            cited_detail.evidence[0].citations[0].citation_kind,
+            "inferred"
+        );
+        assert_eq!(
+            cited_detail.evidence[0].citations[0].rationale.as_deref(),
+            Some("This chunk supports the draft indirectly.")
+        );
 
         let uncite_report = workspace.uncite_source_chunk(problem_id.clone(), chunk_id.clone())?;
         assert!(uncite_report.run_id.is_some());
@@ -593,6 +652,8 @@ mod tests {
                 PatchOp::CiteSourceChunk {
                     node_id: "idea".to_string(),
                     chunk_id,
+                    citation_kind: None,
+                    rationale: None,
                 },
             ],
         };
@@ -811,6 +872,8 @@ mod tests {
                     PatchOp::CiteSourceChunk {
                         node_id: "idea".to_string(),
                         chunk_id: chunk_id.clone(),
+                        citation_kind: Some("inferred".to_string()),
+                        rationale: Some("Supports the hypothesis indirectly.".to_string()),
                     },
                 ],
             },
@@ -845,6 +908,14 @@ mod tests {
         assert_eq!(restored_idea.evidence[0].source.id, import_report.source_id);
         assert_eq!(restored_idea.evidence[0].chunks.len(), 1);
         assert_eq!(restored_idea.evidence[0].chunks[0].id, chunk_id);
+        assert_eq!(
+            restored_idea.evidence[0].citations[0].citation_kind,
+            "inferred"
+        );
+        assert_eq!(
+            restored_idea.evidence[0].citations[0].rationale.as_deref(),
+            Some("Supports the hypothesis indirectly.")
+        );
 
         let restored_source = workspace.source_detail(&import_report.source_id)?;
         let evidence_titles = restored_source.chunks[0]
@@ -853,6 +924,16 @@ mod tests {
             .map(|node| node.title.clone())
             .collect::<Vec<_>>();
         assert!(evidence_titles.contains(&"Idea".to_string()));
+        assert_eq!(
+            restored_source.chunks[0].evidence_links[0].citation_kind,
+            "inferred"
+        );
+        assert_eq!(
+            restored_source.chunks[0].evidence_links[0]
+                .rationale
+                .as_deref(),
+            Some("Supports the hypothesis indirectly.")
+        );
         assert_eq!(workspace.patch_history()?.len(), 3);
         Ok(())
     }
@@ -1059,6 +1140,173 @@ mod tests {
         assert_eq!(workspace.list_nodes()?.len(), 1);
         assert!(workspace.patch_history()?.is_empty());
         assert_eq!(std::fs::read_dir(&workspace.paths.runs_dir)?.count(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn patch_validation_rejects_invalid_citation_metadata() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let source_path = temp_dir.path().join("notes.md");
+        std::fs::write(
+            &source_path,
+            "# Launch Plan\n\n## Problem\nThe project needs a crisp scope.\n",
+        )?;
+
+        let import_report = workspace.import_source(&source_path)?;
+        let source_detail = workspace.source_detail(&import_report.source_id)?;
+        let chunk_id = source_detail.chunks[0].chunk.id.clone();
+
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Cite with invalid metadata".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AttachSource {
+                    node_id: "idea".to_string(),
+                    source_id: import_report.source_id.clone(),
+                },
+                PatchOp::CiteSourceChunk {
+                    node_id: "idea".to_string(),
+                    chunk_id,
+                    citation_kind: Some("weak".to_string()),
+                    rationale: Some("".to_string()),
+                },
+            ],
+        };
+
+        let error = workspace
+            .apply_patch_document(patch, "test", false)
+            .expect_err("invalid citation metadata should fail validation");
+        assert!(
+            error
+                .to_string()
+                .contains("citation_kind must be `direct` or `inferred`")
+                || error
+                    .to_string()
+                    .contains("citation rationale must not be empty")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn open_workspace_migrates_legacy_node_evidence_schema() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let root = temp_dir.path().canonicalize()?;
+        let paths = ProjectPaths::for_root(root.clone());
+        paths.create_layout()?;
+
+        let conn = rusqlite::Connection::open(&paths.db_path)?;
+        conn.execute_batch(
+            "
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
+            CREATE TABLE nodes (
+                id TEXT PRIMARY KEY,
+                parent_id TEXT REFERENCES nodes(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                body TEXT,
+                kind TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE sources (
+                id TEXT PRIMARY KEY,
+                original_path TEXT NOT NULL,
+                original_name TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                format TEXT NOT NULL,
+                imported_at INTEGER NOT NULL
+            );
+
+            CREATE TABLE source_chunks (
+                id TEXT PRIMARY KEY,
+                source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                ordinal INTEGER NOT NULL,
+                label TEXT,
+                text TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL
+            );
+
+            CREATE TABLE node_sources (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                source_id TEXT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+                PRIMARY KEY (node_id, source_id)
+            );
+
+            CREATE TABLE node_source_chunks (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                chunk_id TEXT NOT NULL REFERENCES source_chunks(id) ON DELETE CASCADE,
+                PRIMARY KEY (node_id, chunk_id)
+            );
+
+            CREATE TABLE node_evidence_chunks (
+                node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+                chunk_id TEXT NOT NULL REFERENCES source_chunks(id) ON DELETE CASCADE,
+                PRIMARY KEY (node_id, chunk_id)
+            );
+            ",
+        )?;
+        conn.execute(
+            "INSERT INTO metadata (key, value) VALUES (?1, ?2)",
+            params!["schema_version", "2"],
+        )?;
+        conn.execute(
+            "INSERT INTO metadata (key, value) VALUES (?1, ?2)",
+            params!["workspace_name", "Legacy Workspace"],
+        )?;
+        conn.execute(
+            "INSERT INTO metadata (key, value) VALUES (?1, ?2)",
+            params!["root_id", "root"],
+        )?;
+        conn.execute(
+            "INSERT INTO nodes (id, parent_id, title, body, kind, position, created_at, updated_at)
+             VALUES ('root', NULL, 'Legacy Workspace', NULL, 'topic', 0, 0, 0)",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO sources (id, original_path, original_name, stored_name, format, imported_at)
+             VALUES ('source-1', '/tmp/legacy.md', 'legacy.md', 'source-1.md', 'markdown', 0)",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO source_chunks (id, source_id, ordinal, label, text, start_line, end_line)
+             VALUES ('chunk-1', 'source-1', 0, 'Problem', 'Legacy text', 1, 1)",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO node_sources (node_id, source_id) VALUES ('root', 'source-1')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO node_evidence_chunks (node_id, chunk_id) VALUES ('root', 'chunk-1')",
+            [],
+        )?;
+        drop(conn);
+
+        let workspace = Workspace::open_from(&root)?;
+        let evidence = workspace.list_node_evidence_chunks()?;
+
+        assert_eq!(
+            workspace.metadata_value("schema_version")?.as_deref(),
+            Some("3")
+        );
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(evidence[0].citation_kind, "direct");
+        assert!(evidence[0].rationale.is_none());
         Ok(())
     }
 

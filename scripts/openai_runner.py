@@ -362,6 +362,8 @@ def build_response_schema() -> dict:
                 {
                     "node_id": {"type": "string"},
                     "chunk_id": {"type": "string"},
+                    "citation_kind": string_or_null(),
+                    "rationale": string_or_null(),
                 },
             ),
             patch_op_schema(

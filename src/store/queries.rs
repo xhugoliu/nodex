@@ -89,11 +89,16 @@ impl Workspace {
         let mut chunk_details = Vec::with_capacity(chunks.len());
         for chunk in chunks {
             let linked_nodes = self.nodes_for_chunk(&chunk.id)?;
-            let evidence_nodes = self.evidence_nodes_for_chunk(&chunk.id)?;
+            let evidence_links = self.evidence_links_for_chunk(&chunk.id)?;
+            let evidence_nodes = evidence_links
+                .iter()
+                .map(|link| link.node.clone())
+                .collect::<Vec<_>>();
             chunk_details.push(SourceChunkDetail {
                 chunk,
                 linked_nodes,
                 evidence_nodes,
+                evidence_links,
             });
         }
         Ok(SourceDetail {
@@ -316,12 +321,16 @@ impl Workspace {
 
     pub(super) fn list_node_evidence_chunks(&self) -> Result<Vec<NodeEvidenceChunkRecord>> {
         let mut stmt = self.conn.prepare(
-            "SELECT node_id, chunk_id FROM node_evidence_chunks ORDER BY chunk_id, node_id",
+            "SELECT node_id, chunk_id, citation_kind, rationale
+             FROM node_evidence_chunks
+             ORDER BY chunk_id, node_id",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(NodeEvidenceChunkRecord {
                 node_id: row.get(0)?,
                 chunk_id: row.get(1)?,
+                citation_kind: row.get(2)?,
+                rationale: row.get(3)?,
             })
         })?;
 
@@ -354,18 +363,25 @@ impl Workspace {
         Ok(nodes)
     }
 
-    pub(super) fn evidence_nodes_for_chunk(&self, chunk_id: &str) -> Result<Vec<NodeSummary>> {
+    pub(super) fn evidence_links_for_chunk(
+        &self,
+        chunk_id: &str,
+    ) -> Result<Vec<EvidenceNodeSummary>> {
         let mut stmt = self.conn.prepare(
-            "SELECT nodes.id, nodes.title
+            "SELECT nodes.id, nodes.title, node_evidence_chunks.citation_kind, node_evidence_chunks.rationale
              FROM node_evidence_chunks
              JOIN nodes ON nodes.id = node_evidence_chunks.node_id
              WHERE node_evidence_chunks.chunk_id = ?1
              ORDER BY nodes.title, nodes.id",
         )?;
         let rows = stmt.query_map([chunk_id], |row| {
-            Ok(NodeSummary {
-                id: row.get(0)?,
-                title: row.get(1)?,
+            Ok(EvidenceNodeSummary {
+                node: NodeSummary {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                },
+                citation_kind: row.get(2)?,
+                rationale: row.get(3)?,
             })
         })?;
 
@@ -427,8 +443,16 @@ impl Workspace {
         let mut sources = Vec::new();
         for source in rows {
             let source = source?;
-            let chunks = self.cited_chunks_for_node_and_source(node_id, &source.id)?;
-            sources.push(NodeEvidenceDetail { source, chunks });
+            let citations = self.citations_for_node_and_source(node_id, &source.id)?;
+            let chunks = citations
+                .iter()
+                .map(|citation| citation.chunk.clone())
+                .collect::<Vec<_>>();
+            sources.push(NodeEvidenceDetail {
+                source,
+                chunks,
+                citations,
+            });
         }
         Ok(sources)
     }
@@ -464,27 +488,31 @@ impl Workspace {
         Ok(chunks)
     }
 
-    pub(super) fn cited_chunks_for_node_and_source(
+    pub(super) fn citations_for_node_and_source(
         &self,
         node_id: &str,
         source_id: &str,
-    ) -> Result<Vec<SourceChunkRecord>> {
+    ) -> Result<Vec<EvidenceCitationDetail>> {
         let mut stmt = self.conn.prepare(
-            "SELECT source_chunks.id, source_chunks.source_id, source_chunks.ordinal, source_chunks.label, source_chunks.text, source_chunks.start_line, source_chunks.end_line
+            "SELECT source_chunks.id, source_chunks.source_id, source_chunks.ordinal, source_chunks.label, source_chunks.text, source_chunks.start_line, source_chunks.end_line, node_evidence_chunks.citation_kind, node_evidence_chunks.rationale
              FROM node_evidence_chunks
              JOIN source_chunks ON source_chunks.id = node_evidence_chunks.chunk_id
              WHERE node_evidence_chunks.node_id = ?1 AND source_chunks.source_id = ?2
              ORDER BY source_chunks.ordinal, source_chunks.id",
         )?;
         let rows = stmt.query_map(params![node_id, source_id], |row| {
-            Ok(SourceChunkRecord {
-                id: row.get(0)?,
-                source_id: row.get(1)?,
-                ordinal: row.get(2)?,
-                label: row.get(3)?,
-                text: row.get(4)?,
-                start_line: row.get(5)?,
-                end_line: row.get(6)?,
+            Ok(EvidenceCitationDetail {
+                chunk: SourceChunkRecord {
+                    id: row.get(0)?,
+                    source_id: row.get(1)?,
+                    ordinal: row.get(2)?,
+                    label: row.get(3)?,
+                    text: row.get(4)?,
+                    start_line: row.get(5)?,
+                    end_line: row.get(6)?,
+                },
+                citation_kind: row.get(7)?,
+                rationale: row.get(8)?,
             })
         })?;
 

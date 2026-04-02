@@ -84,7 +84,14 @@ pub enum NodeCommand {
     /// Delete a node and its descendants.
     Delete { id: String },
     /// Cite one source chunk as explicit evidence for a node.
-    CiteChunk { id: String, chunk_id: String },
+    CiteChunk {
+        id: String,
+        chunk_id: String,
+        #[arg(long, value_enum, default_value_t = CitationKind::Direct)]
+        citation_kind: CitationKind,
+        #[arg(long)]
+        rationale: Option<String>,
+    },
     /// Remove one explicit source chunk citation from a node.
     UnciteChunk { id: String, chunk_id: String },
     /// Show one node with parent, children, and linked sources.
@@ -135,6 +142,21 @@ impl AiExploreBy {
 pub enum AiCapability {
     Expand,
     Explore,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CitationKind {
+    Direct,
+    Inferred,
+}
+
+impl CitationKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Direct => "direct",
+            Self::Inferred => "inferred",
+        }
+    }
 }
 
 #[derive(Debug, Subcommand)]

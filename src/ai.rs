@@ -1360,18 +1360,26 @@ mod tests {
                     PatchOp::CiteSourceChunk {
                         node_id: "idea".to_string(),
                         chunk_id: chunk_ids[0].clone(),
+                        citation_kind: None,
+                        rationale: None,
                     },
                     PatchOp::CiteSourceChunk {
                         node_id: "idea".to_string(),
                         chunk_id: chunk_ids[1].clone(),
+                        citation_kind: None,
+                        rationale: None,
                     },
                     PatchOp::CiteSourceChunk {
                         node_id: "idea".to_string(),
                         chunk_id: chunk_ids[2].clone(),
+                        citation_kind: None,
+                        rationale: None,
                     },
                     PatchOp::CiteSourceChunk {
                         node_id: "idea".to_string(),
                         chunk_id: chunk_ids[3].clone(),
+                        citation_kind: None,
+                        rationale: None,
                     },
                 ],
             },

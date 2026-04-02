@@ -38,7 +38,7 @@
 - `workspace_name`
 - `root_id`
 
-当前 schema version 为 `2`。
+当前 schema version 为 `3`。
 
 ### `nodes`
 
@@ -171,12 +171,18 @@
 
 - `node_id`
 - `chunk_id`
+- `citation_kind`
+- `rationale`
 
 当前语义：
 
 - 这层关系来自 `cite_source_chunk` / `uncite_source_chunk` patch op
 - 它和 `node_source_chunks` 分离，避免把“导入生成时的来源关联”和“后续显式引用为证据”混在一起
-- 当前还没有保存 evidence note、quote span、引用理由等更细粒度信息
+- `citation_kind` 当前最小区分为：
+  - `direct`
+  - `inferred`
+- `rationale` 用来表达“为什么引用这个 chunk”
+- 当前还没有保存 quote span、摘录片段等更细粒度信息
 
 ## 当前节点类型
 

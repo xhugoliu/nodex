@@ -189,8 +189,18 @@ fn main() -> Result<()> {
                     let report = workspace.delete_node(id)?;
                     print_patch_report(&report);
                 }
-                NodeCommand::CiteChunk { id, chunk_id } => {
-                    let report = workspace.cite_source_chunk(id, chunk_id)?;
+                NodeCommand::CiteChunk {
+                    id,
+                    chunk_id,
+                    citation_kind,
+                    rationale,
+                } => {
+                    let report = workspace.cite_source_chunk(
+                        id,
+                        chunk_id,
+                        citation_kind.as_str().to_string(),
+                        rationale,
+                    )?;
                     print_patch_report(&report);
                 }
                 NodeCommand::UnciteChunk { id, chunk_id } => {
@@ -260,15 +270,20 @@ fn main() -> Result<()> {
                                     "- {} [{}]",
                                     evidence_detail.source.original_name, evidence_detail.source.id
                                 );
-                                for chunk in evidence_detail.chunks {
+                                for citation in evidence_detail.citations {
+                                    let chunk = citation.chunk;
                                     let label = chunk.label.as_deref().unwrap_or("(no label)");
                                     println!(
-                                        "  - cite chunk {} [{}-{}] {}",
+                                        "  - cite chunk {} [{}-{}] {} ({})",
                                         chunk.ordinal + 1,
                                         chunk.start_line,
                                         chunk.end_line,
-                                        label
+                                        label,
+                                        citation.citation_kind
                                     );
+                                    if let Some(rationale) = citation.rationale {
+                                        println!("    rationale: {}", rationale);
+                                    }
                                     println!("    {}", chunk.text);
                                 }
                             }
@@ -407,13 +422,18 @@ fn main() -> Result<()> {
                             if chunk_detail.evidence_nodes.is_empty() {
                                 println!("  evidence nodes: (none)");
                             } else {
-                                let evidence_nodes = chunk_detail
-                                    .evidence_nodes
-                                    .into_iter()
-                                    .map(|node| format!("{} [{}]", node.title, node.id))
-                                    .collect::<Vec<_>>()
-                                    .join(", ");
-                                println!("  evidence nodes: {}", evidence_nodes);
+                                println!("  evidence nodes: {}", chunk_detail.evidence_nodes.len());
+                                for evidence_link in chunk_detail.evidence_links {
+                                    println!(
+                                        "    - {} [{}] ({})",
+                                        evidence_link.node.title,
+                                        evidence_link.node.id,
+                                        evidence_link.citation_kind
+                                    );
+                                    if let Some(rationale) = evidence_link.rationale {
+                                        println!("      rationale: {}", rationale);
+                                    }
+                                }
                             }
                         }
                     }

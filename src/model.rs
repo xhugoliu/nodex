@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::patch::PatchDocument;
 
+fn default_citation_kind() -> String {
+    "direct".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Node {
     pub id: String,
@@ -95,6 +99,10 @@ pub struct NodeSourceChunkRecord {
 pub struct NodeEvidenceChunkRecord {
     pub node_id: String,
     pub chunk_id: String,
+    #[serde(default = "default_citation_kind")]
+    pub citation_kind: String,
+    #[serde(default)]
+    pub rationale: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -127,9 +135,24 @@ pub struct NodeSourceDetail {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct EvidenceCitationDetail {
+    pub chunk: SourceChunkRecord,
+    pub citation_kind: String,
+    pub rationale: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct NodeEvidenceDetail {
     pub source: SourceRecord,
     pub chunks: Vec<SourceChunkRecord>,
+    pub citations: Vec<EvidenceCitationDetail>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct EvidenceNodeSummary {
+    pub node: NodeSummary,
+    pub citation_kind: String,
+    pub rationale: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -146,6 +169,7 @@ pub struct SourceChunkDetail {
     pub chunk: SourceChunkRecord,
     pub linked_nodes: Vec<NodeSummary>,
     pub evidence_nodes: Vec<NodeSummary>,
+    pub evidence_links: Vec<EvidenceNodeSummary>,
 }
 
 #[derive(Debug, Clone, Serialize)]

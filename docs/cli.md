@@ -172,7 +172,7 @@ nodex node add <title> [--parent root] [--kind topic] [--body ...] [--position N
 nodex node update <id> [--title ...] [--body ...] [--kind ...]
 nodex node move <id> --parent <id> [--position N]
 nodex node delete <id>
-nodex node cite-chunk <id> <chunk-id>
+nodex node cite-chunk <id> <chunk-id> [--citation-kind direct|inferred] [--rationale ...]
 nodex node uncite-chunk <id> <chunk-id>
 nodex node show <id> [--format text|json]
 nodex node list [--format tree|json]
@@ -182,6 +182,9 @@ nodex node list [--format tree|json]
 
 - `node add/update/move/delete` 并不是绕过 patch 引擎直接写库，而是走同一套结构化 patch 流程
 - `node cite-chunk` / `node uncite-chunk` 是显式 evidence 引用的 convenience command，底层同样走 patch 引擎
+- `node cite-chunk` 现在支持最小 evidence 元数据：
+  - `--citation-kind direct|inferred`
+  - `--rationale ...`
 - `node show` 用来查看节点详情、来源关联，以及显式 evidence 引用
 - `node show --format json` 返回结构化节点详情
 - `node list --format tree` 返回人类可读树
@@ -229,6 +232,7 @@ nodex source show <source-id> [--format text|json]
 - `--dry-run` 和 `--emit-patch` 可以一起用
 - `source list` 用来查看已经导入的来源文件
 - `source show` 用来查看一个来源的切片、结构关联节点，以及显式引用它作为 evidence 的节点
+- `source show` 的文本输出现在也会显示 citation kind 和 rationale（如果有）
 - `source list/show --format json` 返回结构化来源信息
 
 ### Snapshot 操作

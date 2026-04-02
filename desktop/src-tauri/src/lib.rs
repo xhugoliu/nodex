@@ -332,7 +332,12 @@ fn cite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument {
     PatchDocument {
         version: 1,
         summary: Some(format!("Cite chunk {chunk_id} for node {node_id}")),
-        ops: vec![PatchOp::CiteSourceChunk { node_id, chunk_id }],
+        ops: vec![PatchOp::CiteSourceChunk {
+            node_id,
+            chunk_id,
+            citation_kind: None,
+            rationale: None,
+        }],
     }
 }
 

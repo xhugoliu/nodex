@@ -33,6 +33,7 @@ cargo run -- export outline
 - Markdown / TXT source import 与基础来源切片关联
 - source / node 双向查看来源链路
 - 显式 evidence 引用：将证据引用与导入关联分离
+- evidence 最小语义：citation rationale 与 `direct` / `inferred` 区分
 - `nodex ai expand <node-id> --dry-run` 本地预览骨架
 - `nodex ai explore <node-id> --by ... --dry-run` 最小按角度探索入口
 - AI request / response contract：可导出 request，并回放外部 response

@@ -76,11 +76,18 @@ impl Workspace {
         &mut self,
         node_id: String,
         chunk_id: String,
+        citation_kind: String,
+        rationale: Option<String>,
     ) -> Result<ApplyPatchReport> {
         let patch = PatchDocument {
             version: 1,
             summary: Some(format!("Cite source chunk {chunk_id} for node {node_id}")),
-            ops: vec![PatchOp::CiteSourceChunk { node_id, chunk_id }],
+            ops: vec![PatchOp::CiteSourceChunk {
+                node_id,
+                chunk_id,
+                citation_kind: Some(citation_kind),
+                rationale,
+            }],
         };
         self.apply_patch_document(patch, "cli", false)
     }
@@ -410,7 +417,12 @@ impl SimulatedWorkspaceState {
                     );
                 }
             }
-            PatchOp::CiteSourceChunk { node_id, chunk_id } => {
+            PatchOp::CiteSourceChunk {
+                node_id,
+                chunk_id,
+                citation_kind,
+                rationale,
+            } => {
                 if !self.parent_ids.contains_key(node_id) {
                     bail!(
                         "cannot cite source chunk {chunk_id} for node {node_id}: node was not found"
@@ -429,6 +441,8 @@ impl SimulatedWorkspaceState {
                         "cannot cite source chunk {chunk_id} for node {node_id}: attach source {source_id} first"
                     );
                 }
+                validate_citation_kind(citation_kind.as_deref())?;
+                validate_citation_rationale(rationale.as_deref())?;
                 if !self
                     .node_evidence_chunks
                     .insert((node_id.clone(), chunk_id.clone()))
@@ -573,6 +587,39 @@ fn validate_position(position: Option<i64>) -> Result<()> {
     Ok(())
 }
 
+fn validate_citation_kind(citation_kind: Option<&str>) -> Result<()> {
+    normalized_citation_kind(citation_kind)?;
+    Ok(())
+}
+
+fn normalized_citation_kind(citation_kind: Option<&str>) -> Result<String> {
+    match citation_kind
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("direct")
+    {
+        "direct" => Ok("direct".to_string()),
+        "inferred" => Ok("inferred".to_string()),
+        value => bail!(
+            "citation_kind must be `direct` or `inferred`; got `{}`",
+            value
+        ),
+    }
+}
+
+fn validate_citation_rationale(rationale: Option<&str>) -> Result<()> {
+    normalized_citation_rationale(rationale)?;
+    Ok(())
+}
+
+fn normalized_citation_rationale(rationale: Option<&str>) -> Result<Option<String>> {
+    match rationale.map(str::trim) {
+        Some("") => bail!("citation rationale must not be empty when provided"),
+        Some(value) => Ok(Some(value.to_string())),
+        None => Ok(None),
+    }
+}
+
 fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<()> {
     match op {
         PatchOp::AddNode {
@@ -688,7 +735,12 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
                 params![node_id, chunk_id],
             )?;
         }
-        PatchOp::CiteSourceChunk { node_id, chunk_id } => {
+        PatchOp::CiteSourceChunk {
+            node_id,
+            chunk_id,
+            citation_kind,
+            rationale,
+        } => {
             let source_id: String = transaction
                 .query_row(
                     "SELECT source_id FROM source_chunks WHERE id = ?1",
@@ -709,9 +761,11 @@ fn apply_op_transaction(transaction: &Transaction<'_>, op: &PatchOp) -> Result<(
                     "cannot cite source chunk {chunk_id} for node {node_id}: attach source {source_id} first"
                 );
             }
+            let citation_kind = normalized_citation_kind(citation_kind.as_deref())?;
+            let rationale = normalized_citation_rationale(rationale.as_deref())?;
             transaction.execute(
-                "INSERT INTO node_evidence_chunks (node_id, chunk_id) VALUES (?1, ?2)",
-                params![node_id, chunk_id],
+                "INSERT INTO node_evidence_chunks (node_id, chunk_id, citation_kind, rationale) VALUES (?1, ?2, ?3, ?4)",
+                params![node_id, chunk_id, citation_kind, rationale],
             )?;
         }
         PatchOp::DetachSource { node_id, source_id } => {

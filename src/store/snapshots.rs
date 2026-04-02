@@ -136,8 +136,13 @@ impl Workspace {
 
         for node_evidence_chunk in snapshot.node_evidence_chunks {
             transaction.execute(
-                "INSERT INTO node_evidence_chunks (node_id, chunk_id) VALUES (?1, ?2)",
-                params![node_evidence_chunk.node_id, node_evidence_chunk.chunk_id],
+                "INSERT INTO node_evidence_chunks (node_id, chunk_id, citation_kind, rationale) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    node_evidence_chunk.node_id,
+                    node_evidence_chunk.chunk_id,
+                    node_evidence_chunk.citation_kind,
+                    node_evidence_chunk.rationale
+                ],
             )?;
         }
 

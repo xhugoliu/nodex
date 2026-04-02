@@ -53,6 +53,10 @@ pub enum PatchOp {
     CiteSourceChunk {
         node_id: String,
         chunk_id: String,
+        #[serde(default)]
+        citation_kind: Option<String>,
+        #[serde(default)]
+        rationale: Option<String>,
     },
     DetachSource {
         node_id: String,
@@ -159,8 +163,20 @@ impl PatchOp {
             Self::AttachSourceChunk { node_id, chunk_id } => {
                 format!("attach source chunk {chunk_id} to node {node_id}")
             }
-            Self::CiteSourceChunk { node_id, chunk_id } => {
-                format!("cite source chunk {chunk_id} as evidence for node {node_id}")
+            Self::CiteSourceChunk {
+                node_id,
+                chunk_id,
+                citation_kind,
+                rationale,
+            } => {
+                let citation_kind = citation_kind.as_deref().unwrap_or("direct");
+                let mut description = format!(
+                    "cite source chunk {chunk_id} as {citation_kind} evidence for node {node_id}"
+                );
+                if let Some(rationale) = rationale.as_deref().filter(|value| !value.is_empty()) {
+                    description.push_str(&format!(" rationale=\"{rationale}\""));
+                }
+                description
             }
             Self::DetachSource { node_id, source_id } => {
                 format!("detach source {source_id} from node {node_id}")
