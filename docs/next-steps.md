@@ -67,6 +67,7 @@
 - 已新增 `provider_smoke.py`，可在临时工作区里统一跑 provider smoke
 - 已为 provider 工具链补上最小离线回归测试，覆盖 registry / doctor / smoke 列表等关键路径
 - 已将 request contract / response schema / runner error 基础能力抽到共享模块，避免其他 provider 继续依赖 `openai_runner.py`
+- 已把统一诊断与 smoke 能力接入 Rust CLI：`nodex ai doctor` / `nodex ai smoke`
 
 下一轮最小切口：
 
@@ -89,7 +90,7 @@
 补充说明：
 
 - 当前更适合把 `codex_runner.py` 作为后端调试主路，而不是继续依赖裸 HTTP 的 `openai_runner.py`
-- 如果同一机器上还保留 `OPENAI_*` 环境变量，优先先跑 `python3 scripts/codex_doctor.py`
+- 如果同一机器上还保留 `OPENAI_*` 环境变量，优先先跑 `nodex ai doctor --provider codex --format json`
 
 ### 2. 串顺桌面主流程
 

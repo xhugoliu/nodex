@@ -57,6 +57,10 @@ cargo run -- export outline
 ### AI
 
 ```text
+nodex ai doctor [--provider openai|codex|gemini] [--format text|json]
+nodex ai status [--provider openai|codex|gemini] [--format text|json]
+nodex ai providers [--format text|json]
+nodex ai smoke --provider openai|codex|gemini [--node-id <id>] [--apply] [--keep-workspace] [--format text|json] [-- <extra args...>]
 nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai explore <node-id> --by risk|question|action|evidence --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai apply-response <file> [--dry-run] [--format text|json]
@@ -66,6 +70,19 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 
 说明：
 
+- `ai doctor` 会直接调用统一的 provider 诊断入口，优先用于确认本机 live config、auth 和环境变量冲突
+- `ai doctor --provider codex --format json` / `ai doctor --provider openai --format json` 适合脚本化排查
+- `ai status` 会基于统一 diagnostics 输出更短的结构化摘要，适合快速看某个 provider 是否 runnable / 是否有 auth / 是否有 env conflict
+- `ai providers` 会列出当前所有 provider 的紧凑摘要视图
+- `ai smoke` 会在临时工作区里串起：
+  - `init`
+  - 一次最小 `ai run-external`
+  - 可选的真正 apply
+- `ai smoke --format json` 会返回结构化 smoke 元数据，包含 preflight summary 和底层命令输出
+- `ai smoke --provider codex` 当前会自动带上默认 smoke 参数：
+  - `--mode plain`
+  - `--reasoning-effort low`
+  - `--max-retries 3`
 - `ai expand` 本身只负责 dry-run request 预览，不直接调用模型
 - `ai explore` 也同样只负责 dry-run request 预览，但会额外要求 `--by`
 - 当前 `ai explore` 支持这些角度：
@@ -188,6 +205,14 @@ python3 scripts/provider_doctor.py --provider codex
 python3 scripts/provider_doctor.py --json
 ```
 
+现在也可以直接通过 CLI 入口调用：
+
+```bash
+cargo run -- ai doctor --provider codex --format json
+cargo run -- ai status --provider codex --format json
+cargo run -- ai providers
+```
+
 如果你想直接在临时工作区里跑一轮 provider smoke，也可以使用统一 smoke 入口：
 
 ```bash
@@ -197,6 +222,12 @@ python3 scripts/provider_smoke.py --provider gemini
 ```
 
 `provider_smoke.py` 会先做一层 provider preflight；如果当前 provider 没有可用 auth，会直接提示先跑对应的 `provider_doctor.py`。
+
+现在也可以直接通过 CLI 入口调用：
+
+```bash
+cargo run -- ai smoke --provider codex --format json
+```
 
 如果自定义 relay 对 `--output-schema` 路径不稳定，可以优先用 plain 模式：
 

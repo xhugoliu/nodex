@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from provider_registry import (
     get_provider_entry,
@@ -93,6 +94,7 @@ def main() -> int:
             node_id=args.node_id,
             runner_command_text=runner_command_text,
             apply=args.apply,
+            json_mode=args.json,
         )
         result["workspace_dir"] = str(tmp_dir)
         result["provider"] = args.provider
@@ -111,6 +113,7 @@ def main() -> int:
             node_id=args.node_id,
             runner_command_text=runner_command_text,
             apply=args.apply,
+            json_mode=args.json,
         )
         result["workspace_dir"] = str(tmp_dir)
         result["provider"] = args.provider
@@ -128,10 +131,12 @@ def run_smoke(
     node_id: str,
     runner_command_text: str,
     apply: bool,
+    json_mode: bool,
 ) -> dict:
-    run_command(
+    init_output = run_command(
         ["cargo", "run", "--manifest-path", str(manifest_path), "--", "init"],
         cwd=workspace_dir,
+        capture=json_mode,
     )
     args = [
         "cargo",
@@ -146,17 +151,42 @@ def run_smoke(
     ]
     if not apply:
         args.append("--dry-run")
-    run_command(args, cwd=workspace_dir)
-    return {
+    run_output = run_command(args, cwd=workspace_dir, capture=json_mode)
+    result = {
         "mode": "apply" if apply else "dry_run",
         "node_id": node_id,
     }
+    if json_mode:
+        result["steps"] = {
+            "init": init_output,
+            "run_external": run_output,
+        }
+    return result
 
 
-def run_command(command: list[str], *, cwd: Path) -> None:
-    completed = subprocess.run(command, cwd=cwd, check=False)
+def run_command(command: list[str], *, cwd: Path, capture: bool) -> Optional[dict]:
+    completed = subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        capture_output=capture,
+        text=True,
+    )
     if completed.returncode != 0:
+        if capture:
+            detail = completed.stderr.strip() or completed.stdout.strip() or str(
+                completed.returncode
+            )
+            raise SystemExit(detail)
         raise SystemExit(completed.returncode)
+    if not capture:
+        return None
+    return {
+        "command": command,
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
 
 
 if __name__ == "__main__":

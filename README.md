@@ -45,6 +45,7 @@ cargo run -- export outline
 - 统一 provider runner 入口：`scripts/provider_runner.py`
 - 统一 provider 诊断入口：`scripts/provider_doctor.py`
 - 统一 provider smoke 入口：`scripts/provider_smoke.py`
+- `nodex ai doctor` / `nodex ai smoke`：统一 provider 诊断与 smoke 的 CLI 入口
 - `provider_smoke.py` 会先做 provider preflight，再进入临时工作区 smoke
 - 可检查 Codex live config / auth / 环境变量冲突的诊断脚本：`scripts/codex_doctor.py`
 - `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run

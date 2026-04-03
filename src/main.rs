@@ -1,6 +1,7 @@
 mod cli;
 
 use std::path::PathBuf;
+use std::process::{Command as ProcessCommand, Stdio};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -16,8 +17,8 @@ use nodex::{
 use serde::Serialize;
 
 use crate::cli::{
-    AiCapability, AiCommand, Cli, Command, ExportCommand, ListFormat, NodeCommand, OutputFormat,
-    PatchCommand, SnapshotCommand, SourceCommand,
+    AiCapability, AiCommand, AiProvider, Cli, Command, ExportCommand, ListFormat, NodeCommand,
+    OutputFormat, PatchCommand, SnapshotCommand, SourceCommand,
 };
 
 fn main() -> Result<()> {
@@ -35,6 +36,56 @@ fn main() -> Result<()> {
             println!("Try: cargo run -- patch apply examples/expand-root.json --dry-run");
         }
         Command::Ai { command } => match command {
+            AiCommand::Doctor { provider, format } => {
+                let output = run_provider_script(
+                    provider_script_path("provider_doctor.py")?,
+                    build_provider_doctor_args(provider, format),
+                )?;
+                print_provider_script_output(output, format)?;
+            }
+            AiCommand::Status { provider, format } => {
+                let doctor_output = run_provider_script(
+                    provider_script_path("provider_doctor.py")?,
+                    build_provider_doctor_args(provider, OutputFormat::Json),
+                )?;
+                let doctor_json = parse_provider_script_json(&doctor_output)?;
+                match format {
+                    OutputFormat::Text => print_provider_status_text(&doctor_json),
+                    OutputFormat::Json => print_json(&build_provider_status_json(&doctor_json)?)?,
+                }
+            }
+            AiCommand::Providers { format } => {
+                let doctor_output = run_provider_script(
+                    provider_script_path("provider_doctor.py")?,
+                    build_provider_doctor_args(None, OutputFormat::Json),
+                )?;
+                let doctor_json = parse_provider_script_json(&doctor_output)?;
+                match format {
+                    OutputFormat::Text => print_provider_status_text(&doctor_json),
+                    OutputFormat::Json => print_json(&build_provider_status_json(&doctor_json)?)?,
+                }
+            }
+            AiCommand::Smoke {
+                provider,
+                node_id,
+                apply,
+                keep_workspace,
+                format,
+                extra_args,
+            } => {
+                let output = run_provider_script(
+                    provider_script_path("provider_smoke.py")?,
+                    build_provider_smoke_args(
+                        provider,
+                        &node_id,
+                        apply,
+                        keep_workspace,
+                        format,
+                        &extra_args,
+                    ),
+                )?;
+                print_provider_script_output(output, format)?;
+            }
             AiCommand::Expand {
                 node_id,
                 dry_run,
@@ -545,6 +596,171 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn provider_script_path(script_name: &str) -> Result<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("scripts")
+        .join(script_name);
+    if !path.exists() {
+        anyhow::bail!("provider script {} was not found", path.display());
+    }
+    Ok(path)
+}
+
+fn build_provider_doctor_args(provider: Option<AiProvider>, format: OutputFormat) -> Vec<String> {
+    let mut args = Vec::new();
+    if let Some(provider) = provider {
+        args.extend(["--provider".to_string(), provider.as_str().to_string()]);
+    }
+    if matches!(format, OutputFormat::Json) {
+        args.push("--json".to_string());
+    }
+    args
+}
+
+fn build_provider_smoke_args(
+    provider: AiProvider,
+    node_id: &str,
+    apply: bool,
+    keep_workspace: bool,
+    format: OutputFormat,
+    extra_args: &[String],
+) -> Vec<String> {
+    let mut args = vec![
+        "--provider".to_string(),
+        provider.as_str().to_string(),
+        "--node-id".to_string(),
+        node_id.to_string(),
+    ];
+    if apply {
+        args.push("--apply".to_string());
+    }
+    if keep_workspace {
+        args.push("--keep-workspace".to_string());
+    }
+    if matches!(format, OutputFormat::Json) {
+        args.push("--json".to_string());
+    }
+    args.extend(extra_args.iter().cloned());
+    args
+}
+
+fn run_provider_script(script_path: PathBuf, args: Vec<String>) -> Result<std::process::Output> {
+    let output = ProcessCommand::new("python3")
+        .arg(script_path)
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .context("failed to run provider helper script")?;
+    if output.status.success() {
+        return Ok(output);
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let detail = if !stderr.is_empty() {
+        stderr
+    } else if !stdout.is_empty() {
+        stdout
+    } else {
+        format!(
+            "provider helper script exited with status {}",
+            output.status.code().unwrap_or(-1)
+        )
+    };
+    anyhow::bail!("{detail}");
+}
+
+fn print_provider_script_output(output: std::process::Output, format: OutputFormat) -> Result<()> {
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    match format {
+        OutputFormat::Text => {
+            if !stdout.is_empty() {
+                println!("{stdout}");
+            }
+        }
+        OutputFormat::Json => {
+            let value: serde_json::Value = serde_json::from_str(&stdout)
+                .context("provider helper did not return valid JSON")?;
+            print_json(&value)?;
+        }
+    }
+    Ok(())
+}
+
+fn parse_provider_script_json(output: &std::process::Output) -> Result<serde_json::Value> {
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    serde_json::from_str(&stdout).context("provider helper did not return valid JSON")
+}
+
+fn build_provider_status_json(doctor_json: &serde_json::Value) -> Result<serde_json::Value> {
+    let root = doctor_json
+        .as_object()
+        .context("provider doctor JSON must be an object")?;
+    let mut summaries = Vec::new();
+    for (provider_name, payload) in root {
+        let summary = payload
+            .get("summary")
+            .and_then(|value| value.as_object())
+            .with_context(|| format!("provider {provider_name} is missing summary"))?;
+        summaries.push(serde_json::json!({
+            "provider": provider_name,
+            "runnable": summary.get("runnable").and_then(|value| value.as_bool()).unwrap_or(false),
+            "has_auth": summary.get("has_auth").and_then(|value| value.as_bool()).unwrap_or(false),
+            "has_process_env_conflict": summary
+                .get("has_process_env_conflict")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false),
+            "has_shell_env_conflict": summary
+                .get("has_shell_env_conflict")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(false),
+        }));
+    }
+    Ok(serde_json::Value::Array(summaries))
+}
+
+fn print_provider_status_text(doctor_json: &serde_json::Value) {
+    let Some(root) = doctor_json.as_object() else {
+        println!("Provider doctor output was not an object.");
+        return;
+    };
+
+    for (provider_name, payload) in root {
+        let summary = payload.get("summary").and_then(|value| value.as_object());
+        let runnable = summary
+            .and_then(|summary| summary.get("runnable"))
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let has_auth = summary
+            .and_then(|summary| summary.get("has_auth"))
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let process_conflict = summary
+            .and_then(|summary| summary.get("has_process_env_conflict"))
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+        let shell_conflict = summary
+            .and_then(|summary| summary.get("has_shell_env_conflict"))
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        let model = payload
+            .get("model")
+            .and_then(|value| value.as_str())
+            .unwrap_or("(unset)");
+        let base_url = payload
+            .get("base_url")
+            .and_then(|value| value.as_str())
+            .unwrap_or("(unset)");
+
+        println!(
+            "{}  runnable={}  auth={}  process_env_conflict={}  shell_env_conflict={}",
+            provider_name, runnable, has_auth, process_conflict, shell_conflict
+        );
+        println!("  model: {}", model);
+        println!("  base_url: {}", base_url);
+    }
 }
 
 fn read_patch(cwd: &std::path::Path, path: &PathBuf) -> Result<PatchDocument> {

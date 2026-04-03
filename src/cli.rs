@@ -145,6 +145,23 @@ pub enum AiCapability {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AiProvider {
+    Openai,
+    Codex,
+    Gemini,
+}
+
+impl AiProvider {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Openai => "openai",
+            Self::Codex => "codex",
+            Self::Gemini => "gemini",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CitationKind {
     Direct,
     Inferred,
@@ -161,6 +178,40 @@ impl CitationKind {
 
 #[derive(Debug, Subcommand)]
 pub enum AiCommand {
+    /// Inspect local provider configuration and environment diagnostics.
+    Doctor {
+        #[arg(long, value_enum)]
+        provider: Option<AiProvider>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Show a compact provider status summary.
+    Status {
+        #[arg(long, value_enum)]
+        provider: Option<AiProvider>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// List supported providers and whether they are runnable.
+    Providers {
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Run one provider smoke flow in a temporary workspace.
+    Smoke {
+        #[arg(long, value_enum)]
+        provider: AiProvider,
+        #[arg(long, default_value = "root")]
+        node_id: String,
+        #[arg(long)]
+        apply: bool,
+        #[arg(long)]
+        keep_workspace: bool,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+        #[arg(last = true)]
+        extra_args: Vec<String>,
+    },
     /// Prepare a dry-run expand request for one node.
     Expand {
         node_id: String,
