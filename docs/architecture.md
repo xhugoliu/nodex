@@ -32,6 +32,7 @@ CLI 命令入口和输出分发。
 
 - 解析 CLI 参数
 - 调用共享内核
+- 调用 provider 调试辅助脚本
 - 输出人类可读结果
 
 ### `src/store.rs`
@@ -93,6 +94,17 @@ AI request / response 编排层。
 
 - 从当前目录向上发现 `.nodex/project.db`
 - 统一 `runs/`、`snapshots/`、`sources/`、`exports/` 路径
+
+### `scripts/`
+
+本地 provider 调试工具层。
+
+职责：
+
+- 承载 `openai` / `codex` / `gemini` 的最小 runner
+- 提供统一的 `provider_doctor` / `provider_runner` / `provider_smoke` 入口
+- 收口 provider config 发现、环境变量冲突诊断、共享 contract 校验与 smoke 参数
+- 继续保持 external runner 边界，而不是把 provider SDK 直接塞进 Rust 内核
 
 ### `desktop/src-tauri`
 
@@ -237,6 +249,11 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 当前也有一版开发用 provider runner：
 
 - `scripts/openai_runner.py`
+- `scripts/codex_runner.py`
+- `scripts/gemini_runner.py`
+- `scripts/provider_doctor.py`
+- `scripts/provider_runner.py`
+- `scripts/provider_smoke.py`
 - 继续通过 external runner bridge 接入，而不是把 provider SDK 写进 Rust 内核
 - `.nodex/ai/*.meta.json` 保存本地运行审计信息，便于排查 provider 调用过程
 

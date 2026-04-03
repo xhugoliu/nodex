@@ -38,7 +38,7 @@
 - `workspace_name`
 - `root_id`
 
-当前 schema version 为 `3`。
+当前 schema version 为 `4`。
 
 ### `nodes`
 

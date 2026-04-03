@@ -4,7 +4,7 @@
 
 Nodex 想做的不是“又一个带聊天框的画布工具”，而是一个以脑图为主界面、以节点拓展为核心交互、以结构化 patch 为编辑内核的本地优先工作台。
 
-当前仓库已经有一版可运行的 Rust CLI MVP，用来先验证这几件事：
+当前仓库已经有一版可运行的 Rust CLI 内核、最小桌面壳和 provider 调试工具链，用来先验证这几件事：
 
 - 本地工作区初始化
 - 结构化 patch 驱动的节点编辑
@@ -28,37 +28,13 @@ cargo run -- export outline
 
 当前已经落地：
 
-- patch-first CLI 内核
-- SQLite 工作区
-- Markdown / TXT source import 与基础来源切片关联
-- source / node 双向查看来源链路
-- 显式 evidence 引用：将证据引用与导入关联分离
-- evidence 最小语义：citation rationale 与 `direct` / `inferred` 区分
-- `nodex ai expand <node-id> --dry-run` 本地预览骨架
-- `nodex ai explore <node-id> --by ... --dry-run` 最小按角度探索入口
-- AI request / response contract：可导出 request，并回放外部 response
-- `ai expand` 最小解释层：`rationale_summary` / `direct_evidence` / `inferred_suggestions`
-- external runner bridge：可通过本地命令完成 request -> response -> patch 预览
-- 开发用最小 OpenAI runner：`scripts/openai_runner.py`
-- 可复用本机 Codex 登录态的外部 runner：`scripts/codex_runner.py`
-- 开发用最小 Gemini runner：`scripts/gemini_runner.py`
-- 统一 provider runner 入口：`scripts/provider_runner.py`
-- 统一 provider 诊断入口：`scripts/provider_doctor.py`
-- 统一 provider smoke 入口：`scripts/provider_smoke.py`
-- `nodex ai doctor` / `nodex ai smoke`：统一 provider 诊断与 smoke 的 CLI 入口
-- `provider_smoke.py` 会先做 provider preflight，再进入临时工作区 smoke
-- 可检查 Codex live config / auth / 环境变量冲突的诊断脚本：`scripts/codex_doctor.py`
-- `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
-- 桌面壳可为当前节点直接起草 AI expand / explore，并显示本次运行元数据
-- 桌面节点详情可回看当前节点最近的 AI 运行记录
-- patch 历史归档
-- snapshot 保存与恢复
-- Markdown outline 导出
-- 基于 React + Vite + TypeScript + Tailwind CSS 的最小 Tauri 桌面壳
-- 单屏三栏桌面工作台：树 / 详情摘要 / 统一编辑器
-- 工作区入口收敛为“打开文件夹后自动打开或初始化”
-- 由原生 Tauri 菜单栏承载低频动作：语言、source import、snapshot、历史 patch
-- 可从来源详情为上下文节点起草 cite / uncite patch
+- patch-first CLI 内核：节点编辑、patch 应用、snapshot、outline 导出
+- SQLite 本地工作区：`.nodex/`、patch history、AI run 审计、可恢复 snapshot
+- Markdown / TXT source import：基础切片、source / node 双向来源链路
+- evidence 最小语义：显式 citation、`direct` / `inferred`、rationale
+- AI request / response contract：`expand` / `explore` dry-run、external runner bridge、解释层
+- 多 provider 调试工具链：`openai` / `codex` / `gemini` runner，统一 `doctor` / `status` / `providers` / `smoke`
+- 最小 Tauri 桌面壳：三栏工作台、AI draft 入口、AI 历史回看、原生菜单驱动的低频动作
 
 当前还没落地：
 

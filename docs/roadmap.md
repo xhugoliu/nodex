@@ -81,11 +81,21 @@
 - 已形成 request / response contract、external runner bridge 和最小 provider runner
 - 已把最小 explainability contract 接到 AI response：理由摘要、直接证据、推断建议
 - 已能保存本地 AI 运行审计信息，并把最小运行索引写进 SQLite，供后续排查和查询扩展
+- 已把 provider 调试工具链收口成：
+  - `provider_doctor`
+  - `provider_runner`
+  - `provider_smoke`
+- 已让 `codex` / `openai` / `gemini` 三条线都接入同一套 diagnostics / runner 抽象
+- 已把这些能力接进 CLI：
+  - `nodex ai doctor`
+  - `nodex ai status`
+  - `nodex ai providers`
+  - `nodex ai smoke`
 
 当前短期重点：
 
 - 不是再发明一条新的 provider 接入路径
-- 而是把现有 external runner + 最小 OpenAI runner 做成更清晰的真实运行体验
+- 而是把现有 external runner + 多 provider 调试工具链做成更清晰的真实运行体验
 - 包括配置状态、运行状态、失败反馈和 patch apply 链路的可见性
 
 关键问题：
