@@ -5,7 +5,6 @@ import json
 import os
 import socket
 import sys
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -20,17 +19,20 @@ from ai_contract import (
     validate_request_contract,
     write_runner_metadata,
 )
-from openai_context import load_openai_context
+from gemini_context import load_gemini_context
 from provider_runtime import compute_backoff_seconds
 
 
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF_SECONDS = 2.0
 DEFAULT_MAX_BACKOFF_SECONDS = 20.0
+DEFAULT_TIMEOUT_SECONDS = 120
 RETRYABLE_HTTP_CODES = {408, 409, 429, 500, 502, 503, 504}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Minimal OpenAI runner for Nodex AI request/response contract."
+        description="Minimal Gemini runner for Nodex AI request/response contract."
     )
     parser.add_argument(
         "--request",
@@ -45,18 +47,18 @@ def main() -> int:
     parser.add_argument(
         "--model",
         default=None,
-        help="OpenAI model name. Defaults to OPENAI_MODEL or gpt-5.4-mini.",
+        help="Gemini model name. Defaults to GEMINI_MODEL or gemini-2.5-pro.",
     )
     parser.add_argument(
         "--base-url",
         default=None,
-        help="Responses API URL. Defaults to OPENAI_BASE_URL or the official Responses endpoint.",
+        help="Gemini base URL. Defaults to GOOGLE_GEMINI_BASE_URL or the official Gemini endpoint.",
     )
     parser.add_argument(
         "--timeout",
         type=int,
         default=None,
-        help="HTTP timeout seconds. Defaults to OPENAI_TIMEOUT_SECONDS or 120.",
+        help=f"HTTP timeout seconds. Defaults to GEMINI_TIMEOUT_SECONDS or {DEFAULT_TIMEOUT_SECONDS}.",
     )
     args = parser.parse_args()
 
@@ -65,32 +67,37 @@ def main() -> int:
     metadata_path = (
         Path(os.environ["NODEX_AI_META"]) if os.environ.get("NODEX_AI_META") else None
     )
-    context = load_openai_context(
+    request_payload = json.loads(request_path.read_text())
+    validate_request_contract(request_payload)
+
+    context = load_gemini_context(
         script_path=Path(__file__),
         model_override=args.model,
         base_url_override=args.base_url,
-        timeout_override=args.timeout,
     )
     api_key = context.api_key
     if not api_key:
         raise SystemExit(
-            "[auth] OPENAI_API_KEY is missing. Set it in the environment or in .env.local next to the repo."
+            "[auth] GEMINI_API_KEY is missing. Set it in the environment or in .env.local next to the repo."
         )
 
     model = context.model
     base_url = context.base_url
-    timeout = context.timeout_seconds
-    max_retries = int(os.environ.get("OPENAI_MAX_RETRIES", str(DEFAULT_MAX_RETRIES)))
+    timeout = args.timeout or int(
+        os.environ.get("GEMINI_TIMEOUT_SECONDS", str(DEFAULT_TIMEOUT_SECONDS))
+    )
+    max_retries = int(os.environ.get("GEMINI_MAX_RETRIES", str(DEFAULT_MAX_RETRIES)))
     backoff_seconds = float(
-        os.environ.get("OPENAI_BACKOFF_SECONDS", str(DEFAULT_BACKOFF_SECONDS))
+        os.environ.get("GEMINI_BACKOFF_SECONDS", str(DEFAULT_BACKOFF_SECONDS))
     )
     max_backoff_seconds = float(
         os.environ.get(
-            "OPENAI_MAX_BACKOFF_SECONDS", str(DEFAULT_MAX_BACKOFF_SECONDS)
+            "GEMINI_MAX_BACKOFF_SECONDS", str(DEFAULT_MAX_BACKOFF_SECONDS)
         )
     )
+
     metadata = {
-        "provider": "openai",
+        "provider": "gemini",
         "model": model,
         "provider_run_id": None,
         "retry_count": 0,
@@ -100,35 +107,14 @@ def main() -> int:
     }
 
     try:
-        request_payload = json.loads(request_path.read_text())
-        validate_request_contract(request_payload)
         response_contract = request_payload["contract"]["response_kind"]
         request_version = request_payload["contract"]["version"]
         patch_version = request_payload["contract"]["patch_version"]
 
-        output_schema = build_response_schema()
-        api_payload = {
-            "model": model,
-            "instructions": request_payload["system_prompt"],
-            "input": request_payload["user_prompt"],
-            "text": {
-                "format": {
-                    "type": "json_schema",
-                    "name": response_contract,
-                    "strict": True,
-                    "schema": output_schema,
-                }
-            },
-        }
-
-        reasoning_effort = context.reasoning_effort
-        if reasoning_effort:
-            api_payload["reasoning"] = {"effort": reasoning_effort}
-
-        response_data = post_responses_request(
-            base_url=base_url,
+        response_data = post_generate_content_request(
+            url=build_generate_content_url(base_url, model),
             api_key=api_key,
-            payload=api_payload,
+            payload=build_generate_content_payload(request_payload),
             timeout=timeout,
             max_retries=max_retries,
             backoff_seconds=backoff_seconds,
@@ -142,7 +128,7 @@ def main() -> int:
         except json.JSONDecodeError as exc:
             raise RunnerFailure(
                 category="parse_error",
-                message=f"model output was not valid JSON: {exc}",
+                message=f"Gemini output was not valid JSON: {exc}",
                 retryable=False,
             ) from exc
 
@@ -154,11 +140,11 @@ def main() -> int:
         )
 
         contract_response["generator"] = {
-            "provider": "openai",
+            "provider": "gemini",
             "model": model,
-            "run_id": response_data.get("id"),
+            "run_id": response_data.get("responseId"),
         }
-        metadata["provider_run_id"] = response_data.get("id")
+        metadata["provider_run_id"] = response_data.get("responseId")
         write_runner_metadata(metadata_path, metadata)
 
         response_path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,9 +156,42 @@ def main() -> int:
         metadata["last_status_code"] = exc.status_code
         write_runner_metadata(metadata_path, metadata)
         raise SystemExit(format_failure(exc))
-def post_responses_request(
+
+
+def build_generate_content_url(base_url: str, model: str) -> str:
+    base = base_url.rstrip("/")
+    if ":generateContent" in base:
+        return base
+    if "/models/" in base:
+        if base.endswith(model):
+            return f"{base}:generateContent"
+        return f"{base}/{model}:generateContent"
+    if base.endswith("/v1beta") or base.endswith("/v1") or base.endswith("/v1alpha"):
+        return f"{base}/models/{model}:generateContent"
+    return f"{base}/v1beta/models/{model}:generateContent"
+
+
+def build_generate_content_payload(request_payload: dict) -> dict:
+    return {
+        "system_instruction": {
+            "parts": [{"text": request_payload["system_prompt"]}],
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": request_payload["user_prompt"]}],
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "responseJsonSchema": build_response_schema(),
+        },
+    }
+
+
+def post_generate_content_request(
     *,
-    base_url: str,
+    url: str,
     api_key: str,
     payload: dict,
     timeout: int,
@@ -186,9 +205,12 @@ def post_responses_request(
     while True:
         try:
             request = urllib.request.Request(
-                base_url,
+                url,
                 data=json.dumps(payload).encode("utf-8"),
-                headers=build_headers(api_key),
+                headers={
+                    "x-goog-api-key": api_key,
+                    "Content-Type": "application/json",
+                },
                 method="POST",
             )
             with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -212,17 +234,18 @@ def post_responses_request(
         metadata["last_error_message"] = failure.message
         metadata["last_status_code"] = failure.status_code
         write_runner_metadata(metadata_path, metadata)
-        sleep_seconds = compute_openai_backoff_seconds(
+        sleep_seconds = compute_backoff_seconds(
             attempt=attempt,
             base_seconds=backoff_seconds,
             max_seconds=max_backoff_seconds,
-            retry_after=failure.retry_after,
         )
         sys.stderr.write(
             f"[{failure.category}] attempt {attempt + 1} failed: {failure.message}; "
             f"retrying in {sleep_seconds:.1f}s\n"
         )
         sys.stderr.flush()
+        import time
+
         time.sleep(sleep_seconds)
         attempt += 1
 
@@ -232,40 +255,20 @@ def classify_http_error(exc: urllib.error.HTTPError) -> RunnerFailure:
     payload = try_parse_json(body)
     message = extract_error_message(payload) or body or "HTTP error"
     code = exc.code
-    retry_after = parse_retry_after(exc.headers.get("Retry-After"))
 
     if code == 401:
         return RunnerFailure("auth", message, retryable=False, status_code=code)
     if code == 403:
         return RunnerFailure("permission", message, retryable=False, status_code=code)
     if code == 429:
-        error_code = extract_error_code(payload)
-        if error_code in {"insufficient_quota", "billing_hard_limit_reached"}:
-            return RunnerFailure(
-                "quota",
-                message,
-                retryable=False,
-                status_code=code,
-                retry_after=retry_after,
-            )
-        return RunnerFailure(
-            "rate_limit",
-            message,
-            retryable=True,
-            status_code=code,
-            retry_after=retry_after,
-        )
+        return RunnerFailure("rate_limit", message, retryable=True, status_code=code)
     if code in {400, 404, 422}:
         return RunnerFailure(
             "invalid_request", message, retryable=False, status_code=code
         )
     if code in RETRYABLE_HTTP_CODES:
         return RunnerFailure(
-            "server_error",
-            message,
-            retryable=True,
-            status_code=code,
-            retry_after=retry_after,
+            "server_error", message, retryable=True, status_code=code
         )
     return RunnerFailure("http_error", message, retryable=False, status_code=code)
 
@@ -284,79 +287,40 @@ def classify_url_error(exc: urllib.error.URLError) -> RunnerFailure:
         retryable=True,
     )
 
-def compute_openai_backoff_seconds(
-    *,
-    attempt: int,
-    base_seconds: float,
-    max_seconds: float,
-    retry_after: Optional[float],
-) -> float:
-    if retry_after is not None and retry_after > 0:
-        return min(retry_after, max_seconds)
-    return compute_backoff_seconds(
-        attempt=attempt, base_seconds=base_seconds, max_seconds=max_seconds
-    )
 
-
-def parse_retry_after(value: Optional[str]) -> Optional[float]:
-    if not value:
-        return None
-    try:
-        return float(value)
-    except ValueError:
-        return None
-
-
-def build_headers(api_key: str) -> dict:
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    organization = os.environ.get("OPENAI_ORGANIZATION")
-    if organization:
-        headers["OpenAI-Organization"] = organization
-    project = os.environ.get("OPENAI_PROJECT")
-    if project:
-        headers["OpenAI-Project"] = project
-    return headers
 def extract_output_text(response_data: dict) -> str:
-    if isinstance(response_data.get("output_text"), str) and response_data["output_text"].strip():
-        return response_data["output_text"]
-
-    collected = []
-    for item in response_data.get("output", []):
-        item_type = item.get("type")
-        if item_type in {"refusal", "output_refusal"}:
-            raise RunnerFailure(
-                category="refusal",
-                message=f"model refused the request: {item.get('refusal', 'unknown refusal')}",
-            )
-        for content in item.get("content", []):
-            content_type = content.get("type")
-            if content_type in {"output_text", "text"} and isinstance(
-                content.get("text"), str
-            ):
-                collected.append(content["text"])
-            elif content_type == "refusal":
-                raise RunnerFailure(
-                    category="refusal",
-                    message=f"model refused the request: {content.get('refusal', 'unknown refusal')}",
-                )
-
-    if collected:
-        return "\n".join(collected).strip()
-
-    if response_data.get("status") == "incomplete":
+    candidates = response_data.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
         raise RunnerFailure(
-            category="incomplete",
-            message="OpenAI response was incomplete and did not produce text output",
-            retryable=True,
+            category="parse_error",
+            message="Gemini response did not contain candidates",
         )
+
+    candidate = candidates[0]
+    finish_reason = candidate.get("finishReason")
+    if finish_reason and finish_reason not in {"STOP", "MAX_TOKENS"}:
+        raise RunnerFailure(
+            category="refusal",
+            message=f"Gemini generation stopped with finishReason={finish_reason}",
+            retryable=False,
+        )
+
+    content = candidate.get("content", {})
+    parts = content.get("parts", [])
+    texts = [
+        part.get("text")
+        for part in parts
+        if isinstance(part, dict) and isinstance(part.get("text"), str)
+    ]
+    if texts:
+        return "\n".join(texts).strip()
 
     raise RunnerFailure(
         category="parse_error",
-        message="OpenAI response did not contain output_text or parseable text content",
+        message="Gemini response did not contain text parts",
     )
+
+
 def try_parse_json(text: str) -> Optional[dict]:
     try:
         value = json.loads(text)
@@ -376,15 +340,6 @@ def extract_error_message(payload: Optional[dict]) -> Optional[str]:
     return None
 
 
-def extract_error_code(payload: Optional[dict]) -> Optional[str]:
-    if not payload:
-        return None
-    error = payload.get("error")
-    if isinstance(error, dict):
-        code = error.get("code")
-        if isinstance(code, str) and code.strip():
-            return code.strip()
-    return None
 if __name__ == "__main__":
     try:
         raise SystemExit(main())

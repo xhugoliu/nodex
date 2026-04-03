@@ -118,6 +118,13 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - 仓库内提供了一个最小 OpenAI runner：`python3 scripts/openai_runner.py`
 - 如果你的 provider 已经通过本机 `codex login` 和 `~/.codex/config.toml` 跑通，也可以改用：
   - `python3 scripts/codex_runner.py`
+- Gemini 路径现在也有最小 runner：
+  - `python3 scripts/gemini_runner.py`
+- 如果你想收敛命令面，也可以通过统一入口转发到具体 provider runner：
+  - `python3 scripts/provider_runner.py --provider openai`
+  - `python3 scripts/provider_runner.py --provider codex`
+  - `python3 scripts/provider_runner.py --provider gemini`
+  - `python3 scripts/provider_runner.py --list`
 - `codex_runner.py` 会复用本机 Codex CLI 的登录态和 provider 配置，而不是直接手写 Bearer 请求
 - `codex_runner.py` 默认优先读取：
   - `~/.codex/config.toml` 里的 `model` / `model_reasoning_effort`
@@ -172,13 +179,35 @@ cargo run -- ai run-external root "python3 scripts/codex_runner.py --reasoning-e
 建议先做一次本地诊断，确认 `~/.codex` live config 和环境变量没有冲突：
 
 ```bash
-python3 scripts/codex_doctor.py
+python3 scripts/provider_doctor.py --provider codex
 ```
+
+如果你想一次看完当前机器上的 Codex / OpenAI / Gemini 三条 provider 诊断，也可以直接跑统一入口：
+
+```bash
+python3 scripts/provider_doctor.py --json
+```
+
+如果你想直接在临时工作区里跑一轮 provider smoke，也可以使用统一 smoke 入口：
+
+```bash
+python3 scripts/provider_smoke.py --provider codex
+python3 scripts/provider_smoke.py --provider openai
+python3 scripts/provider_smoke.py --provider gemini
+```
+
+`provider_smoke.py` 会先做一层 provider preflight；如果当前 provider 没有可用 auth，会直接提示先跑对应的 `provider_doctor.py`。
 
 如果自定义 relay 对 `--output-schema` 路径不稳定，可以优先用 plain 模式：
 
 ```bash
 cargo run -- ai run-external root "python3 scripts/codex_runner.py --mode plain --reasoning-effort low --max-retries 3" --dry-run
+```
+
+如果你想统一 runner 入口，也可以这样调用：
+
+```bash
+cargo run -- ai run-external root "python3 scripts/provider_runner.py --provider codex --mode plain --reasoning-effort low --max-retries 3" --dry-run
 ```
 
 ### 初始化

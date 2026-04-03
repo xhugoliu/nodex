@@ -3,7 +3,6 @@
 import argparse
 import json
 import os
-import random
 import re
 import subprocess
 import sys
@@ -12,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from openai_runner import (
+from ai_contract import (
     RunnerFailure,
     build_response_schema,
     ensure_path,
@@ -21,30 +20,13 @@ from openai_runner import (
     validate_request_contract,
     write_runner_metadata,
 )
+from codex_context import CodexContext, load_codex_context
+from provider_runtime import compute_backoff_seconds
 
 
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_BACKOFF_SECONDS = 2.0
 DEFAULT_MAX_BACKOFF_SECONDS = 12.0
-
-TOP_LEVEL_ASSIGNMENT_PATTERNS = {
-    "model_provider": re.compile(
-        r'^\s*model_provider\s*=\s*(["\'])([^"\'\r\n]+)\1\s*(?:#.*)?$',
-        re.MULTILINE,
-    ),
-    "model": re.compile(
-        r'^\s*model\s*=\s*(["\'])([^"\'\r\n]+)\1\s*(?:#.*)?$',
-        re.MULTILINE,
-    ),
-    "model_reasoning_effort": re.compile(
-        r'^\s*model_reasoning_effort\s*=\s*(["\'])([^"\'\r\n]+)\1\s*(?:#.*)?$',
-        re.MULTILINE,
-    ),
-}
-SECTION_PATTERN = re.compile(r"^\s*\[([^\]\r\n]+)\]\s*$")
-BASE_URL_PATTERN = re.compile(
-    r'^\s*base_url\s*=\s*(["\'])([^"\'\r\n]+)\1\s*(?:#.*)?$'
-)
 CODE_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
 
@@ -189,148 +171,6 @@ def main() -> int:
         raise SystemExit(format_failure(last_failure))
     raise SystemExit("[runner_error] codex runner exited unexpectedly")
 
-
-class CodexContext:
-    def __init__(
-        self,
-        *,
-        config_path: Path,
-        provider_name: Optional[str],
-        base_url: Optional[str],
-        model: Optional[str],
-        reasoning_effort: Optional[str],
-        login_status: str,
-        ignored_openai_env_keys: list[str],
-    ) -> None:
-        self.config_path = config_path
-        self.provider_name = provider_name
-        self.base_url = base_url
-        self.model = model
-        self.reasoning_effort = reasoning_effort
-        self.login_status = login_status
-        self.ignored_openai_env_keys = ignored_openai_env_keys
-
-
-def load_codex_context(
-    *,
-    model_override: Optional[str],
-    reasoning_override: Optional[str],
-) -> CodexContext:
-    config_path = get_codex_config_path()
-    config_text = read_codex_config_text(config_path)
-    provider_name = extract_top_level_assignment(config_text, "model_provider")
-    base_url = extract_codex_base_url(config_text, provider_name)
-    model = (
-        model_override
-        or os.environ.get("CODEX_RUNNER_MODEL")
-        or extract_top_level_assignment(config_text, "model")
-    )
-    reasoning_effort = (
-        reasoning_override
-        or os.environ.get("CODEX_RUNNER_REASONING_EFFORT")
-        or extract_top_level_assignment(config_text, "model_reasoning_effort")
-    )
-    login_status = get_codex_login_status()
-    ignored_openai_env_keys = sorted(
-        key for key in os.environ.keys() if key.startswith("OPENAI_")
-    )
-    return CodexContext(
-        config_path=config_path,
-        provider_name=provider_name,
-        base_url=base_url,
-        model=model,
-        reasoning_effort=reasoning_effort,
-        login_status=login_status,
-        ignored_openai_env_keys=ignored_openai_env_keys,
-    )
-
-
-def get_codex_config_path() -> Path:
-    codex_home = os.environ.get("CODEX_HOME")
-    if codex_home:
-        return Path(codex_home).expanduser().resolve() / "config.toml"
-    return Path.home() / ".codex" / "config.toml"
-
-
-def read_codex_config_text(config_path: Path) -> str:
-    if not config_path.exists():
-        return ""
-    return config_path.read_text()
-
-
-def extract_top_level_assignment(config_text: str, key: str) -> Optional[str]:
-    pattern = TOP_LEVEL_ASSIGNMENT_PATTERNS[key]
-    match = pattern.search(config_text)
-    if not match:
-        return None
-    value = match.group(2).strip()
-    return value or None
-
-
-def extract_codex_base_url(
-    config_text: str,
-    provider_name: Optional[str],
-) -> Optional[str]:
-    if not config_text.strip():
-        return None
-
-    lines = config_text.splitlines()
-    target_section = (
-        f"model_providers.{provider_name}" if provider_name is not None else None
-    )
-
-    def find_in_range(start: int, end: int) -> Optional[str]:
-        for index in range(start, end):
-            match = BASE_URL_PATTERN.match(lines[index])
-            if match:
-                return match.group(2).strip()
-        return None
-
-    if target_section is not None:
-        section_start = None
-        section_end = len(lines)
-        for index, line in enumerate(lines):
-            section_match = SECTION_PATTERN.match(line)
-            if not section_match:
-                continue
-            section_name = section_match.group(1)
-            if section_start is None:
-                if section_name == target_section:
-                    section_start = index + 1
-                continue
-            section_end = index
-            break
-
-        if section_start is not None:
-            match = find_in_range(section_start, section_end)
-            if match:
-                return match
-
-    top_level_end = len(lines)
-    for index, line in enumerate(lines):
-        if SECTION_PATTERN.match(line):
-            top_level_end = index
-            break
-
-    return find_in_range(0, top_level_end)
-
-
-def get_codex_login_status() -> str:
-    completed = subprocess.run(
-        ["codex", "login", "status"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    detail = (completed.stdout or completed.stderr).strip()
-    if completed.returncode != 0:
-        raise RunnerFailure(
-            category="auth",
-            message=detail or "failed to read `codex login status`",
-        )
-    return detail
-
-
 def warn_on_env_conflicts(ignored_keys: list[str]) -> None:
     if not ignored_keys:
         return
@@ -412,7 +252,7 @@ def run_codex_once(
 
         stdout = completed.stdout.strip()
         stderr = completed.stderr.strip()
-        session_id = extract_session_id(stdout)
+        session_id = extract_session_id(stdout=stdout, stderr=stderr)
 
         if completed.returncode != 0:
             detail = extract_codex_error_detail(stdout=stdout, stderr=stderr)
@@ -559,8 +399,9 @@ def build_codex_env() -> dict:
     return env
 
 
-def extract_session_id(stdout: str) -> Optional[str]:
-    match = re.search(r"session id:\s*(\S+)", stdout)
+def extract_session_id(*, stdout: str, stderr: str) -> Optional[str]:
+    combined = "\n".join(part for part in (stdout, stderr) if part)
+    match = re.search(r"session id:\s*(\S+)", combined)
     if not match:
         return None
     return match.group(1)
@@ -657,13 +498,6 @@ def parse_plain_json_response(output_text: str) -> dict:
             message="codex exec plain mode returned non-object JSON",
         )
     return value
-
-
-def compute_backoff_seconds(*, attempt: int, base_seconds: float, max_seconds: float) -> float:
-    exponential = min(base_seconds * (2**attempt), max_seconds)
-    jitter = random.uniform(0, min(base_seconds, 1.0))
-    return min(exponential + jitter, max_seconds)
-
 
 if __name__ == "__main__":
     try:

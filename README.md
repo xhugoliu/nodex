@@ -41,6 +41,11 @@ cargo run -- export outline
 - external runner bridge：可通过本地命令完成 request -> response -> patch 预览
 - 开发用最小 OpenAI runner：`scripts/openai_runner.py`
 - 可复用本机 Codex 登录态的外部 runner：`scripts/codex_runner.py`
+- 开发用最小 Gemini runner：`scripts/gemini_runner.py`
+- 统一 provider runner 入口：`scripts/provider_runner.py`
+- 统一 provider 诊断入口：`scripts/provider_doctor.py`
+- 统一 provider smoke 入口：`scripts/provider_smoke.py`
+- `provider_smoke.py` 会先做 provider preflight，再进入临时工作区 smoke
 - 可检查 Codex live config / auth / 环境变量冲突的诊断脚本：`scripts/codex_doctor.py`
 - `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
 - 桌面壳可为当前节点直接起草 AI expand / explore，并显示本次运行元数据

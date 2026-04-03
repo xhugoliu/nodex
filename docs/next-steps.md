@@ -56,11 +56,25 @@
 
 - 真实 OpenAI provider 已可通过 `ai run-external` 和桌面 draft 入口跑通
 - 已有 request / response contract、解释层、evidence 最小语义、运行审计和 `ai_runs` 索引
+- 已新增可复用本机 `codex login` / `~/.codex/config.toml` 的 `scripts/codex_runner.py`
+- 已新增 `scripts/codex_doctor.py`，可排查 Codex live config 与 `OPENAI_*` 环境变量冲突
+- 已开始抽离 shared provider runtime / codex context，避免后续 runner 再重复实现 env 冲突、backoff 和 live config 发现逻辑
+- 已为 OpenAI 路径补上第二个最小 skeleton：`openai_context.py` / `openai_doctor.py`
+- 已为 Gemini 路径补上第三个最小 skeleton：`gemini_context.py` / `gemini_doctor.py`
+- 已新增统一入口 `provider_doctor.py`，可聚合查看 Codex / OpenAI / Gemini 三条线的本地诊断结果
+- 已新增 `provider_runner.py` 作为统一 runner 入口的最小壳，先收口 `openai` / `codex`
+- 已将 Gemini 从 diagnostics-only 推进到最小 runnable provider：`scripts/gemini_runner.py`
+- 已新增 `provider_smoke.py`，可在临时工作区里统一跑 provider smoke
+- 已为 provider 工具链补上最小离线回归测试，覆盖 registry / doctor / smoke 列表等关键路径
+- 已将 request contract / response schema / runner error 基础能力抽到共享模块，避免其他 provider 继续依赖 `openai_runner.py`
 
 下一轮最小切口：
 
+- 把 Codex 这条调试链路继续压实成默认可用路径：
+  - 固定一条稳定的 `plain + low + retries` smoke 命令
+  - 让一次 Codex draft 的 request / response / patch / 最终 apply 状态更容易串起来看
+  - 把 relay `502`、schema 输出不稳定、环境变量覆盖这三类问题区分清楚
 - 让当前 provider 是否已配置、正在使用哪个 runner / model 更可见
-- 让一次 AI draft 的 request / response / patch / 最终 apply 状态更容易串起来看
 - 让失败原因和下一步动作更清楚，而不是只暴露底层错误
 
 短期只关心这条流程是否顺手：
@@ -71,6 +85,11 @@
 - 预览 patch
 - 应用 patch
 - 回看历史
+
+补充说明：
+
+- 当前更适合把 `codex_runner.py` 作为后端调试主路，而不是继续依赖裸 HTTP 的 `openai_runner.py`
+- 如果同一机器上还保留 `OPENAI_*` 环境变量，优先先跑 `python3 scripts/codex_doctor.py`
 
 ### 2. 串顺桌面主流程
 
@@ -95,6 +114,41 @@
 - `PDF import`
 - 来源问答
 - 更完整的 evidence 视图
+
+### 3.5 推进多 provider 抽象
+
+状态：在 Codex 链路稳定后立即进入，不晚于来源能力前期设计
+
+目标：
+
+- 不把当前 Codex 路径做成一次性的脚本特判
+- 在保持 external runner 边界的前提下，为后续多 provider 接入预留稳定抽象
+
+当前判断：
+
+- `cc-switch` 的借鉴点主要不在“再写一个更重的代理”，而在：
+  - 把 live config 读写当作一等能力
+  - 把环境变量冲突当作显式诊断项
+  - 把不同 provider 的 URL / auth / config 语义拆成独立适配层
+
+下一轮最小切口：
+
+- 抽一层 shared provider diagnostics / config context，避免 `codex_runner.py` 变成孤例
+- 至少再让一个非 Codex provider 落到同一套结构上，验证抽象不是假抽象
+- 下一步优先考虑把第三条线从“doctor/context”推进到“最小 runnable provider”
+- 同时继续收敛操作面，优先从多个 provider-specific 脚本收敛到更少的统一入口
+- 后续可以考虑让 `provider_runner.py` 直接承接默认 smoke 命令，逐步替代手写具体脚本路径
+- Gemini runnable 路径落地后，下一轮更适合补共享测试样例或统一 runner mode 能力，而不是继续加第四条线
+- 统一 smoke 入口落地后，下一轮更适合补共享测试样例或统一 runner mode 能力，而不是继续加第四条线
+- 约定 future runners 至少统一这些能力：
+  - provider config 发现
+  - auth/source 诊断
+  - transient error 分类与重试
+  - runner mode（schema / plain / fallback）
+- 文档上明确区分：
+  - 真实调试主路
+  - provider-specific workaround
+  - 长期可复用抽象
 
 ### 4. 最后再做更完整的脑图 GUI
 
