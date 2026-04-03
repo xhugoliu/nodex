@@ -5,6 +5,9 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from provider_runner import build_runner_command
 
 
 def run_script(*args: str) -> subprocess.CompletedProcess[str]:
@@ -37,6 +40,21 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('"summary"', result.stdout)
         self.assertIn('"provider": "openai"', result.stdout)
+
+    def test_provider_runner_can_prepend_provider_default_args(self) -> None:
+        command = build_runner_command(
+            script_path=REPO_ROOT / "scripts" / "provider_runner.py",
+            provider="codex",
+            passthrough=["--model", "gpt-5.4"],
+            use_default_args=True,
+        )
+        self.assertEqual(command[0], sys.executable)
+        self.assertTrue(command[1].endswith("scripts/codex_runner.py"))
+        self.assertEqual(
+            command[2:8],
+            ["--mode", "plain", "--reasoning-effort", "low", "--max-retries", "3"],
+        )
+        self.assertEqual(command[8:], ["--model", "gpt-5.4"])
 
 
 if __name__ == "__main__":

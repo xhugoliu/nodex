@@ -8,6 +8,28 @@ from pathlib import Path
 from provider_registry import get_provider_entry, provider_names, runnable_provider_names
 
 
+def build_runner_command(
+    *,
+    script_path: Path,
+    provider: str,
+    passthrough: list[str],
+    use_default_args: bool,
+) -> list[str]:
+    entry = get_provider_entry(provider)
+    script_name = entry.runner_script
+    if script_name is None:
+        raise SystemExit(
+            "[config] provider runner for "
+            f"`{provider}` is not implemented yet; runnable providers: "
+            + ", ".join(runnable_provider_names())
+            + f". Try `python3 scripts/provider_doctor.py --provider {provider}` first."
+        )
+
+    runner_path = script_path.resolve().parent / script_name
+    default_args = list(entry.default_smoke_args) if use_default_args else []
+    return [sys.executable, str(runner_path), *default_args, *passthrough]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Dispatch to a concrete provider runner."
@@ -23,6 +45,11 @@ def main() -> int:
         required=False,
         help="Which concrete provider runner to execute.",
     )
+    parser.add_argument(
+        "--use-default-args",
+        action="store_true",
+        help="Prepend the provider's default runner arguments before passthrough args.",
+    )
     args, passthrough = parser.parse_known_args()
 
     if args.list:
@@ -35,18 +62,12 @@ def main() -> int:
     if not args.provider:
         parser.error("--provider is required unless --list is used")
 
-    entry = get_provider_entry(args.provider)
-    script_name = entry.runner_script
-    if script_name is None:
-        raise SystemExit(
-            "[config] provider runner for "
-            f"`{args.provider}` is not implemented yet; runnable providers: "
-            + ", ".join(runnable_provider_names())
-            + f". Try `python3 scripts/provider_doctor.py --provider {args.provider}` first."
-        )
-
-    runner_path = Path(__file__).resolve().parent / script_name
-    command = [sys.executable, str(runner_path), *passthrough]
+    command = build_runner_command(
+        script_path=Path(__file__),
+        provider=args.provider,
+        passthrough=passthrough,
+        use_default_args=args.use_default_args,
+    )
     completed = subprocess.run(command, check=False)
     return completed.returncode
 

@@ -1,7 +1,11 @@
 import type {
   ApplyPatchReport,
+  AiRunArtifact,
+  AiRunRecord,
+  DesktopAiStatus,
   ExternalRunnerReport,
   ParentCandidate,
+  PatchDraftOrigin,
   PatchOperation,
   TreeNode,
 } from "./types";
@@ -30,10 +34,12 @@ export function renderPatchReport(
   report: ApplyPatchReport,
   dryRun: boolean,
   t: Translator,
+  draftOrigin?: PatchDraftOrigin | null,
 ) {
   return [
     dryRun ? t("reports.patchPreviewSucceeded") : t("reports.patchApplied"),
     report.summary ? t("reports.summary", { value: report.summary }) : null,
+    ...(draftOrigin ? renderPatchDraftOriginLines(draftOrigin, t) : []),
     ...report.preview.map((line) => `- ${line}`),
     report.run_id ? t("reports.runId", { id: report.run_id }) : null,
   ]
@@ -338,6 +344,166 @@ export function formatError(error: unknown): string {
   return String(error);
 }
 
+export function buildAiDraftNextSteps(
+  status: DesktopAiStatus | null,
+  t: Translator,
+  error?: unknown,
+): string[] {
+  if (!status) {
+    return [];
+  }
+
+  const detail = [formatError(error ?? ""), status.status_error ?? "", status.command]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  const provider = status.provider ?? t("nodeEditing.aiDraftUnknown");
+  const actions = new Array<string>();
+
+  if (status.command_source === "override" && status.provider === null) {
+    actions.push(t("messages.aiDraftNextCustomOverride"));
+  }
+
+  if (status.has_auth === false) {
+    actions.push(t("messages.aiDraftNextSetupAuth", { provider }));
+  }
+
+  if (
+    status.provider === "codex" &&
+    (status.has_process_env_conflict || status.has_shell_env_conflict)
+  ) {
+    actions.push(t("messages.aiDraftNextCheckCodexEnv"));
+  }
+
+  if (detail.includes("[rate_limit]") || detail.includes("rate limit")) {
+    actions.push(t("messages.aiDraftNextRateLimit"));
+  }
+
+  if (detail.includes("502") || detail.includes("bad gateway")) {
+    actions.push(t("messages.aiDraftNextRelay502"));
+  }
+
+  if (
+    detail.includes("[network]") ||
+    detail.includes("[timeout]") ||
+    detail.includes("timeout")
+  ) {
+    actions.push(t("messages.aiDraftNextNetwork"));
+  }
+
+  if (detail.includes("[schema_error]") || detail.includes("schema_error")) {
+    actions.push(t("messages.aiDraftNextSchema"));
+  }
+
+  if (
+    detail.includes("[parse_error]") ||
+    detail.includes("parse_error") ||
+    detail.includes("did not return valid json") ||
+    detail.includes("returned non-object json")
+  ) {
+    actions.push(t("messages.aiDraftNextParse"));
+  }
+
+  if (!actions.length && status.provider) {
+    actions.push(t("messages.aiDraftNextRunDoctor", { provider: status.provider }));
+  }
+
+  return Array.from(new Set(actions));
+}
+
+export function renderAiDraftFailure(
+  error: unknown,
+  status: DesktopAiStatus | null,
+  t: Translator,
+): string {
+  const detail = formatError(error);
+  const nextSteps = buildAiDraftNextSteps(status, t, error);
+  if (!nextSteps.length) {
+    return detail;
+  }
+
+  return [
+    detail,
+    "",
+    t("nodeEditing.aiDraftNextTitle"),
+    ...nextSteps.map((step) => `- ${step}`),
+  ].join("\n");
+}
+
+export function renderAiRunTrace(run: AiRunRecord, t: Translator): string {
+  const metadataPath = deriveAiRunMetadataPath(run.response_path);
+  const lines = [
+    t("detail.aiRunTraceTitle"),
+    t("reports.capability", { value: run.capability }),
+    run.explore_by ? t("reports.exploreBy", { value: run.explore_by }) : null,
+    t("detail.aiRunStatus", { value: run.status }),
+    t("detail.aiRunMode", {
+      value: run.dry_run ? t("detail.aiRunDryRun") : t("detail.aiRunApplied"),
+    }),
+    t("detail.aiRunStartedAt", { value: formatTimestamp(run.started_at) }),
+    run.provider ? t("reports.provider", { value: run.provider }) : null,
+    run.model ? t("reports.model", { value: run.model }) : null,
+    t("detail.aiRunCommand", { value: run.command }),
+    t("detail.aiRunRequest", { value: run.request_path }),
+    t("detail.aiRunResponse", { value: run.response_path }),
+    metadataPath ? t("detail.aiRunMetadata", { value: metadataPath }) : null,
+    run.patch_run_id ? t("detail.aiRunPatchRun", { value: run.patch_run_id }) : null,
+    run.patch_summary ? t("detail.aiRunPatchSummary", { value: run.patch_summary }) : null,
+    run.last_error_category
+      ? t("detail.aiRunErrorCategory", { value: run.last_error_category })
+      : null,
+    run.last_error_message
+      ? t("detail.aiRunErrorMessage", { value: run.last_error_message })
+      : null,
+  ];
+
+  return lines.filter(Boolean).join("\n");
+}
+
+export function renderAiRunArtifact(
+  artifact: AiRunArtifact,
+  t: Translator,
+): string {
+  const title =
+    artifact.kind === "request"
+      ? t("detail.showAiRunRequest")
+      : artifact.kind === "response"
+        ? t("detail.showAiRunResponse")
+        : t("detail.showAiRunMetadata");
+
+  return [
+    title,
+    t("detail.aiRunArtifactPath", { value: artifact.path }),
+    "",
+    artifact.content,
+  ].join("\n");
+}
+
+export function formatPatchDraftOriginTitle(
+  origin: PatchDraftOrigin,
+  t: Translator,
+): string {
+  return t("composer.aiRunOriginTitle", { id: origin.run_id });
+}
+
+export function formatPatchDraftOriginMeta(
+  origin: PatchDraftOrigin,
+  t: Translator,
+): string {
+  const parts = [
+    origin.explore_by
+      ? t("reports.exploreBy", { value: origin.explore_by })
+      : t("reports.capability", { value: origin.capability }),
+    origin.provider ? t("reports.provider", { value: origin.provider }) : null,
+    origin.model ? t("reports.model", { value: origin.model }) : null,
+    origin.patch_run_id
+      ? t("composer.aiRunOriginPatchRun", { id: origin.patch_run_id })
+      : null,
+  ];
+
+  return parts.filter(Boolean).join(" · ");
+}
+
 function changedFieldLabels(op: PatchOperation, t: Translator): string[] {
   const fields = new Array<string>();
 
@@ -366,6 +532,46 @@ function stringValue(value: unknown, fallback: string): string {
 
 function integerValue(value: unknown): number | null {
   return Number.isInteger(value) ? Number(value) : null;
+}
+
+function deriveAiRunMetadataPath(responsePath: string): string | null {
+  const trimmed = responsePath.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.endsWith(".response.json")) {
+    return `${trimmed.slice(0, -".response.json".length)}.meta.json`;
+  }
+
+  return null;
+}
+
+function renderPatchDraftOriginLines(
+  origin: PatchDraftOrigin,
+  t: Translator,
+): string[] {
+  return [
+    t("reports.sourceAiRun", { id: origin.run_id }),
+    origin.explore_by
+      ? t("reports.sourceCapability", {
+          value: `${origin.capability} / ${origin.explore_by}`,
+        })
+      : t("reports.sourceCapability", { value: origin.capability }),
+    origin.provider ? t("reports.provider", { value: origin.provider }) : null,
+    origin.model ? t("reports.model", { value: origin.model }) : null,
+    origin.patch_run_id
+      ? t("reports.sourcePatchRun", { id: origin.patch_run_id })
+      : null,
+  ].filter(Boolean) as string[];
+}
+
+function formatTimestamp(timestampSeconds: number): string {
+  if (!Number.isFinite(timestampSeconds)) {
+    return String(timestampSeconds);
+  }
+
+  return new Date(timestampSeconds * 1000).toLocaleString();
 }
 
 function collectSubtreeIds(tree: TreeNode, nodeId: string): Set<string> {

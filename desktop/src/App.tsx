@@ -11,6 +11,9 @@ import {
   inspectPatchDraft,
   listParentCandidates,
   optionalText,
+  renderAiDraftFailure,
+  renderAiRunArtifact,
+  renderAiRunTrace,
   renderExternalRunnerReport,
   renderPatchReport,
   type ConsoleTone,
@@ -29,13 +32,16 @@ import {
 } from "./components/panes";
 import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
+  AiRunArtifact,
   AiRunRecord,
   ApplyPatchReport,
+  DesktopAiStatus,
   ExternalRunnerReport,
   LanguagePreference,
   Locale,
   NodeDetail,
   PatchDocument,
+  PatchDraftOrigin,
   SourceDetail,
   WorkspaceOverview,
 } from "./types";
@@ -83,9 +89,12 @@ export default function App() {
   const [selectedNodeAiRuns, setSelectedNodeAiRuns] = useState<AiRunRecord[]>([]);
   const [selectedSourceDetail, setSelectedSourceDetail] =
     useState<SourceDetail | null>(null);
+  const [desktopAiStatus, setDesktopAiStatus] = useState<DesktopAiStatus | null>(null);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const [contextSourceId, setContextSourceId] = useState<string | null>(null);
   const [patchEditor, setPatchEditor] = useState("");
+  const [patchDraftOrigin, setPatchDraftOrigin] =
+    useState<PatchDraftOrigin | null>(null);
   const [showAdvancedPatchEditor, setShowAdvancedPatchEditor] = useState(false);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeKind, setUpdateNodeKind] = useState("");
@@ -141,7 +150,16 @@ export default function App() {
         message: t("messages.tauriUnavailable"),
         tone: "error",
       });
+      return;
     }
+
+    void invokeCommand<DesktopAiStatus>("get_desktop_ai_status", {})
+      .then((status) => {
+        setDesktopAiStatus(status);
+      })
+      .catch((error) => {
+        setConsoleMessage(formatError(error), "error");
+      });
   }, []);
 
   useEffect(() => {
@@ -189,6 +207,7 @@ export default function App() {
               setSelectedSourceDetail(null);
               setContextNodeId(null);
               setContextSourceId(null);
+              setPatchDraftOrigin(null);
             });
             setConsoleMessage(event.payload.message, event.payload.tone);
           },
@@ -205,6 +224,7 @@ export default function App() {
         await listen<PatchEditorEventPayload>("desktop://patch-editor", (event) => {
           setShowAdvancedPatchEditor(event.payload.reveal_advanced);
           setPatchEditor(event.payload.patch_json);
+          setPatchDraftOrigin(null);
           setConsoleMessage(event.payload.message, event.payload.tone);
         }),
       );
@@ -497,7 +517,7 @@ export default function App() {
         start_path: workspacePath,
         patch_json: patchJson,
       });
-      setConsoleMessage(renderPatchReport(report, true, t), "success");
+      setConsoleMessage(renderPatchReport(report, true, t, patchDraftOrigin), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
     }
@@ -523,7 +543,7 @@ export default function App() {
         preserveSelection: true,
         successMessage: false,
       });
-      setConsoleMessage(renderPatchReport(report, false, t), "success");
+      setConsoleMessage(renderPatchReport(report, false, t, patchDraftOrigin), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
     }
@@ -550,6 +570,7 @@ export default function App() {
         position: null,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
       setConsoleMessage(
         t("messages.draftedAddChild", { nodeId: selectedNodeId! }),
         "success",
@@ -571,12 +592,13 @@ export default function App() {
         node_id: selectedNodeId,
       });
       setPatchEditor(JSON.stringify(result.patch, null, 2));
+      setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
       setConsoleMessage(
         renderExternalRunnerReport(result, t),
         "success",
       );
     } catch (error) {
-      setConsoleMessage(formatError(error), "error");
+      setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
     }
   }
 
@@ -598,9 +620,10 @@ export default function App() {
         },
       );
       setPatchEditor(JSON.stringify(result.patch, null, 2));
+      setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
       setConsoleMessage(renderExternalRunnerReport(result, t), "success");
     } catch (error) {
-      setConsoleMessage(formatError(error), "error");
+      setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
     }
   }
 
@@ -639,6 +662,7 @@ export default function App() {
         },
       );
       setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
       setConsoleMessage(
         t("messages.draftedUpdate", { nodeId: selectedNodeId! }),
         "success",
@@ -682,6 +706,7 @@ export default function App() {
         position: null,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
       setConsoleMessage(
         t("messages.draftedMove", { nodeId: selectedNodeId! }),
         "success",
@@ -710,6 +735,7 @@ export default function App() {
         },
       );
       setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
       setConsoleMessage(
         t("messages.draftedDelete", { nodeId: selectedNodeId! }),
         "success",
@@ -739,6 +765,7 @@ export default function App() {
         chunk_id: chunkId,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
       setConsoleMessage(
         cited
           ? t("messages.draftedUncitation", { nodeId: contextNodeId })
@@ -752,11 +779,12 @@ export default function App() {
 
   function clearPatchEditor() {
     setPatchEditor("");
+    setPatchDraftOrigin(null);
     setShowAdvancedPatchEditor(false);
     setConsoleMessage(t("messages.patchEditorCleared"), "success");
   }
 
-  async function loadAiRunPatch(runId: string) {
+  async function loadAiRunPatch(run: AiRunRecord) {
     if (!ensureWorkspace()) {
       return;
     }
@@ -765,13 +793,31 @@ export default function App() {
       setShowAdvancedPatchEditor(false);
       const patch = await invokeCommand<PatchDocument>("get_ai_run_patch", {
         start_path: workspacePath,
-        run_id: runId,
+        run_id: run.id,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
-      setConsoleMessage(t("messages.loadedAiRunPatch", { runId }), "success");
+      setPatchDraftOrigin(aiRunRecordToDraftOrigin(run));
+      setConsoleMessage(t("messages.loadedAiRunPatch", { runId: run.id }), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
     }
+  }
+
+  function showCurrentDraftOrigin() {
+    if (!patchDraftOrigin) {
+      return;
+    }
+
+    const traceRun = selectedNodeAiRuns.find((run) => run.id === patchDraftOrigin.run_id);
+    if (traceRun) {
+      setConsoleMessage(renderAiRunTrace(traceRun, t), "success");
+      return;
+    }
+
+    setConsoleMessage(
+      t("messages.patchDraftOriginTraceUnavailable", { runId: patchDraftOrigin.run_id }),
+      "error",
+    );
   }
 
   return (
@@ -795,6 +841,7 @@ export default function App() {
             hasWorkspace
             selectedNodeDetail={selectedNodeDetail}
             selectedNodeAiRuns={selectedNodeAiRuns}
+            patchDraftOrigin={patchDraftOrigin}
             selectedSourceDetail={selectedSourceDetail}
             contextNodeId={contextNodeId}
             contextSourceId={contextSourceId}
@@ -812,7 +859,31 @@ export default function App() {
               void fetchSourceDetail(sourceId);
             }}
             onLoadAiRunPatch={(runId) => {
-              void loadAiRunPatch(runId);
+              const run = selectedNodeAiRuns.find((entry) => entry.id === runId);
+              if (!run) {
+                setConsoleMessage(t("messages.patchDraftOriginTraceUnavailable", { runId }), "error");
+                return;
+              }
+              void loadAiRunPatch(run);
+            }}
+            onShowAiRunTrace={(run) => {
+              setConsoleMessage(
+                renderAiRunTrace(run, t),
+                run.status === "failed" ? "error" : "success",
+              );
+            }}
+            onShowAiRunArtifact={(runId, kind) => {
+              void invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+                start_path: workspacePath,
+                run_id: runId,
+                kind,
+              })
+                .then((artifact) => {
+                  setConsoleMessage(renderAiRunArtifact(artifact, t), "success");
+                })
+                .catch((error) => {
+                  setConsoleMessage(formatError(error), "error");
+                });
             }}
             onDraftCiteChunk={(chunkId) => {
               void draftSourceChunkCitation(chunkId, false);
@@ -823,6 +894,7 @@ export default function App() {
           />
           <EditorPane
             hasWorkspace
+            desktopAiStatus={desktopAiStatus}
             selectedNodeDetail={selectedNodeDetail}
             updateNodeTitle={updateNodeTitle}
             updateNodeKind={updateNodeKind}
@@ -833,6 +905,7 @@ export default function App() {
             moveNodeParent={moveNodeParent}
             moveParentOptions={moveParentOptions}
             patchEditor={patchEditor}
+            patchDraftOrigin={patchDraftOrigin}
             showAdvancedPatchEditor={showAdvancedPatchEditor}
             canRunStructureActions={canRunStructureActions}
             patchDraftState={patchDraftState}
@@ -873,6 +946,7 @@ export default function App() {
             onApplyPatch={() => {
               void applyPatch();
             }}
+            onShowDraftOrigin={showCurrentDraftOrigin}
           />
         </main>
       ) : (
@@ -890,4 +964,30 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function aiMetadataToDraftOrigin(
+  result: ExternalRunnerReport,
+): PatchDraftOrigin {
+  return {
+    kind: "ai_run",
+    run_id: result.metadata.run_id,
+    capability: result.metadata.capability,
+    explore_by: result.metadata.explore_by,
+    provider: result.metadata.provider,
+    model: result.metadata.model,
+    patch_run_id: result.metadata.patch_run_id,
+  };
+}
+
+function aiRunRecordToDraftOrigin(run: AiRunRecord): PatchDraftOrigin {
+  return {
+    kind: "ai_run",
+    run_id: run.id,
+    capability: run.capability,
+    explore_by: run.explore_by,
+    provider: run.provider,
+    model: run.model,
+    patch_run_id: run.patch_run_id,
+  };
 }

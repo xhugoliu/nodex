@@ -85,6 +85,7 @@ AI request / response 编排层。
 - 定义稳定的 request / response contract，供未来 runtime 对接
 - 提供 external runner bridge，把 request / response 文件交给本地命令处理
 - 当前共享内核不直接内置 provider SDK，但已经支持通过 external runner 间接接入真实模型
+- 桌面 draft 默认通过统一 `provider_runner.py` 调度 `codex`，仍可用 `NODEX_DESKTOP_AI_COMMAND` 显式覆盖
 
 ### `src/project.rs`
 
@@ -123,6 +124,10 @@ AI request / response 编排层。
   - 历史 patch 载入
   - 语言切换
 - 也负责为桌面前端暴露 AI expand / explore dry-run draft 入口
+- 也负责为桌面前端暴露 AI run 相关读取入口：
+  - 最近运行记录
+  - patch 草案回放
+  - request / response / metadata 工件查看
 - 把菜单动作和工作区状态变化通过事件发回前端
 
 ### `desktop/src`
@@ -138,7 +143,8 @@ AI request / response 编排层。
   - 右栏：统一节点编辑器与 patch 编辑器
 - 负责把节点编辑动作起草为 patch
 - 负责把 AI expand / explore 结果作为 patch 草案载入编辑器
-- 负责在节点详情里展示当前节点最近的 AI 运行记录
+- 负责在 patch 编辑器里展示当前草案是否来自某次 AI run
+- 负责在节点详情里展示当前节点最近的 AI 运行记录、trace 和工件查看入口
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里

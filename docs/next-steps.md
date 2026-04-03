@@ -19,8 +19,8 @@
 ## 使用方式
 
 - 每次开启新对话，先读这份文档，再读本次要改动对应的专项文档
-- 每完成一个小步，就更新这份文档里的状态、顺序或阻塞点
-- 这里优先记录“下一步做什么”，不要把已经落地的实现细节无限堆回这里
+- 只有当短期优先级、阻塞点或下一步切口发生变化时，才重写这份文档
+- 这里优先记录“现在该做什么”，不要按对话轮次追加已完成事项
 - 如果某项已经不再是短期重点，就从这里移走，保留到 `docs/roadmap.md`
 
 ## 当前主路径
@@ -31,14 +31,15 @@
 
 短期内，判断优先级时优先看这条路径是否更顺，而不是入口是否更多、界面是否更大。
 
-## 当前基线
+## 当前判断
 
-下面这些能力已经有最小落地，后续以 `docs/cli.md` 和相关专项文档为准，这里不再展开重复：
+当前已经不再缺“能力是否存在”，而是缺“主路径是否足够顺手、默认路径是否足够清楚”。
 
-- `ai expand` 可解释化最小闭环
-- `ai explore` 最小 CLI / external runner / desktop draft 入口
-- evidence 最小语义：citation rationale + `direct` / `inferred`
-- AI 运行历史最小索引：`ai_runs` + `nodex ai history`
+因此这里不再逐条复述已完成项；已落地能力请以这些文档为准：
+
+- `docs/cli.md`
+- `docs/architecture.md`
+- `README.md`
 
 ## 当前执行顺序
 
@@ -49,34 +50,20 @@
 目标：
 
 - 不再停留在“桥接能力已存在但用户感知不强”的状态
-- 把现有 external runner + 最小 OpenAI runner 做成清晰可用的真实运行路径
+- 把现有 external runner 路径做成默认可理解、默认可排查、默认可回看的真实运行路径
 - 保持 external runner 边界，不急着把 provider SDK 写进 Rust 内核
-
-当前基础：
-
-- 真实 OpenAI provider 已可通过 `ai run-external` 和桌面 draft 入口跑通
-- 已有 request / response contract、解释层、evidence 最小语义、运行审计和 `ai_runs` 索引
-- 已新增可复用本机 `codex login` / `~/.codex/config.toml` 的 `scripts/codex_runner.py`
-- 已新增 `scripts/codex_doctor.py`，可排查 Codex live config 与 `OPENAI_*` 环境变量冲突
-- 已开始抽离 shared provider runtime / codex context，避免后续 runner 再重复实现 env 冲突、backoff 和 live config 发现逻辑
-- 已为 OpenAI 路径补上第二个最小 skeleton：`openai_context.py` / `openai_doctor.py`
-- 已为 Gemini 路径补上第三个最小 skeleton：`gemini_context.py` / `gemini_doctor.py`
-- 已新增统一入口 `provider_doctor.py`，可聚合查看 Codex / OpenAI / Gemini 三条线的本地诊断结果
-- 已新增 `provider_runner.py` 作为统一 runner 入口的最小壳，先收口 `openai` / `codex`
-- 已将 Gemini 从 diagnostics-only 推进到最小 runnable provider：`scripts/gemini_runner.py`
-- 已新增 `provider_smoke.py`，可在临时工作区里统一跑 provider smoke
-- 已为 provider 工具链补上最小离线回归测试，覆盖 registry / doctor / smoke 列表等关键路径
-- 已将 request contract / response schema / runner error 基础能力抽到共享模块，避免其他 provider 继续依赖 `openai_runner.py`
-- 已把统一诊断与 smoke 能力接入 Rust CLI：`nodex ai doctor` / `nodex ai smoke`
 
 下一轮最小切口：
 
 - 把 Codex 这条调试链路继续压实成默认可用路径：
-  - 固定一条稳定的 `plain + low + retries` smoke 命令
   - 让一次 Codex draft 的 request / response / patch / 最终 apply 状态更容易串起来看
   - 把 relay `502`、schema 输出不稳定、环境变量覆盖这三类问题区分清楚
-- 让当前 provider 是否已配置、正在使用哪个 runner / model 更可见
-- 让失败原因和下一步动作更清楚，而不是只暴露底层错误
+- 继续收口“默认路径”：
+  - 优先让桌面和 CLI 都更少依赖手写命令
+  - 优先让用户看到当前 provider / runner / model / mode，而不是去猜
+- 继续收口“排查动作”：
+  - 让失败提示直接链接到更可执行的下一步
+  - 让 request / response / metadata / patch run 之间的关系更少靠人工拼接
 
 短期只关心这条流程是否顺手：
 
@@ -105,6 +92,7 @@
 
 - 当前节点上下文在 draft / apply / refresh 之后保持稳定
 - 节点详情里的最近 AI 运行记录、patch 编辑器和 apply 结果之间切换更自然
+- AI run 相关信息优先在现有详情区和控制台里收口，不急着另起重型调试面板
 
 ### 3. 再补来源能力
 
@@ -132,24 +120,15 @@
   - 把环境变量冲突当作显式诊断项
   - 把不同 provider 的 URL / auth / config 语义拆成独立适配层
 
-下一轮最小切口：
+进入这个阶段时，优先看这几个问题：
 
-- 抽一层 shared provider diagnostics / config context，避免 `codex_runner.py` 变成孤例
-- 至少再让一个非 Codex provider 落到同一套结构上，验证抽象不是假抽象
-- 下一步优先考虑把第三条线从“doctor/context”推进到“最小 runnable provider”
-- 同时继续收敛操作面，优先从多个 provider-specific 脚本收敛到更少的统一入口
-- 后续可以考虑让 `provider_runner.py` 直接承接默认 smoke 命令，逐步替代手写具体脚本路径
-- Gemini runnable 路径落地后，下一轮更适合补共享测试样例或统一 runner mode 能力，而不是继续加第四条线
-- 统一 smoke 入口落地后，下一轮更适合补共享测试样例或统一 runner mode 能力，而不是继续加第四条线
-- 约定 future runners 至少统一这些能力：
+- 当前 provider 抽象是否已经能覆盖默认路径，而不是只覆盖脚本层
+- `provider_runner.py` 是否已经足够承担统一入口，而不是继续叠 provider-specific 调用样式
+- future runners 是否至少统一这些能力：
   - provider config 发现
   - auth/source 诊断
   - transient error 分类与重试
   - runner mode（schema / plain / fallback）
-- 文档上明确区分：
-  - 真实调试主路
-  - provider-specific workaround
-  - 长期可复用抽象
 
 ### 4. 最后再做更完整的脑图 GUI
 
@@ -169,11 +148,10 @@
 - 把 evidence 语义一次性做成很重的文献系统
 - 为未来能力提前铺太多空壳结构
 
-## 交接时建议补充的信息
+## 更新要求
 
-如果某次开发完成或中断，最好顺手把这些信息写回这份文档：
+后续更新这份文档时：
 
-- 当前做到第几项
-- 本轮实际改了什么
-- 哪个点还卡住
-- 下一轮最小可继续的切口是什么
+- 直接重写“当前优先级”“当前最小切口”“当前阻塞点”
+- 不记录按轮次累积的完成项
+- 不把它写成开发日报或提交摘要

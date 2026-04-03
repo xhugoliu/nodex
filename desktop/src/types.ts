@@ -102,6 +102,36 @@ export interface AiRunRecord {
   patch_summary: string | null;
 }
 
+export interface AiRunArtifact {
+  kind: string;
+  path: string;
+  content: string;
+}
+
+export interface PatchDraftOrigin {
+  kind: "ai_run";
+  run_id: string;
+  capability: string;
+  explore_by: string | null;
+  provider: string | null;
+  model: string | null;
+  patch_run_id: string | null;
+}
+
+export interface DesktopAiStatus {
+  command: string;
+  command_source: string;
+  provider: string | null;
+  runner: string;
+  model: string | null;
+  reasoning_effort: string | null;
+  has_auth: boolean | null;
+  has_process_env_conflict: boolean | null;
+  has_shell_env_conflict: boolean | null;
+  uses_provider_defaults: boolean;
+  status_error: string | null;
+}
+
 export interface ExternalRunnerReport {
   request_path: string;
   response_path: string;

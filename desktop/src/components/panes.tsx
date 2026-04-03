@@ -1,13 +1,18 @@
 import {
+  buildAiDraftNextSteps,
   describePatchOperation,
+  formatPatchDraftOriginMeta,
+  formatPatchDraftOriginTitle,
   type ConsoleTone,
   type PatchDraftState,
   type Translator,
 } from "../app-helpers";
 import type {
   AiRunRecord,
+  DesktopAiStatus,
   NodeDetail,
   ParentCandidate,
+  PatchDraftOrigin,
   SourceDetail,
   TreeNode,
   WorkspaceOverview,
@@ -22,6 +27,7 @@ import {
   inputClass,
   LabeledField,
   panelClass,
+  PatchDraftBanner,
   patchTextareaClass,
   primaryButtonClass,
   SectionHeader,
@@ -136,6 +142,7 @@ export function InspectorPane(props: {
   hasWorkspace: boolean;
   selectedNodeDetail: NodeDetail | null;
   selectedNodeAiRuns: AiRunRecord[];
+  patchDraftOrigin: PatchDraftOrigin | null;
   selectedSourceDetail: SourceDetail | null;
   contextNodeId: string | null;
   contextSourceId: string | null;
@@ -147,6 +154,8 @@ export function InspectorPane(props: {
   onSelectNode: (nodeId: string) => void;
   onSelectSource: (sourceId: string) => void;
   onLoadAiRunPatch: (runId: string) => void;
+  onShowAiRunTrace: (run: AiRunRecord) => void;
+  onShowAiRunArtifact: (runId: string, kind: "request" | "response" | "metadata") => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
 }) {
@@ -168,10 +177,13 @@ export function InspectorPane(props: {
             <CompactNodeDetail
               detail={props.selectedNodeDetail}
               aiRuns={props.selectedNodeAiRuns}
+              patchDraftOrigin={props.patchDraftOrigin}
               contextSourceId={props.contextSourceId}
               t={props.t}
               onSelectSource={props.onSelectSource}
               onLoadAiRunPatch={props.onLoadAiRunPatch}
+              onShowAiRunTrace={props.onShowAiRunTrace}
+              onShowAiRunArtifact={props.onShowAiRunArtifact}
             />
           ) : props.selectedSourceDetail ? (
             <CompactSourceDetail
@@ -248,6 +260,7 @@ export function InspectorPane(props: {
 
 export function EditorPane(props: {
   hasWorkspace: boolean;
+  desktopAiStatus: DesktopAiStatus | null;
   selectedNodeDetail: NodeDetail | null;
   updateNodeTitle: string;
   updateNodeKind: string;
@@ -258,6 +271,7 @@ export function EditorPane(props: {
   moveNodeParent: string;
   moveParentOptions: ParentCandidate[];
   patchEditor: string;
+  patchDraftOrigin: PatchDraftOrigin | null;
   showAdvancedPatchEditor: boolean;
   canRunStructureActions: boolean;
   patchDraftState: PatchDraftState;
@@ -280,6 +294,7 @@ export function EditorPane(props: {
   onDraftDelete: () => void;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
+  onShowDraftOrigin: () => void;
 }) {
   const draftLines =
     props.patchDraftState.state === "ready"
@@ -302,8 +317,13 @@ export function EditorPane(props: {
 
       <div className={`${cardClass} flex min-h-0 flex-1 flex-col`}>
         <CardHeader title={props.t("nodeEditing.title")} />
-        {props.selectedNodeDetail ? (
-          <>
+        <div className="space-y-5">
+          {props.desktopAiStatus ? (
+            <AiDraftStatusCard status={props.desktopAiStatus} t={props.t} />
+          ) : null}
+
+          {props.selectedNodeDetail ? (
+            <>
             <div className="mb-4 flex items-center justify-between gap-3 border-b border-[color:var(--line-soft)] pb-4">
               <div className="flex min-w-0 items-center gap-2">
                 <div className="truncate text-sm font-semibold text-[color:var(--text)]">
@@ -510,21 +530,22 @@ export function EditorPane(props: {
                 </section>
               ) : null}
             </div>
-          </>
-        ) : (
-          <EmptyState
-            title={props.t(
-              props.hasWorkspace
-                ? "nodeEditing.emptyMeta"
-                : "nodeEditing.workspaceEmptyMeta",
-            )}
-            body={props.t(
-              props.hasWorkspace
-                ? "nodeEditing.emptyBody"
-                : "nodeEditing.workspaceEmptyBody",
-            )}
-          />
-        )}
+            </>
+          ) : (
+            <EmptyState
+              title={props.t(
+                props.hasWorkspace
+                  ? "nodeEditing.emptyMeta"
+                  : "nodeEditing.workspaceEmptyMeta",
+              )}
+              body={props.t(
+                props.hasWorkspace
+                  ? "nodeEditing.emptyBody"
+                  : "nodeEditing.workspaceEmptyBody",
+              )}
+            />
+          )}
+        </div>
 
         <div className="mt-5 border-t border-[color:var(--line-soft)] pt-5">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -554,6 +575,19 @@ export function EditorPane(props: {
               ) : null}
             </div>
           </div>
+
+          {props.patchDraftOrigin ? (
+            <div className="mb-4">
+              <PatchDraftBanner
+                title={formatPatchDraftOriginTitle(props.patchDraftOrigin, props.t)}
+                meta={formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)}
+                ops={props.patchDraftState.opTypes}
+                onOpen={props.onShowDraftOrigin}
+                openLabel={props.t("composer.showOriginTrace")}
+                tone="neutral"
+              />
+            </div>
+          ) : null}
 
           {props.patchDraftState.state === "ready" ? (
             <div className="rounded-2xl border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] p-4">
@@ -630,6 +664,152 @@ export function EditorPane(props: {
         </div>
       </div>
     </section>
+  );
+}
+
+function AiDraftStatusCard(props: {
+  status: DesktopAiStatus;
+  t: Translator;
+}) {
+  const nextSteps = buildAiDraftNextSteps(props.status, props.t);
+  const toneClass =
+    props.status.status_error || props.status.has_auth === false
+      ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.08)]"
+      : "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)]";
+  const sourceLabel =
+    props.status.command_source === "override"
+      ? props.t("nodeEditing.aiDraftSourceOverride")
+      : props.t("nodeEditing.aiDraftSourceDefault");
+  const authLabel =
+    props.status.has_auth === true
+      ? props.t("nodeEditing.aiDraftAuthReady")
+      : props.status.has_auth === false
+        ? props.t("nodeEditing.aiDraftAuthMissing")
+        : props.t("nodeEditing.aiDraftUnknown");
+  const processEnvLabel =
+    props.status.has_process_env_conflict === true
+      ? props.t("nodeEditing.aiDraftEnvDetected")
+      : props.status.has_process_env_conflict === false
+        ? props.t("nodeEditing.aiDraftEnvClean")
+        : props.t("nodeEditing.aiDraftUnknown");
+  const shellEnvLabel =
+    props.status.has_shell_env_conflict === true
+      ? props.t("nodeEditing.aiDraftEnvDetected")
+      : props.status.has_shell_env_conflict === false
+        ? props.t("nodeEditing.aiDraftEnvClean")
+        : props.t("nodeEditing.aiDraftUnknown");
+
+  return (
+    <section className={`rounded-xl border px-4 py-4 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("nodeEditing.aiDraftRoute")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--text)]">
+            {props.t("nodeEditing.aiDraftRouteMeta")}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+            {sourceLabel}
+          </span>
+          {props.status.uses_provider_defaults ? (
+            <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+              {props.t("nodeEditing.aiDraftUsesProviderDefaults")}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <StatusField
+          label={props.t("nodeEditing.aiDraftProvider")}
+          value={props.status.provider || props.t("nodeEditing.aiDraftUnknown")}
+        />
+        <StatusField
+          label={props.t("nodeEditing.aiDraftRunner")}
+          value={
+            props.status.runner === "custom"
+              ? props.t("nodeEditing.aiDraftCustomRunner")
+              : props.status.runner
+          }
+        />
+        <StatusField
+          label={props.t("nodeEditing.aiDraftModel")}
+          value={props.status.model || props.t("nodeEditing.aiDraftUnknown")}
+        />
+        <StatusField
+          label={props.t("nodeEditing.aiDraftReasoning")}
+          value={
+            props.status.reasoning_effort || props.t("nodeEditing.aiDraftUnknown")
+          }
+        />
+        <StatusField
+          label={props.t("nodeEditing.aiDraftAuth")}
+          value={authLabel}
+        />
+        <StatusField
+          label={props.t("nodeEditing.aiDraftProcessEnv")}
+          value={processEnvLabel}
+        />
+        <StatusField
+          label={props.t("nodeEditing.aiDraftShellEnv")}
+          value={shellEnvLabel}
+        />
+      </div>
+
+      <div className="mt-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("nodeEditing.aiDraftCommand")}
+        </div>
+        <div className="mt-2 break-all rounded-xl border border-[color:var(--line)] bg-white/85 px-3 py-2 text-xs leading-6 text-[color:var(--text)]">
+          {props.status.command || props.t("nodeEditing.aiDraftUnknown")}
+        </div>
+      </div>
+
+      {nextSteps.length ? (
+        <div className="mt-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("nodeEditing.aiDraftNextTitle")}
+          </div>
+          <div className="mt-2 space-y-2">
+            {nextSteps.map((step) => (
+              <div
+                key={step}
+                className="rounded-xl border border-[color:var(--line)] bg-white/85 px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+              >
+                {step}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {props.status.status_error ? (
+        <div className="mt-4 rounded-xl border border-[rgba(180,35,24,0.18)] bg-white/70 px-3 py-2 text-sm leading-6 text-[color:var(--danger)]">
+          <div className="font-medium text-[color:var(--text)]">
+            {props.t("nodeEditing.aiDraftStatusCheck")}
+          </div>
+          <div className="mt-1 whitespace-pre-wrap">
+            {props.status.status_error}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function StatusField(props: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[color:var(--line-soft)] bg-white/70 px-3 py-2">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+        {props.label}
+      </div>
+      <div className="mt-1 text-sm leading-6 text-[color:var(--text)]">
+        {props.value}
+      </div>
+    </div>
   );
 }
 
@@ -763,10 +943,13 @@ function summarizeChunkLabels(
 function CompactNodeDetail(props: {
   detail: NodeDetail;
   aiRuns: AiRunRecord[];
+  patchDraftOrigin: PatchDraftOrigin | null;
   contextSourceId: string | null;
   t: Translator;
   onSelectSource: (sourceId: string) => void;
   onLoadAiRunPatch: (runId: string) => void;
+  onShowAiRunTrace: (run: AiRunRecord) => void;
+  onShowAiRunArtifact: (runId: string, kind: "request" | "response" | "metadata") => void;
 }) {
   const showKindBadge = props.detail.node.kind !== "topic";
   const childrenSummary = props.detail.children.length
@@ -933,10 +1116,19 @@ function CompactNodeDetail(props: {
         </div>
         {props.aiRuns.length ? (
           <div className="space-y-2">
-            {props.aiRuns.slice(0, 5).map((run) => (
+            {props.aiRuns.slice(0, 5).map((run) => {
+              const isCurrentDraft = props.patchDraftOrigin?.run_id === run.id;
+              const hasAppliedPatch = Boolean(run.patch_run_id);
+
+              return (
               <div
                 key={run.id}
-                className="rounded-xl border border-[color:var(--line)] bg-white/80 px-3 py-3"
+                className={[
+                  "rounded-xl border bg-white/80 px-3 py-3",
+                  isCurrentDraft
+                    ? "border-[rgba(17,24,39,0.18)] shadow-[0_6px_18px_rgba(15,23,42,0.05)]"
+                    : "border-[color:var(--line)]",
+                ].join(" ")}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -948,6 +1140,16 @@ function CompactNodeDetail(props: {
                       <span className="rounded-full border border-[color:var(--line-soft)] bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
                         {run.status}
                       </span>
+                      {isCurrentDraft ? (
+                        <span className="rounded-full border border-[rgba(17,24,39,0.18)] bg-[rgba(17,24,39,0.06)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--accent)]">
+                          {props.t("detail.currentDraft")}
+                        </span>
+                      ) : null}
+                      {hasAppliedPatch ? (
+                        <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--text)]">
+                          {props.t("detail.appliedPatch")}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-1 text-xs text-[color:var(--muted)]">
                       {formatTimestamp(run.started_at)}
@@ -968,18 +1170,46 @@ function CompactNodeDetail(props: {
                         ? props.t("detail.aiRunDryRun")
                         : props.t("detail.aiRunApplied")}
                     </div>
+                    <button
+                      className={ghostButtonClass}
+                      onClick={() => props.onShowAiRunTrace(run)}
+                    >
+                      {props.t("detail.showAiRunTrace")}
+                    </button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        className={ghostButtonClass}
+                        onClick={() => props.onShowAiRunArtifact(run.id, "request")}
+                      >
+                        {props.t("detail.showAiRunRequest")}
+                      </button>
+                      <button
+                        className={ghostButtonClass}
+                        onClick={() => props.onShowAiRunArtifact(run.id, "response")}
+                      >
+                        {props.t("detail.showAiRunResponse")}
+                      </button>
+                      <button
+                        className={ghostButtonClass}
+                        onClick={() => props.onShowAiRunArtifact(run.id, "metadata")}
+                      >
+                        {props.t("detail.showAiRunMetadata")}
+                      </button>
+                    </div>
                     {run.status !== "failed" ? (
                       <button
                         className={ghostButtonClass}
                         onClick={() => props.onLoadAiRunPatch(run.id)}
                       >
-                        {props.t("detail.loadAiRunPatch")}
+                        {hasAppliedPatch
+                          ? props.t("detail.loadAppliedPatch")
+                          : props.t("detail.loadAiRunPatch")}
                       </button>
                     ) : null}
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         ) : (
           <div className="text-sm leading-6 text-[color:var(--muted)]">

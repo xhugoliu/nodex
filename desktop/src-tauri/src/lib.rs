@@ -1,4 +1,8 @@
-use std::{path::Path, sync::Mutex};
+use std::{
+    path::{Path, PathBuf},
+    process::{Command as ProcessCommand, Stdio},
+    sync::Mutex,
+};
 
 use anyhow::{Context, Result};
 use nodex::{
@@ -57,6 +61,37 @@ struct PatchEditorPayload {
 #[derive(Debug, Serialize, Clone)]
 struct LanguagePayload {
     preference: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct AiRunArtifact {
+    kind: String,
+    path: String,
+    content: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct DesktopAiStatus {
+    command: String,
+    command_source: String,
+    provider: Option<String>,
+    runner: String,
+    model: Option<String>,
+    reasoning_effort: Option<String>,
+    has_auth: Option<bool>,
+    has_process_env_conflict: Option<bool>,
+    has_shell_env_conflict: Option<bool>,
+    uses_provider_defaults: bool,
+    status_error: Option<String>,
+}
+
+#[derive(Debug)]
+struct ProviderDoctorSummary {
+    model: Option<String>,
+    reasoning_effort: Option<String>,
+    has_auth: bool,
+    has_process_env_conflict: bool,
+    has_shell_env_conflict: bool,
 }
 
 const EVENT_CONSOLE: &str = "desktop://console";
@@ -394,28 +429,216 @@ fn draft_ai_patch(
             &command,
             true,
         ),
-        _ => Err(anyhow::anyhow!("unsupported desktop AI capability `{capability}`")),
+        _ => Err(anyhow::anyhow!(
+            "unsupported desktop AI capability `{capability}`"
+        )),
     }
     .map(normalize_external_runner_report)
     .map_err(|err| err.to_string())?;
     Ok(report)
 }
 
+fn desktop_ai_runner_override_command() -> Option<String> {
+    std::env::var("NODEX_DESKTOP_AI_COMMAND")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn desktop_ai_runner_command_source() -> &'static str {
+    if desktop_ai_runner_override_command().is_some() {
+        "override"
+    } else {
+        "default"
+    }
+}
+
 fn desktop_ai_runner_command() -> Result<String> {
-    if let Ok(command) = std::env::var("NODEX_DESKTOP_AI_COMMAND")
-        && !command.trim().is_empty()
-    {
+    if let Some(command) = desktop_ai_runner_override_command() {
         return Ok(command);
     }
 
     let runner_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scripts/openai_runner.py")
+        .join("../../scripts/provider_runner.py")
         .canonicalize()
-        .context("failed to resolve scripts/openai_runner.py for desktop AI expand")?;
-    Ok(format!(
-        "python3 {}",
-        shell_quote(&display_path(runner_path.as_path()))
-    ))
+        .context("failed to resolve scripts/provider_runner.py for desktop AI expand")?;
+    Ok(desktop_default_ai_runner_command(runner_path.as_path()))
+}
+
+fn desktop_default_ai_runner_command(script_path: &Path) -> String {
+    format!(
+        "python3 {} --provider codex --use-default-args",
+        shell_quote(&display_path(script_path))
+    )
+}
+
+fn provider_script_path(script_name: &str) -> Result<PathBuf> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts")
+        .join(script_name);
+    if !path.exists() {
+        anyhow::bail!("provider script {} was not found", path.display());
+    }
+    Ok(path)
+}
+
+fn run_provider_doctor(provider: &str) -> Result<ProviderDoctorSummary> {
+    let output = ProcessCommand::new("python3")
+        .arg(provider_script_path("provider_doctor.py")?)
+        .args(["--provider", provider, "--json"])
+        .stdin(Stdio::null())
+        .output()
+        .context("failed to run provider doctor")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            format!(
+                "provider doctor exited with status {}",
+                output.status.code().unwrap_or(-1)
+            )
+        };
+        anyhow::bail!("{detail}");
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    parse_provider_doctor_summary(provider, &stdout)
+}
+
+fn parse_provider_doctor_summary(provider: &str, json_text: &str) -> Result<ProviderDoctorSummary> {
+    let root: serde_json::Value =
+        serde_json::from_str(json_text).context("provider doctor did not return valid JSON")?;
+    let provider_payload = root
+        .get(provider)
+        .and_then(|value| value.as_object())
+        .with_context(|| format!("provider doctor JSON did not include `{provider}` payload"))?;
+    let summary = provider_payload
+        .get("summary")
+        .and_then(|value| value.as_object())
+        .context("provider doctor JSON did not include a summary object")?;
+
+    Ok(ProviderDoctorSummary {
+        model: provider_payload
+            .get("model")
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned),
+        reasoning_effort: provider_payload
+            .get("reasoning_effort")
+            .and_then(|value| value.as_str())
+            .map(ToOwned::to_owned),
+        has_auth: summary
+            .get("has_auth")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+        has_process_env_conflict: summary
+            .get("has_process_env_conflict")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+        has_shell_env_conflict: summary
+            .get("has_shell_env_conflict")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false),
+    })
+}
+
+fn detected_provider_from_command(command: &str) -> Option<&'static str> {
+    if command.contains("--provider codex")
+        || command.contains("--provider=codex")
+        || command.contains("codex_runner.py")
+    {
+        Some("codex")
+    } else if command.contains("--provider openai")
+        || command.contains("--provider=openai")
+        || command.contains("openai_runner.py")
+    {
+        Some("openai")
+    } else if command.contains("--provider gemini")
+        || command.contains("--provider=gemini")
+        || command.contains("gemini_runner.py")
+    {
+        Some("gemini")
+    } else {
+        None
+    }
+}
+
+fn detected_runner_from_command(command: &str) -> &'static str {
+    if command.contains("provider_runner.py") {
+        "provider_runner.py"
+    } else if command.contains("codex_runner.py") {
+        "codex_runner.py"
+    } else if command.contains("openai_runner.py") {
+        "openai_runner.py"
+    } else if command.contains("gemini_runner.py") {
+        "gemini_runner.py"
+    } else {
+        "custom"
+    }
+}
+
+fn desktop_ai_status() -> DesktopAiStatus {
+    let command_source = desktop_ai_runner_command_source().to_string();
+    let command = match desktop_ai_runner_command() {
+        Ok(command) => command,
+        Err(err) => {
+            return DesktopAiStatus {
+                command: String::new(),
+                command_source,
+                provider: None,
+                runner: "unavailable".to_string(),
+                model: None,
+                reasoning_effort: None,
+                has_auth: None,
+                has_process_env_conflict: None,
+                has_shell_env_conflict: None,
+                uses_provider_defaults: false,
+                status_error: Some(err.to_string()),
+            };
+        }
+    };
+
+    let provider = detected_provider_from_command(&command).map(ToOwned::to_owned);
+    let mut status = DesktopAiStatus {
+        command: command.clone(),
+        command_source: command_source.clone(),
+        provider: provider.clone(),
+        runner: detected_runner_from_command(&command).to_string(),
+        model: None,
+        reasoning_effort: None,
+        has_auth: None,
+        has_process_env_conflict: None,
+        has_shell_env_conflict: None,
+        uses_provider_defaults: command.contains("--use-default-args"),
+        status_error: None,
+    };
+
+    match provider {
+        Some(provider_name) => match run_provider_doctor(&provider_name) {
+            Ok(summary) => {
+                status.model = summary.model;
+                status.reasoning_effort = summary.reasoning_effort;
+                status.has_auth = Some(summary.has_auth);
+                status.has_process_env_conflict = Some(summary.has_process_env_conflict);
+                status.has_shell_env_conflict = Some(summary.has_shell_env_conflict);
+            }
+            Err(err) => {
+                status.status_error = Some(err.to_string());
+            }
+        },
+        None if command_source == "override" => {
+            status.status_error = Some(
+                "NODEX_DESKTOP_AI_COMMAND does not map to a known provider runner.".to_string(),
+            );
+        }
+        None => {}
+    }
+
+    status
 }
 
 fn shell_quote(value: &str) -> String {
@@ -745,7 +968,10 @@ fn get_source_detail(start_path: String, source_id: String) -> Result<SourceDeta
 }
 
 #[command]
-fn get_ai_run_history(start_path: String, node_id: Option<String>) -> Result<Vec<AiRunRecord>, String> {
+fn get_ai_run_history(
+    start_path: String,
+    node_id: Option<String>,
+) -> Result<Vec<AiRunRecord>, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     workspace
         .ai_run_history(node_id.as_deref())
@@ -774,6 +1000,48 @@ fn get_ai_run_patch(start_path: String, run_id: String) -> Result<PatchDocument,
         .with_context(|| format!("failed to parse {}", record.response_path))
         .map_err(|err| err.to_string())?;
     Ok(response.patch)
+}
+
+#[command]
+fn get_ai_run_artifact(
+    start_path: String,
+    run_id: String,
+    kind: String,
+) -> Result<AiRunArtifact, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    let record = workspace
+        .ai_run_record_by_id(&run_id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| format!("AI run {run_id} was not found"))?;
+
+    let artifact_path = match kind.as_str() {
+        "request" => record.request_path.clone(),
+        "response" => record.response_path.clone(),
+        "metadata" => record
+            .response_path
+            .strip_suffix(".response.json")
+            .map(|value| format!("{value}.meta.json"))
+            .ok_or_else(|| format!("AI run {} has no derived metadata path", record.id))?,
+        other => return Err(format!("unsupported AI run artifact kind `{other}`")),
+    };
+
+    let raw = std::fs::read_to_string(&artifact_path)
+        .with_context(|| format!("failed to read {}", artifact_path))
+        .map_err(|err| err.to_string())?;
+    let content = serde_json::from_str::<serde_json::Value>(&raw)
+        .and_then(|value| serde_json::to_string_pretty(&value))
+        .unwrap_or(raw);
+
+    Ok(AiRunArtifact {
+        kind,
+        path: display_path_text(&artifact_path),
+        content,
+    })
+}
+
+#[command]
+fn get_desktop_ai_status() -> DesktopAiStatus {
+    desktop_ai_status()
 }
 
 #[command]
@@ -948,7 +1216,9 @@ pub fn run() {
             draft_update_node_patch,
             get_node_detail,
             get_ai_run_history,
+            get_ai_run_artifact,
             get_ai_run_patch,
+            get_desktop_ai_status,
             get_patch_document,
             get_source_detail,
             import_source,
@@ -967,7 +1237,66 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use super::{
+        desktop_default_ai_runner_command, detected_provider_from_command,
+        parse_provider_doctor_summary,
+    };
+
+    #[cfg(windows)]
     use super::display_path_text;
+
+    #[test]
+    fn desktop_default_ai_runner_uses_provider_entry_defaults() {
+        let command = desktop_default_ai_runner_command(Path::new("/tmp/provider_runner.py"));
+        assert_eq!(
+            command,
+            "python3 '/tmp/provider_runner.py' --provider codex --use-default-args"
+        );
+    }
+
+    #[test]
+    fn detects_provider_from_supported_runner_commands() {
+        assert_eq!(
+            detected_provider_from_command(
+                "python3 '/tmp/provider_runner.py' --provider codex --use-default-args"
+            ),
+            Some("codex")
+        );
+        assert_eq!(
+            detected_provider_from_command("python3 scripts/openai_runner.py"),
+            Some("openai")
+        );
+        assert_eq!(detected_provider_from_command("bash ./custom.sh"), None);
+    }
+
+    #[test]
+    fn parses_provider_doctor_summary_from_json_payload() {
+        let summary = parse_provider_doctor_summary(
+            "codex",
+            r#"{
+              "codex": {
+                "summary": {
+                  "provider": "codex",
+                  "runnable": true,
+                  "has_auth": true,
+                  "has_process_env_conflict": false,
+                  "has_shell_env_conflict": true
+                },
+                "model": "gpt-5.4",
+                "reasoning_effort": "low"
+              }
+            }"#,
+        )
+        .expect("summary should parse");
+
+        assert_eq!(summary.model.as_deref(), Some("gpt-5.4"));
+        assert_eq!(summary.reasoning_effort.as_deref(), Some("low"));
+        assert!(summary.has_auth);
+        assert!(!summary.has_process_env_conflict);
+        assert!(summary.has_shell_env_conflict);
+    }
 
     #[test]
     #[cfg(windows)]
