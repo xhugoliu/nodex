@@ -116,6 +116,18 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - 成功和失败都会尽量写 `.meta.json`，方便之后排查一次调用到底发生了什么
 - 这条命令当前仍然不内置任何 provider SDK；它只是本地执行桥
 - 仓库内提供了一个最小 OpenAI runner：`python3 scripts/openai_runner.py`
+- 如果你的 provider 已经通过本机 `codex login` 和 `~/.codex/config.toml` 跑通，也可以改用：
+  - `python3 scripts/codex_runner.py`
+- `codex_runner.py` 会复用本机 Codex CLI 的登录态和 provider 配置，而不是直接手写 Bearer 请求
+- `codex_runner.py` 默认优先读取：
+  - `~/.codex/config.toml` 里的 `model` / `model_reasoning_effort`
+  - `codex login status` 当前登录态
+- 它会在启动 `codex exec` 前忽略父进程里的 `OPENAI_*` 环境变量，避免当前 shell 配置覆盖 Codex live config
+- 可通过这些参数或环境变量覆盖默认行为：
+  - `--mode auto|schema|plain`
+  - `--model ...` 或 `CODEX_RUNNER_MODEL`
+  - `--reasoning-effort ...` 或 `CODEX_RUNNER_REASONING_EFFORT`
+  - `--max-retries ...` 或 `CODEX_RUNNER_MAX_RETRIES`
 - 开发时可复制根目录 `.env.example` 到 `.env.local`，填入 `OPENAI_API_KEY`
 - 默认模型是 `gpt-5.4-mini`，也可以通过 `OPENAI_MODEL` 覆盖
 - runner 默认会对可重试错误做指数退避重试：
@@ -148,6 +160,25 @@ cp .env.example .env.local
 # 编辑 .env.local，填入 OPENAI_API_KEY
 
 cargo run -- ai run-external root "python3 scripts/openai_runner.py" --dry-run
+```
+
+如果当前机器上的 `codex exec` 已经能正常调用目标 provider，也可以直接复用它：
+
+```bash
+codex login status
+cargo run -- ai run-external root "python3 scripts/codex_runner.py --reasoning-effort medium" --dry-run
+```
+
+建议先做一次本地诊断，确认 `~/.codex` live config 和环境变量没有冲突：
+
+```bash
+python3 scripts/codex_doctor.py
+```
+
+如果自定义 relay 对 `--output-schema` 路径不稳定，可以优先用 plain 模式：
+
+```bash
+cargo run -- ai run-external root "python3 scripts/codex_runner.py --mode plain --reasoning-effort low --max-retries 3" --dry-run
 ```
 
 ### 初始化

@@ -40,6 +40,8 @@ cargo run -- export outline
 - `ai expand` 最小解释层：`rationale_summary` / `direct_evidence` / `inferred_suggestions`
 - external runner bridge：可通过本地命令完成 request -> response -> patch 预览
 - 开发用最小 OpenAI runner：`scripts/openai_runner.py`
+- 可复用本机 Codex 登录态的外部 runner：`scripts/codex_runner.py`
+- 可检查 Codex live config / auth / 环境变量冲突的诊断脚本：`scripts/codex_doctor.py`
 - `.nodex/ai/*.meta.json` 本地运行审计：provider / model / run id / retry 次数 / patch run
 - 桌面壳可为当前节点直接起草 AI expand / explore，并显示本次运行元数据
 - 桌面节点详情可回看当前节点最近的 AI 运行记录
