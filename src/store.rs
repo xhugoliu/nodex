@@ -1330,6 +1330,11 @@ mod tests {
 
         let patch = workspace.ai_run_patch_document("ai-run-indexed")?;
         assert_eq!(patch.summary, preview.response_template.patch.summary);
+        let response = workspace.ai_run_response("ai-run-indexed")?;
+        assert_eq!(
+            response.explanation.rationale_summary,
+            preview.response_template.explanation.rationale_summary
+        );
 
         let request_artifact = workspace.ai_run_artifact("ai-run-indexed", "request")?;
         assert_eq!(request_artifact.kind, "request");

@@ -300,6 +300,13 @@ pub enum AiCommand {
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
         format: OutputFormat,
     },
+    /// Compare two indexed AI runs.
+    Compare {
+        left_run_id: String,
+        right_run_id: String,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
     /// Export request, call one external command, and read back its response.
     RunExternal {
         node_id: String,

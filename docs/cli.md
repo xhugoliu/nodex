@@ -69,6 +69,7 @@ nodex ai show <run-id> [--format text|json]
 nodex ai artifact <run-id> --kind request|response|metadata [--format text|json]
 nodex ai patch <run-id> [--format text|json]
 nodex ai replay <run-id> [--dry-run|--apply] [--format text|json]
+nodex ai compare <left-run-id> <right-run-id> [--format text|json]
 nodex ai run-external <node-id> <command> [--capability expand|explore] [--by risk|question|action|evidence] [--dry-run] [--format text|json]
 ```
 
@@ -125,6 +126,11 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `--apply` 才会真正写入当前工作区
   - 如果这条 AI run 原本还是 dry-run，`--apply` 后会把新产生的 patch run 反链回这条 `ai_runs` 记录
   - 如果原始 patch 已经落盘到 `patch_runs`，replay 会先把其中 concrete 的新增节点 id 重映射成一组新 id，避免直接撞上旧节点
+- `ai compare <left-run-id> <right-run-id>` 会把两条运行记录并排展开，并汇总这些关键差异：
+  - node / capability / provider / model / status
+  - explanation.rationale_summary
+  - patch summary 与 patch preview
+  - response notes
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据

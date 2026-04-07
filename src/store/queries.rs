@@ -1,5 +1,5 @@
 use super::*;
-use crate::ai::{AiRunMetadata, derive_ai_metadata_path, parse_ai_patch_response};
+use crate::ai::{AiPatchResponse, AiRunMetadata, derive_ai_metadata_path, parse_ai_patch_response};
 use crate::model::AiRunArtifact;
 
 impl Workspace {
@@ -170,6 +170,16 @@ impl Workspace {
         let response = parse_ai_patch_response(&response_json)
             .with_context(|| format!("failed to parse {}", record.response_path))?;
         Ok(response.patch)
+    }
+
+    pub fn ai_run_response(&self, run_id: &str) -> Result<AiPatchResponse> {
+        let record = self
+            .ai_run_record_by_id(run_id)?
+            .with_context(|| format!("AI run {run_id} was not found"))?;
+        let response_json = std::fs::read_to_string(&record.response_path)
+            .with_context(|| format!("failed to read {}", record.response_path))?;
+        parse_ai_patch_response(&response_json)
+            .with_context(|| format!("failed to parse {}", record.response_path))
     }
 
     pub fn ai_run_artifact(&self, run_id: &str, kind: &str) -> Result<AiRunArtifact> {
