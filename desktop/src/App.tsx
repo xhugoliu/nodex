@@ -535,15 +535,34 @@ export default function App() {
     }
 
     try {
-      const report = await invokeCommand<ApplyPatchReport>("apply_patch", {
+      const args: Record<string, unknown> = {
         start_path: workspacePath,
         patch_json: patchJson,
-      });
+      };
+      if (patchDraftOrigin?.kind === "ai_run") {
+        args.ai_run_id = patchDraftOrigin.run_id;
+      }
+      const report = await invokeCommand<ApplyPatchReport>("apply_patch", args);
+      const nextDraftOrigin = linkPatchRunToDraftOrigin(
+        patchDraftOrigin,
+        report.run_id,
+      );
+      setPatchDraftOrigin(nextDraftOrigin);
+      if (nextDraftOrigin?.kind === "ai_run" && report.run_id) {
+        setSelectedNodeAiRuns((current) =>
+          attachPatchRunToAiRuns(
+            current,
+            nextDraftOrigin.run_id,
+            report.run_id!,
+            report.summary,
+          ),
+        );
+      }
       await refreshWorkspace({
         preserveSelection: true,
         successMessage: false,
       });
-      setConsoleMessage(renderPatchReport(report, false, t, patchDraftOrigin), "success");
+      setConsoleMessage(renderPatchReport(report, false, t, nextDraftOrigin), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
     }
@@ -593,6 +612,9 @@ export default function App() {
       });
       setPatchEditor(JSON.stringify(result.patch, null, 2));
       setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
+      setSelectedNodeAiRuns((current) =>
+        mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
+      );
       setConsoleMessage(
         renderExternalRunnerReport(result, t),
         "success",
@@ -621,6 +643,9 @@ export default function App() {
       );
       setPatchEditor(JSON.stringify(result.patch, null, 2));
       setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
+      setSelectedNodeAiRuns((current) =>
+        mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
+      );
       setConsoleMessage(renderExternalRunnerReport(result, t), "success");
     } catch (error) {
       setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
@@ -839,6 +864,7 @@ export default function App() {
           />
           <InspectorPane
             hasWorkspace
+            desktopAiStatus={desktopAiStatus}
             selectedNodeDetail={selectedNodeDetail}
             selectedNodeAiRuns={selectedNodeAiRuns}
             patchDraftOrigin={patchDraftOrigin}
@@ -980,6 +1006,32 @@ function aiMetadataToDraftOrigin(
   };
 }
 
+function aiMetadataToRunRecord(metadata: ExternalRunnerReport["metadata"]): AiRunRecord {
+  return {
+    id: metadata.run_id,
+    capability: metadata.capability,
+    explore_by: metadata.explore_by,
+    node_id: metadata.node_id,
+    command: metadata.command,
+    dry_run: metadata.dry_run,
+    status: metadata.status,
+    started_at: metadata.started_at,
+    finished_at: metadata.finished_at,
+    request_path: metadata.request_path,
+    response_path: metadata.response_path,
+    exit_code: metadata.exit_code,
+    provider: metadata.provider,
+    model: metadata.model,
+    provider_run_id: metadata.provider_run_id,
+    retry_count: metadata.retry_count,
+    last_error_category: metadata.last_error_category,
+    last_error_message: metadata.last_error_message,
+    last_status_code: metadata.last_status_code,
+    patch_run_id: metadata.patch_run_id,
+    patch_summary: metadata.patch_summary,
+  };
+}
+
 function aiRunRecordToDraftOrigin(run: AiRunRecord): PatchDraftOrigin {
   return {
     kind: "ai_run",
@@ -989,5 +1041,48 @@ function aiRunRecordToDraftOrigin(run: AiRunRecord): PatchDraftOrigin {
     provider: run.provider,
     model: run.model,
     patch_run_id: run.patch_run_id,
+  };
+}
+
+function mergeAiRunRecord(
+  current: AiRunRecord[],
+  next: AiRunRecord,
+): AiRunRecord[] {
+  return [next, ...current.filter((run) => run.id !== next.id)].sort((left, right) => {
+    if (right.started_at !== left.started_at) {
+      return right.started_at - left.started_at;
+    }
+    return right.id.localeCompare(left.id);
+  });
+}
+
+function attachPatchRunToAiRuns(
+  current: AiRunRecord[],
+  aiRunId: string,
+  patchRunId: string,
+  patchSummary: string | null,
+): AiRunRecord[] {
+  return current.map((run) =>
+    run.id === aiRunId
+      ? {
+          ...run,
+          patch_run_id: patchRunId,
+          patch_summary: patchSummary ?? run.patch_summary,
+        }
+      : run,
+  );
+}
+
+function linkPatchRunToDraftOrigin(
+  origin: PatchDraftOrigin | null,
+  patchRunId: string | null,
+): PatchDraftOrigin | null {
+  if (!origin || !patchRunId) {
+    return origin;
+  }
+
+  return {
+    ...origin,
+    patch_run_id: patchRunId,
   };
 }

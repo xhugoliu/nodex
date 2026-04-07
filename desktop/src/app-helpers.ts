@@ -411,6 +411,62 @@ export function buildAiDraftNextSteps(
   return Array.from(new Set(actions));
 }
 
+export function buildAiRunNextSteps(
+  run: AiRunRecord,
+  status: DesktopAiStatus | null,
+  t: Translator,
+): string[] {
+  if (
+    run.status !== "failed" &&
+    !run.last_error_category &&
+    !run.last_error_message
+  ) {
+    return [];
+  }
+
+  const provider = run.provider ?? status?.provider ?? null;
+  const effectiveStatus = provider
+    ? {
+        command: status?.command ?? run.command,
+        command_source: status?.command_source ?? "default",
+        provider,
+        runner: status?.runner ?? "custom",
+        model: run.model ?? status?.model ?? null,
+        reasoning_effort: status?.reasoning_effort ?? null,
+        has_auth: status?.has_auth ?? null,
+        has_process_env_conflict: status?.has_process_env_conflict ?? null,
+        has_shell_env_conflict: status?.has_shell_env_conflict ?? null,
+        uses_provider_defaults: status?.uses_provider_defaults ?? false,
+        status_error: status?.status_error ?? null,
+      }
+    : status;
+  const errorDetail = [
+    run.last_error_category ? `[${run.last_error_category}]` : "",
+    run.last_error_message ?? "",
+    run.status,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return buildAiDraftNextSteps(effectiveStatus, t, errorDetail);
+}
+
+export function formatAiRunStatusLabel(
+  status: string,
+  t: Translator,
+): string {
+  switch (status) {
+    case "dry_run_succeeded":
+      return t("detail.aiRunDraftReadyStatus");
+    case "applied":
+      return t("detail.aiRunAppliedStatus");
+    case "failed":
+      return t("detail.aiRunFailedStatus");
+    default:
+      return status;
+  }
+}
+
 export function renderAiDraftFailure(
   error: unknown,
   status: DesktopAiStatus | null,
@@ -436,7 +492,7 @@ export function renderAiRunTrace(run: AiRunRecord, t: Translator): string {
     t("detail.aiRunTraceTitle"),
     t("reports.capability", { value: run.capability }),
     run.explore_by ? t("reports.exploreBy", { value: run.explore_by }) : null,
-    t("detail.aiRunStatus", { value: run.status }),
+    t("detail.aiRunStatus", { value: formatAiRunStatusLabel(run.status, t) }),
     t("detail.aiRunMode", {
       value: run.dry_run ? t("detail.aiRunDryRun") : t("detail.aiRunApplied"),
     }),

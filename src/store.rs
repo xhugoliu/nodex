@@ -1224,6 +1224,61 @@ mod tests {
     }
 
     #[test]
+    fn applying_patch_from_ai_run_records_patch_link() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+
+        workspace.upsert_ai_run_index(&crate::ai::AiRunMetadata {
+            run_id: "ai-run-1".to_string(),
+            capability: "expand".to_string(),
+            explore_by: None,
+            node_id: "root".to_string(),
+            command: "python3 scripts/provider_runner.py --provider codex".to_string(),
+            dry_run: true,
+            status: "dry_run_succeeded".to_string(),
+            started_at: 1,
+            finished_at: 2,
+            request_path: temp_dir.path().join("request.json").display().to_string(),
+            response_path: temp_dir.path().join("response.json").display().to_string(),
+            exit_code: Some(0),
+            provider: Some("codex".to_string()),
+            model: Some("gpt-5.4-mini".to_string()),
+            provider_run_id: Some("provider-run-1".to_string()),
+            retry_count: 0,
+            last_error_category: None,
+            last_error_message: None,
+            last_status_code: None,
+            patch_run_id: None,
+            patch_summary: None,
+        })?;
+
+        let report = workspace.apply_patch_document_with_ai_run(
+            PatchDocument {
+                version: 1,
+                summary: Some("Add linked child".to_string()),
+                ops: vec![PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                }],
+            },
+            "desktop",
+            false,
+            Some("ai-run-1"),
+        )?;
+
+        let ai_run = workspace
+            .ai_run_record_by_id("ai-run-1")?
+            .context("linked AI run should exist")?;
+        assert_eq!(ai_run.patch_run_id, report.run_id);
+        assert_eq!(ai_run.patch_summary.as_deref(), Some("Add linked child"));
+        Ok(())
+    }
+
+    #[test]
     fn open_workspace_migrates_legacy_node_evidence_schema() -> Result<()> {
         let temp_dir = tempdir()?;
         let root = temp_dir.path().canonicalize()?;

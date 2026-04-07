@@ -1089,11 +1089,12 @@ fn apply_patch(
     state: State<DesktopState>,
     start_path: String,
     patch_json: String,
+    ai_run_id: Option<String>,
 ) -> Result<ApplyPatchReport, String> {
     let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     let patch = parse_patch_document(&patch_json).map_err(|err| err.to_string())?;
     let report = workspace
-        .apply_patch_document(patch, "desktop", false)
+        .apply_patch_document_with_ai_run(patch, "desktop", false, ai_run_id.as_deref())
         .map_err(|err| err.to_string())?;
     set_current_workspace(
         &app,

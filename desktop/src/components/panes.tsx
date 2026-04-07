@@ -1,6 +1,8 @@
 import {
   buildAiDraftNextSteps,
+  buildAiRunNextSteps,
   describePatchOperation,
+  formatAiRunStatusLabel,
   formatPatchDraftOriginMeta,
   formatPatchDraftOriginTitle,
   type ConsoleTone,
@@ -140,6 +142,7 @@ export function WorkspaceStartPane(props: {
 
 export function InspectorPane(props: {
   hasWorkspace: boolean;
+  desktopAiStatus: DesktopAiStatus | null;
   selectedNodeDetail: NodeDetail | null;
   selectedNodeAiRuns: AiRunRecord[];
   patchDraftOrigin: PatchDraftOrigin | null;
@@ -177,6 +180,7 @@ export function InspectorPane(props: {
             <CompactNodeDetail
               detail={props.selectedNodeDetail}
               aiRuns={props.selectedNodeAiRuns}
+              desktopAiStatus={props.desktopAiStatus}
               patchDraftOrigin={props.patchDraftOrigin}
               contextSourceId={props.contextSourceId}
               t={props.t}
@@ -943,6 +947,7 @@ function summarizeChunkLabels(
 function CompactNodeDetail(props: {
   detail: NodeDetail;
   aiRuns: AiRunRecord[];
+  desktopAiStatus: DesktopAiStatus | null;
   patchDraftOrigin: PatchDraftOrigin | null;
   contextSourceId: string | null;
   t: Translator;
@@ -1119,6 +1124,18 @@ function CompactNodeDetail(props: {
             {props.aiRuns.slice(0, 5).map((run) => {
               const isCurrentDraft = props.patchDraftOrigin?.run_id === run.id;
               const hasAppliedPatch = Boolean(run.patch_run_id);
+              const nextSteps = buildAiRunNextSteps(
+                run,
+                props.desktopAiStatus,
+                props.t,
+              );
+              const statusLabel = formatAiRunStatusLabel(run.status, props.t);
+              const statusToneClass =
+                run.status === "failed"
+                  ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.08)] text-[color:var(--danger)]"
+                  : hasAppliedPatch
+                    ? "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] text-[color:var(--text)]"
+                    : "border-[color:var(--line-soft)] bg-white text-[color:var(--muted)]";
 
               return (
               <div
@@ -1137,8 +1154,13 @@ function CompactNodeDetail(props: {
                         {run.capability}
                         {run.explore_by ? ` / ${run.explore_by}` : ""}
                       </div>
-                      <span className="rounded-full border border-[color:var(--line-soft)] bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
-                        {run.status}
+                      <span
+                        className={[
+                          "rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em]",
+                          statusToneClass,
+                        ].join(" ")}
+                      >
+                        {statusLabel}
                       </span>
                       {isCurrentDraft ? (
                         <span className="rounded-full border border-[rgba(17,24,39,0.18)] bg-[rgba(17,24,39,0.06)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--accent)]">
@@ -1159,10 +1181,45 @@ function CompactNodeDetail(props: {
                         run.last_error_message ||
                         props.t("detail.none")}
                     </div>
-                    <div className="mt-2 text-xs leading-5 text-[color:var(--muted)]">
-                      {run.provider || props.t("detail.none")}
-                      {run.model ? ` / ${run.model}` : ""}
+                    <div className="mt-2 space-y-1 text-xs leading-5 text-[color:var(--muted)]">
+                      <div>
+                        {run.provider || props.t("detail.none")}
+                        {run.model ? ` / ${run.model}` : ""}
+                      </div>
+                      <div>
+                        {props.t("detail.aiRunRetryCount", {
+                          count: run.retry_count,
+                        })}
+                      </div>
+                      {hasAppliedPatch ? (
+                        <div>
+                          {props.t("detail.aiRunLinkedPatch", {
+                            value: run.patch_run_id!,
+                          })}
+                        </div>
+                      ) : (
+                        <div>{props.t("detail.aiRunPatchPending")}</div>
+                      )}
+                      {run.last_error_category ? (
+                        <div>
+                          {props.t("detail.aiRunErrorCategory", {
+                            value: run.last_error_category,
+                          })}
+                        </div>
+                      ) : null}
                     </div>
+                    {nextSteps.length ? (
+                      <div className="mt-3 rounded-lg border border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.06)] px-3 py-3">
+                        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                          {props.t("detail.aiRunNextSteps")}
+                        </div>
+                        <div className="mt-2 space-y-1 text-sm leading-6 text-[color:var(--text)]">
+                          {nextSteps.map((step) => (
+                            <div key={`${run.id}-${step}`}>- {step}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-[color:var(--muted)]">

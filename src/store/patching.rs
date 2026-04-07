@@ -113,6 +113,16 @@ impl Workspace {
         origin: &str,
         dry_run: bool,
     ) -> Result<ApplyPatchReport> {
+        self.apply_patch_document_with_ai_run(patch, origin, dry_run, None)
+    }
+
+    pub fn apply_patch_document_with_ai_run(
+        &mut self,
+        patch: PatchDocument,
+        origin: &str,
+        dry_run: bool,
+        ai_run_id: Option<&str>,
+    ) -> Result<ApplyPatchReport> {
         let patch = self.prepare_patch_document(patch)?;
         let preview = patch.preview_lines();
 
@@ -129,6 +139,14 @@ impl Workspace {
         let apply_result = (|| -> Result<()> {
             apply_patch_ops_tx(&transaction, &patch.ops)?;
             insert_patch_run_tx(&transaction, &archive, patch.summary.as_ref(), origin)?;
+            if let Some(ai_run_id) = ai_run_id {
+                link_ai_run_patch_tx(
+                    &transaction,
+                    ai_run_id,
+                    &archive.run_id,
+                    patch.summary.as_deref(),
+                )?;
+            }
             Ok(())
         })();
 
@@ -913,6 +931,22 @@ pub(super) fn insert_patch_run_tx(
             archive.file_name,
             archive.applied_at
         ],
+    )?;
+    Ok(())
+}
+
+fn link_ai_run_patch_tx(
+    transaction: &Transaction<'_>,
+    ai_run_id: &str,
+    patch_run_id: &str,
+    patch_summary: Option<&str>,
+) -> Result<()> {
+    transaction.execute(
+        "UPDATE ai_runs
+         SET patch_run_id = ?2,
+             patch_summary = COALESCE(?3, patch_summary)
+         WHERE id = ?1",
+        params![ai_run_id, patch_run_id, patch_summary],
     )?;
     Ok(())
 }
