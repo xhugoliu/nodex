@@ -1281,6 +1281,86 @@ mod tests {
     }
 
     #[test]
+    fn ai_run_patch_and_artifacts_can_be_loaded_from_indexed_run() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let workspace = Workspace::init_at(temp_dir.path())?;
+        let preview = workspace.preview_ai_expand("root")?;
+        let request_path = temp_dir.path().join("indexed-run.request.json");
+        let response_path = temp_dir.path().join("indexed-run.response.json");
+        let metadata_path = temp_dir.path().join("indexed-run.meta.json");
+
+        crate::ai::write_ai_json_document(&request_path, &preview.request)?;
+        crate::ai::write_ai_json_document(&response_path, &preview.response_template)?;
+        crate::ai::write_ai_json_document(
+            &metadata_path,
+            &serde_json::json!({
+                "provider": "test_runner",
+                "model": "test-model",
+                "provider_run_id": "provider-run-1",
+                "retry_count": 0,
+                "last_error_category": null,
+                "last_error_message": null,
+                "last_status_code": null
+            }),
+        )?;
+
+        workspace.upsert_ai_run_index(&crate::ai::AiRunMetadata {
+            run_id: "ai-run-indexed".to_string(),
+            capability: "expand".to_string(),
+            explore_by: None,
+            node_id: "root".to_string(),
+            command: "python3 runner.py".to_string(),
+            dry_run: true,
+            status: "dry_run_succeeded".to_string(),
+            started_at: 10,
+            finished_at: 11,
+            request_path: request_path.display().to_string(),
+            response_path: response_path.display().to_string(),
+            exit_code: Some(0),
+            provider: Some("test_runner".to_string()),
+            model: Some("test-model".to_string()),
+            provider_run_id: Some("provider-run-1".to_string()),
+            retry_count: 0,
+            last_error_category: None,
+            last_error_message: None,
+            last_status_code: None,
+            patch_run_id: None,
+            patch_summary: None,
+        })?;
+
+        let patch = workspace.ai_run_patch_document("ai-run-indexed")?;
+        assert_eq!(patch.summary, preview.response_template.patch.summary);
+
+        let request_artifact = workspace.ai_run_artifact("ai-run-indexed", "request")?;
+        assert_eq!(request_artifact.kind, "request");
+        assert_eq!(request_artifact.path, request_path.display().to_string());
+        assert!(
+            request_artifact
+                .content
+                .contains("\"kind\": \"nodex_ai_expand_request\"")
+        );
+
+        let response_artifact = workspace.ai_run_artifact("ai-run-indexed", "response")?;
+        assert_eq!(response_artifact.kind, "response");
+        assert_eq!(response_artifact.path, response_path.display().to_string());
+        assert!(
+            response_artifact
+                .content
+                .contains("\"kind\": \"nodex_ai_patch_response\"")
+        );
+
+        let metadata_artifact = workspace.ai_run_artifact("ai-run-indexed", "metadata")?;
+        assert_eq!(metadata_artifact.kind, "metadata");
+        assert_eq!(metadata_artifact.path, metadata_path.display().to_string());
+        assert!(
+            metadata_artifact
+                .content
+                .contains("\"provider\": \"test_runner\"")
+        );
+        Ok(())
+    }
+
+    #[test]
     fn snapshot_restore_keeps_ai_runs_and_ai_artifacts() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;

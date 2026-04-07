@@ -10,7 +10,9 @@ use nodex::{
         AiExpandPreview, AiPatchExplanation, AiPatchResponse, ExternalRunnerReport,
         derive_ai_metadata_path, parse_ai_patch_response, write_ai_json_document,
     },
-    model::{ApplyPatchReport, SourceImportPreview, SourceImportReport},
+    model::{
+        AiRunArtifact, AiRunRecord, ApplyPatchReport, SourceImportPreview, SourceImportReport,
+    },
     patch::PatchDocument,
     store::{Workspace, format_timestamp},
 };
@@ -181,62 +183,39 @@ fn main() -> Result<()> {
                             println!("No AI runs have been indexed yet.");
                         } else {
                             for entry in history {
-                                let explore_by = entry
-                                    .explore_by
-                                    .as_deref()
-                                    .map(|value| format!(" by {value}"))
-                                    .unwrap_or_default();
-                                println!(
-                                    "{}  {}  {}{}  {}  {}",
-                                    entry.id,
-                                    format_timestamp(entry.started_at),
-                                    entry.capability,
-                                    explore_by,
-                                    entry.status,
-                                    entry.node_id
-                                );
-                                println!("  command: {}", entry.command);
-                                println!(
-                                    "  mode: {}",
-                                    if entry.dry_run { "dry-run" } else { "apply" }
-                                );
-                                if let Some(provider) = &entry.provider {
-                                    println!("  provider: {}", provider);
-                                }
-                                if let Some(model) = &entry.model {
-                                    println!("  model: {}", model);
-                                }
-                                if let Some(provider_run_id) = &entry.provider_run_id {
-                                    println!("  provider run: {}", provider_run_id);
-                                }
-                                println!("  retries: {}", entry.retry_count);
-                                if let Some(exit_code) = entry.exit_code {
-                                    println!("  exit code: {}", exit_code);
-                                }
-                                if let Some(category) = &entry.last_error_category {
-                                    println!("  error: {}", category);
-                                }
-                                if let Some(message) = &entry.last_error_message {
-                                    println!("  detail: {}", message);
-                                }
-                                println!("  request: {}", entry.request_path);
-                                println!("  response: {}", entry.response_path);
-                                match derive_ai_metadata_path(&entry.response_path) {
-                                    Some(metadata_path) => {
-                                        println!("  metadata: {}", metadata_path);
-                                    }
-                                    None => println!("  metadata: (unavailable)"),
-                                }
-                                if let Some(summary) = &entry.patch_summary {
-                                    println!("  patch summary: {}", summary);
-                                }
-                                if let Some(run_id) = &entry.patch_run_id {
-                                    println!("  patch run: {}", run_id);
-                                }
+                                print_ai_run_record(&entry);
                             }
                         }
                     }
                     OutputFormat::Json => print_json(&history)?,
+                }
+            }
+            AiCommand::Show { run_id, format } => {
+                let workspace = Workspace::open_from(&cwd)?;
+                let output = load_ai_run_show_output(&workspace, &run_id)?;
+                match format {
+                    OutputFormat::Text => print_ai_run_show_output(&output),
+                    OutputFormat::Json => print_json(&output)?,
+                }
+            }
+            AiCommand::Artifact {
+                run_id,
+                kind,
+                format,
+            } => {
+                let workspace = Workspace::open_from(&cwd)?;
+                let artifact = workspace.ai_run_artifact(&run_id, kind.as_str())?;
+                match format {
+                    OutputFormat::Text => print_ai_run_artifact(&artifact),
+                    OutputFormat::Json => print_json(&artifact)?,
+                }
+            }
+            AiCommand::Patch { run_id, format } => {
+                let workspace = Workspace::open_from(&cwd)?;
+                let patch = workspace.ai_run_patch_document(&run_id)?;
+                match format {
+                    OutputFormat::Text => print_patch_preview(&patch),
+                    OutputFormat::Json => print_json(&patch)?,
                 }
             }
             AiCommand::RunExternal {
@@ -964,6 +943,148 @@ struct AiResponseApplyOutput {
     response: AiPatchResponse,
     report: ApplyPatchReport,
     dry_run: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct AiRunShowOutput {
+    record: AiRunRecord,
+    metadata_path: Option<String>,
+    explanation: Option<AiPatchExplanation>,
+    patch: Option<PatchDocument>,
+    response_notes: Vec<String>,
+    load_notes: Vec<String>,
+}
+
+fn load_ai_run_show_output(workspace: &Workspace, run_id: &str) -> Result<AiRunShowOutput> {
+    let record = workspace
+        .ai_run_record_by_id(run_id)?
+        .with_context(|| format!("AI run {run_id} was not found"))?;
+    let metadata_path = derive_ai_metadata_path(&record.response_path);
+    let mut explanation = None;
+    let mut patch = workspace.ai_run_patch_document(run_id).ok();
+    let mut response_notes = Vec::new();
+    let mut load_notes = Vec::new();
+
+    match std::fs::read_to_string(&record.response_path) {
+        Ok(response_json) => match parse_ai_patch_response(&response_json) {
+            Ok(response) => {
+                explanation = Some(response.explanation);
+                if patch.is_none() {
+                    patch = Some(response.patch);
+                }
+                response_notes = response.notes;
+            }
+            Err(err) => {
+                load_notes.push(format!(
+                    "Failed to parse response artifact {}: {}",
+                    record.response_path, err
+                ));
+            }
+        },
+        Err(err) => {
+            load_notes.push(format!(
+                "Response artifact is unavailable at {}: {}",
+                record.response_path, err
+            ));
+        }
+    }
+
+    Ok(AiRunShowOutput {
+        record,
+        metadata_path,
+        explanation,
+        patch,
+        response_notes,
+        load_notes,
+    })
+}
+
+fn print_ai_run_record(entry: &AiRunRecord) {
+    let explore_by = entry
+        .explore_by
+        .as_deref()
+        .map(|value| format!(" by {value}"))
+        .unwrap_or_default();
+    println!(
+        "{}  {}  {}{}  {}  {}",
+        entry.id,
+        format_timestamp(entry.started_at),
+        entry.capability,
+        explore_by,
+        entry.status,
+        entry.node_id
+    );
+    println!("  command: {}", entry.command);
+    println!(
+        "  mode: {}",
+        if entry.dry_run { "dry-run" } else { "apply" }
+    );
+    if let Some(provider) = &entry.provider {
+        println!("  provider: {}", provider);
+    }
+    if let Some(model) = &entry.model {
+        println!("  model: {}", model);
+    }
+    if let Some(provider_run_id) = &entry.provider_run_id {
+        println!("  provider run: {}", provider_run_id);
+    }
+    println!("  retries: {}", entry.retry_count);
+    if let Some(exit_code) = entry.exit_code {
+        println!("  exit code: {}", exit_code);
+    }
+    if let Some(category) = &entry.last_error_category {
+        println!("  error: {}", category);
+    }
+    if let Some(message) = &entry.last_error_message {
+        println!("  detail: {}", message);
+    }
+    println!("  request: {}", entry.request_path);
+    println!("  response: {}", entry.response_path);
+    match derive_ai_metadata_path(&entry.response_path) {
+        Some(metadata_path) => println!("  metadata: {}", metadata_path),
+        None => println!("  metadata: (unavailable)"),
+    }
+    if let Some(summary) = &entry.patch_summary {
+        println!("  patch summary: {}", summary);
+    }
+    if let Some(run_id) = &entry.patch_run_id {
+        println!("  patch run: {}", run_id);
+    }
+}
+
+fn print_ai_run_show_output(output: &AiRunShowOutput) {
+    print_ai_run_record(&output.record);
+    if let Some(explanation) = &output.explanation {
+        println!();
+        println!("[explanation]");
+        print_ai_patch_explanation(explanation);
+    }
+    if let Some(patch) = &output.patch {
+        println!();
+        println!("[patch]");
+        print_patch_preview(patch);
+    }
+    if !output.response_notes.is_empty() {
+        println!();
+        println!("[response notes]");
+        for note in &output.response_notes {
+            println!("- {note}");
+        }
+    }
+    if !output.load_notes.is_empty() {
+        println!();
+        println!("[load notes]");
+        for note in &output.load_notes {
+            println!("- {note}");
+        }
+    }
+}
+
+fn print_ai_run_artifact(artifact: &AiRunArtifact) {
+    println!("artifact: {}", artifact.kind);
+    println!("path: {}", artifact.path);
+    println!();
+    println!("{}", artifact.content);
 }
 
 fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {

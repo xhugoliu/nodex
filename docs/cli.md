@@ -65,6 +65,9 @@ nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-templ
 nodex ai explore <node-id> --by risk|question|action|evidence --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai apply-response <file> [--dry-run] [--format text|json]
 nodex ai history [--node-id <id>] [--format text|json]
+nodex ai show <run-id> [--format text|json]
+nodex ai artifact <run-id> --kind request|response|metadata [--format text|json]
+nodex ai patch <run-id> [--format text|json]
 nodex ai run-external <node-id> <command> [--capability expand|explore] [--by risk|question|action|evidence] [--dry-run] [--format text|json]
 ```
 
@@ -113,6 +116,9 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - request / response / derived metadata 路径
   - provider run id、retry count、exit code
   - 关联 patch run 与 patch summary（如果有）
+- `ai show <run-id>` 会汇总一条运行记录，并在 response 可读时继续显示 explanation、patch 预览和 response notes
+- `ai artifact <run-id> --kind ...` 会直接读取该次运行的 request / response / metadata 工件
+- `ai patch <run-id>` 会优先读取关联 `patch_run_id` 对应的最终 patch；如果这次运行只是 dry-run，则回退到 response 里的 patch
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据

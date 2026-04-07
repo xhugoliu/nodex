@@ -162,6 +162,23 @@ impl AiProvider {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AiArtifactKind {
+    Request,
+    Response,
+    Metadata,
+}
+
+impl AiArtifactKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Request => "request",
+            Self::Response => "response",
+            Self::Metadata => "metadata",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CitationKind {
     Direct,
     Inferred,
@@ -250,6 +267,26 @@ pub enum AiCommand {
     History {
         #[arg(long)]
         node_id: Option<String>,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Show one indexed AI run with explanation and patch context when available.
+    Show {
+        run_id: String,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Show one AI run artifact.
+    Artifact {
+        run_id: String,
+        #[arg(long, value_enum)]
+        kind: AiArtifactKind,
+        #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
+        format: OutputFormat,
+    },
+    /// Show the patch associated with one AI run.
+    Patch {
+        run_id: String,
         #[arg(long, value_enum, default_value_t = OutputFormat::Text)]
         format: OutputFormat,
     },

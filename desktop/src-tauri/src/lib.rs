@@ -6,10 +6,10 @@ use std::{
 
 use anyhow::{Context, Result};
 use nodex::{
-    ai::{ExternalRunnerReport, derive_ai_metadata_path, parse_ai_patch_response},
+    ai::ExternalRunnerReport,
     model::{
-        AiRunRecord, ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
-        SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
+        AiRunArtifact, AiRunRecord, ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord,
+        SourceDetail, SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
     },
     patch::{PatchDocument, PatchOp},
     store::Workspace,
@@ -61,13 +61,6 @@ struct PatchEditorPayload {
 #[derive(Debug, Serialize, Clone)]
 struct LanguagePayload {
     preference: String,
-}
-
-#[derive(Debug, Serialize, Clone)]
-struct AiRunArtifact {
-    kind: String,
-    path: String,
-    content: String,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -993,24 +986,9 @@ fn get_ai_run_record(start_path: String, run_id: String) -> Result<AiRunRecord, 
 #[command]
 fn get_ai_run_patch(start_path: String, run_id: String) -> Result<PatchDocument, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
-    let record = workspace
-        .ai_run_record_by_id(&run_id)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| format!("AI run {run_id} was not found"))?;
-
-    if let Some(patch_run_id) = record.patch_run_id.as_deref() {
-        return workspace
-            .patch_document_by_run_id(patch_run_id)
-            .map_err(|err| err.to_string());
-    }
-
-    let response_json = std::fs::read_to_string(&record.response_path)
-        .with_context(|| format!("failed to read {}", record.response_path))
-        .map_err(|err| err.to_string())?;
-    let response = parse_ai_patch_response(&response_json)
-        .with_context(|| format!("failed to parse {}", record.response_path))
-        .map_err(|err| err.to_string())?;
-    Ok(response.patch)
+    workspace
+        .ai_run_patch_document(&run_id)
+        .map_err(|err| err.to_string())
 }
 
 #[command]
@@ -1020,31 +998,11 @@ fn get_ai_run_artifact(
     kind: String,
 ) -> Result<AiRunArtifact, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
-    let record = workspace
-        .ai_run_record_by_id(&run_id)
-        .map_err(|err| err.to_string())?
-        .ok_or_else(|| format!("AI run {run_id} was not found"))?;
-
-    let artifact_path = match kind.as_str() {
-        "request" => record.request_path.clone(),
-        "response" => record.response_path.clone(),
-        "metadata" => derive_ai_metadata_path(&record.response_path)
-            .ok_or_else(|| format!("AI run {} has no derived metadata path", record.id))?,
-        other => return Err(format!("unsupported AI run artifact kind `{other}`")),
-    };
-
-    let raw = std::fs::read_to_string(&artifact_path)
-        .with_context(|| format!("failed to read {}", artifact_path))
+    let mut artifact = workspace
+        .ai_run_artifact(&run_id, &kind)
         .map_err(|err| err.to_string())?;
-    let content = serde_json::from_str::<serde_json::Value>(&raw)
-        .and_then(|value| serde_json::to_string_pretty(&value))
-        .unwrap_or(raw);
-
-    Ok(AiRunArtifact {
-        kind,
-        path: display_path_text(&artifact_path),
-        content,
-    })
+    artifact.path = display_path_text(&artifact.path);
+    Ok(artifact)
 }
 
 #[command]

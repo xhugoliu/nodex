@@ -1,5 +1,6 @@
 use super::*;
-use crate::ai::AiRunMetadata;
+use crate::ai::{AiRunMetadata, derive_ai_metadata_path, parse_ai_patch_response};
+use crate::model::AiRunArtifact;
 
 impl Workspace {
     pub fn workspace_name(&self) -> Result<String> {
@@ -153,6 +154,48 @@ impl Workspace {
             )
             .optional()
             .map_err(Into::into)
+    }
+
+    pub fn ai_run_patch_document(&self, run_id: &str) -> Result<PatchDocument> {
+        let record = self
+            .ai_run_record_by_id(run_id)?
+            .with_context(|| format!("AI run {run_id} was not found"))?;
+
+        if let Some(patch_run_id) = record.patch_run_id.as_deref() {
+            return self.patch_document_by_run_id(patch_run_id);
+        }
+
+        let response_json = std::fs::read_to_string(&record.response_path)
+            .with_context(|| format!("failed to read {}", record.response_path))?;
+        let response = parse_ai_patch_response(&response_json)
+            .with_context(|| format!("failed to parse {}", record.response_path))?;
+        Ok(response.patch)
+    }
+
+    pub fn ai_run_artifact(&self, run_id: &str, kind: &str) -> Result<AiRunArtifact> {
+        let record = self
+            .ai_run_record_by_id(run_id)?
+            .with_context(|| format!("AI run {run_id} was not found"))?;
+
+        let artifact_path = match kind {
+            "request" => record.request_path.clone(),
+            "response" => record.response_path.clone(),
+            "metadata" => derive_ai_metadata_path(&record.response_path)
+                .ok_or_else(|| anyhow!("AI run {} has no derived metadata path", record.id))?,
+            other => anyhow::bail!("unsupported AI run artifact kind `{other}`"),
+        };
+
+        let raw = std::fs::read_to_string(&artifact_path)
+            .with_context(|| format!("failed to read {}", artifact_path))?;
+        let content = serde_json::from_str::<serde_json::Value>(&raw)
+            .and_then(|value| serde_json::to_string_pretty(&value))
+            .unwrap_or(raw);
+
+        Ok(AiRunArtifact {
+            kind: kind.to_string(),
+            path: artifact_path,
+            content,
+        })
     }
 
     pub fn write_outline(&self, output: Option<&Path>) -> Result<std::path::PathBuf> {
