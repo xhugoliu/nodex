@@ -277,6 +277,7 @@ export function EditorPane(props: {
   patchEditor: string;
   patchDraftOrigin: PatchDraftOrigin | null;
   currentDraftRun: AiRunRecord | null;
+  currentDraftComparison: "matching" | "different" | null;
   showAdvancedPatchEditor: boolean;
   canRunStructureActions: boolean;
   patchDraftState: PatchDraftState;
@@ -299,6 +300,7 @@ export function EditorPane(props: {
   onDraftDelete: () => void;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
+  onLoadAppliedPatch: (patchRunId: string) => void;
   onShowDraftOriginTrace: () => void;
   onShowDraftOriginArtifact: (kind: "request" | "response" | "metadata") => void;
 }) {
@@ -621,8 +623,10 @@ export function EditorPane(props: {
             <div className="mb-4">
               <CurrentDraftRunCard
                 run={props.currentDraftRun}
+                comparison={props.currentDraftComparison}
                 nextSteps={currentDraftNextSteps}
                 t={props.t}
+                onLoadAppliedPatch={props.onLoadAppliedPatch}
               />
             </div>
           ) : null}
@@ -707,8 +711,10 @@ export function EditorPane(props: {
 
 function CurrentDraftRunCard(props: {
   run: AiRunRecord;
+  comparison: "matching" | "different" | null;
   nextSteps: string[];
   t: Translator;
+  onLoadAppliedPatch: (patchRunId: string) => void;
 }) {
   const statusLabel = formatAiRunStatusLabel(props.run.status, props.t);
   const toneClass =
@@ -775,6 +781,16 @@ function CurrentDraftRunCard(props: {
           value={props.run.patch_run_id || props.t("detail.aiRunPatchPending")}
         />
         <StatusField
+          label={props.t("detail.aiRunDraftCompareLabel")}
+          value={
+            props.comparison === "matching"
+              ? props.t("detail.aiRunDraftMatchesApplied")
+              : props.comparison === "different"
+                ? props.t("detail.aiRunDraftDiffersApplied")
+                : props.t("detail.none")
+          }
+        />
+        <StatusField
           label={props.t("detail.aiRunStartedLabel")}
           value={formatTimestamp(props.run.started_at)}
         />
@@ -792,6 +808,17 @@ function CurrentDraftRunCard(props: {
           {summary}
         </div>
       </div>
+
+      {props.run.patch_run_id ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            className={ghostButtonClass}
+            onClick={() => props.onLoadAppliedPatch(props.run.patch_run_id!)}
+          >
+            {props.t("detail.loadAppliedPatch")}
+          </button>
+        </div>
+      ) : null}
 
       {props.nextSteps.length ? (
         <div className="mt-4">

@@ -96,6 +96,8 @@ export default function App() {
   const [patchDraftOrigin, setPatchDraftOrigin] =
     useState<PatchDraftOrigin | null>(null);
   const [currentDraftRun, setCurrentDraftRun] = useState<AiRunRecord | null>(null);
+  const [currentDraftAppliedPatch, setCurrentDraftAppliedPatch] =
+    useState<PatchDocument | null>(null);
   const [showAdvancedPatchEditor, setShowAdvancedPatchEditor] = useState(false);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeKind, setUpdateNodeKind] = useState("");
@@ -218,6 +220,33 @@ export default function App() {
   }, [patchDraftOrigin, selectedNodeAiRuns, workspacePath]);
 
   useEffect(() => {
+    if (!currentDraftRun?.patch_run_id || !workspacePath || !hasTauriRuntime()) {
+      setCurrentDraftAppliedPatch(null);
+      return;
+    }
+
+    let cancelled = false;
+    void invokeCommand<PatchDocument>("get_patch_document", {
+      start_path: workspacePath,
+      run_id: currentDraftRun.patch_run_id,
+    })
+      .then((patch) => {
+        if (!cancelled) {
+          setCurrentDraftAppliedPatch(patch);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentDraftAppliedPatch(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentDraftRun?.patch_run_id, workspacePath]);
+
+  useEffect(() => {
     if (!hasTauriRuntime()) {
       return;
     }
@@ -295,6 +324,11 @@ export default function App() {
     ? t("navigator.searchResults", { count: treeResultCount })
     : t("navigator.totalNodes", { count: workspaceNodeCount });
   const patchDraftState = inspectPatchDraft(deferredPatchEditor);
+  const currentDraftComparison = compareCurrentDraftWithAppliedPatch(
+    patchDraftState,
+    patchEditor,
+    currentDraftAppliedPatch,
+  );
   const isRootNodeSelected = selectedNodeDetail?.node.parent_id === null;
   const moveParentOptions =
     workspaceOverview && selectedNodeDetail
@@ -869,6 +903,27 @@ export default function App() {
     }
   }
 
+  async function loadPatchRunPatch(patchRunId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      setShowAdvancedPatchEditor(false);
+      const patch = await invokeCommand<PatchDocument>("get_patch_document", {
+        start_path: workspacePath,
+        run_id: patchRunId,
+      });
+      setPatchEditor(JSON.stringify(patch, null, 2));
+      setConsoleMessage(
+        t("messages.loadedPatchRunPatch", { runId: patchRunId }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function getAiRunRecord(runId: string): Promise<AiRunRecord> {
     const currentRun = selectedNodeAiRuns.find((run) => run.id === runId);
     if (currentRun) {
@@ -1010,6 +1065,7 @@ export default function App() {
             patchEditor={patchEditor}
             patchDraftOrigin={patchDraftOrigin}
             currentDraftRun={currentDraftRun}
+            currentDraftComparison={currentDraftComparison}
             showAdvancedPatchEditor={showAdvancedPatchEditor}
             canRunStructureActions={canRunStructureActions}
             patchDraftState={patchDraftState}
@@ -1049,6 +1105,9 @@ export default function App() {
             }}
             onApplyPatch={() => {
               void applyPatch();
+            }}
+            onLoadAppliedPatch={(patchRunId) => {
+              void loadPatchRunPatch(patchRunId);
             }}
             onShowDraftOriginTrace={showCurrentDraftOriginTrace}
             onShowDraftOriginArtifact={(kind) => {
@@ -1182,4 +1241,23 @@ function linkPatchRunToDraftOrigin(
     ...origin,
     patch_run_id: patchRunId,
   };
+}
+
+function compareCurrentDraftWithAppliedPatch(
+  patchDraftState: ReturnType<typeof inspectPatchDraft>,
+  patchEditor: string,
+  appliedPatch: PatchDocument | null,
+): "matching" | "different" | null {
+  if (patchDraftState.state !== "ready" || !appliedPatch) {
+    return null;
+  }
+
+  try {
+    const currentPatch = JSON.parse(patchEditor) as PatchDocument;
+    return JSON.stringify(currentPatch) === JSON.stringify(appliedPatch)
+      ? "matching"
+      : "different";
+  } catch {
+    return null;
+  }
 }
