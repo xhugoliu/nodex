@@ -90,8 +90,10 @@ export function PatchDraftBanner(props: {
   title: string;
   meta: string;
   ops: PatchOpSummary[];
-  onOpen?: () => void;
-  openLabel?: string;
+  actions?: Array<{
+    label: string;
+    onClick: () => void;
+  }>;
   tone: "success" | "error" | "neutral";
 }) {
   const toneClass =
@@ -123,10 +125,18 @@ export function PatchDraftBanner(props: {
           ) : null}
         </div>
 
-        {props.onOpen && props.openLabel ? (
-          <button className={ghostButtonClass} onClick={props.onOpen}>
-            {props.openLabel}
-          </button>
+        {props.actions?.length ? (
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            {props.actions.map((action) => (
+              <button
+                key={action.label}
+                className={ghostButtonClass}
+                onClick={action.onClick}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
         ) : null}
       </div>
     </div>

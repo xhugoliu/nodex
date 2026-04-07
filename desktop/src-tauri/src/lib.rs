@@ -980,6 +980,17 @@ fn get_ai_run_history(
 }
 
 #[command]
+fn get_ai_run_record(start_path: String, run_id: String) -> Result<AiRunRecord, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    let record = workspace
+        .ai_run_record_by_id(&run_id)
+        .map_err(|err| err.to_string())?
+        .ok_or_else(|| format!("AI run {run_id} was not found"))?;
+    let mut normalized = normalize_ai_run_records(vec![record]);
+    Ok(normalized.remove(0))
+}
+
+#[command]
 fn get_ai_run_patch(start_path: String, run_id: String) -> Result<PatchDocument, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     let record = workspace
@@ -1217,6 +1228,7 @@ pub fn run() {
             draft_update_node_patch,
             get_node_detail,
             get_ai_run_history,
+            get_ai_run_record,
             get_ai_run_artifact,
             get_ai_run_patch,
             get_desktop_ai_status,

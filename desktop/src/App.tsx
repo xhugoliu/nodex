@@ -828,21 +828,70 @@ export default function App() {
     }
   }
 
-  function showCurrentDraftOrigin() {
+  async function getAiRunRecord(runId: string): Promise<AiRunRecord> {
+    const currentRun = selectedNodeAiRuns.find((run) => run.id === runId);
+    if (currentRun) {
+      return currentRun;
+    }
+
+    return invokeCommand<AiRunRecord>("get_ai_run_record", {
+      start_path: workspacePath,
+      run_id: runId,
+    });
+  }
+
+  async function showAiRunTraceById(runId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const run = await getAiRunRecord(runId);
+      setConsoleMessage(
+        renderAiRunTrace(run, t),
+        run.status === "failed" ? "error" : "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
+  async function showAiRunArtifactById(
+    runId: string,
+    kind: "request" | "response" | "metadata",
+  ) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const artifact = await invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind,
+      });
+      setConsoleMessage(renderAiRunArtifact(artifact, t), "success");
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
+  function showCurrentDraftOriginTrace() {
     if (!patchDraftOrigin) {
       return;
     }
 
-    const traceRun = selectedNodeAiRuns.find((run) => run.id === patchDraftOrigin.run_id);
-    if (traceRun) {
-      setConsoleMessage(renderAiRunTrace(traceRun, t), "success");
+    void showAiRunTraceById(patchDraftOrigin.run_id);
+  }
+
+  function showCurrentDraftOriginArtifact(
+    kind: "request" | "response" | "metadata",
+  ) {
+    if (!patchDraftOrigin) {
       return;
     }
 
-    setConsoleMessage(
-      t("messages.patchDraftOriginTraceUnavailable", { runId: patchDraftOrigin.run_id }),
-      "error",
-    );
+    void showAiRunArtifactById(patchDraftOrigin.run_id, kind);
   }
 
   return (
@@ -893,23 +942,10 @@ export default function App() {
               void loadAiRunPatch(run);
             }}
             onShowAiRunTrace={(run) => {
-              setConsoleMessage(
-                renderAiRunTrace(run, t),
-                run.status === "failed" ? "error" : "success",
-              );
+              void showAiRunTraceById(run.id);
             }}
             onShowAiRunArtifact={(runId, kind) => {
-              void invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-                start_path: workspacePath,
-                run_id: runId,
-                kind,
-              })
-                .then((artifact) => {
-                  setConsoleMessage(renderAiRunArtifact(artifact, t), "success");
-                })
-                .catch((error) => {
-                  setConsoleMessage(formatError(error), "error");
-                });
+              void showAiRunArtifactById(runId, kind);
             }}
             onDraftCiteChunk={(chunkId) => {
               void draftSourceChunkCitation(chunkId, false);
@@ -972,7 +1008,10 @@ export default function App() {
             onApplyPatch={() => {
               void applyPatch();
             }}
-            onShowDraftOrigin={showCurrentDraftOrigin}
+            onShowDraftOriginTrace={showCurrentDraftOriginTrace}
+            onShowDraftOriginArtifact={(kind) => {
+              showCurrentDraftOriginArtifact(kind);
+            }}
           />
         </main>
       ) : (

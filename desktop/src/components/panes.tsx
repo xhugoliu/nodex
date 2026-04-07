@@ -298,7 +298,8 @@ export function EditorPane(props: {
   onDraftDelete: () => void;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
-  onShowDraftOrigin: () => void;
+  onShowDraftOriginTrace: () => void;
+  onShowDraftOriginArtifact: (kind: "request" | "response" | "metadata") => void;
 }) {
   const draftLines =
     props.patchDraftState.state === "ready"
@@ -586,8 +587,24 @@ export function EditorPane(props: {
                 title={formatPatchDraftOriginTitle(props.patchDraftOrigin, props.t)}
                 meta={formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)}
                 ops={props.patchDraftState.opTypes}
-                onOpen={props.onShowDraftOrigin}
-                openLabel={props.t("composer.showOriginTrace")}
+                actions={[
+                  {
+                    label: props.t("composer.showOriginTrace"),
+                    onClick: props.onShowDraftOriginTrace,
+                  },
+                  {
+                    label: props.t("composer.showOriginRequest"),
+                    onClick: () => props.onShowDraftOriginArtifact("request"),
+                  },
+                  {
+                    label: props.t("composer.showOriginResponse"),
+                    onClick: () => props.onShowDraftOriginArtifact("response"),
+                  },
+                  {
+                    label: props.t("composer.showOriginMetadata"),
+                    onClick: () => props.onShowDraftOriginArtifact("metadata"),
+                  },
+                ]}
                 tone="neutral"
               />
             </div>
