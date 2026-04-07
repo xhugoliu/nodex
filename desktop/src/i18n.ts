@@ -239,6 +239,9 @@ const translations: Record<Locale, TranslationTree> = {
       aiRunOriginPatchRun: "from patch run {id}",
       currentDraftRunTitle: "Current Draft Run",
       currentDraftRunMeta: "The patch editor is currently tracking AI run {id}.",
+      lifecycleTitle: "Draft Lifecycle",
+      lifecycleMeta:
+        "Keep the source run, current draft status, and latest patch result aligned in one place.",
       lastPatchResultTitle: "Last Patch Result",
       lastPatchPreview: "Preview result",
       lastPatchApplied: "Apply result",
@@ -597,6 +600,8 @@ const translations: Record<Locale, TranslationTree> = {
       aiRunOriginPatchRun: "对应 patch run：{id}",
       currentDraftRunTitle: "当前草案运行摘要",
       currentDraftRunMeta: "Patch 编辑器当前正在跟踪 AI run {id}。",
+      lifecycleTitle: "草案生命周期",
+      lifecycleMeta: "把来源 run、当前草案状态和最近一次 patch 结果收口到同一处查看。",
       lastPatchResultTitle: "最近一次 Patch 结果",
       lastPatchPreview: "预览结果",
       lastPatchApplied: "应用结果",

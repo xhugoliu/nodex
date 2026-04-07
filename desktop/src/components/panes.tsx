@@ -6,6 +6,7 @@ import {
   formatPatchDraftOriginMeta,
   formatPatchDraftOriginTitle,
   type ConsoleTone,
+  type PatchOpSummary,
   type PatchDraftState,
   type Translator,
 } from "../app-helpers";
@@ -593,53 +594,20 @@ export function EditorPane(props: {
             </div>
           </div>
 
-          {props.patchDraftOrigin ? (
+          {props.patchDraftOrigin || props.currentDraftRun || props.lastPatchResult ? (
             <div className="mb-4">
-              <PatchDraftBanner
-                title={formatPatchDraftOriginTitle(props.patchDraftOrigin, props.t)}
-                meta={formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)}
-                ops={props.patchDraftState.opTypes}
-                actions={[
-                  {
-                    label: props.t("composer.showOriginTrace"),
-                    onClick: props.onShowDraftOriginTrace,
-                  },
-                  {
-                    label: props.t("composer.showOriginRequest"),
-                    onClick: () => props.onShowDraftOriginArtifact("request"),
-                  },
-                  {
-                    label: props.t("composer.showOriginResponse"),
-                    onClick: () => props.onShowDraftOriginArtifact("response"),
-                  },
-                  {
-                    label: props.t("composer.showOriginMetadata"),
-                    onClick: () => props.onShowDraftOriginArtifact("metadata"),
-                  },
-                ]}
-                tone="neutral"
-              />
-            </div>
-          ) : null}
-
-          {props.patchDraftOrigin && props.currentDraftRun ? (
-            <div className="mb-4">
-              <CurrentDraftRunCard
-                run={props.currentDraftRun}
-                comparison={props.currentDraftComparison}
-                nextSteps={currentDraftNextSteps}
+              <DraftLifecyclePanel
+                patchDraftOrigin={props.patchDraftOrigin}
+                draftOps={props.patchDraftState.opTypes}
+                currentDraftRun={props.currentDraftRun}
+                currentDraftComparison={props.currentDraftComparison}
+                currentDraftNextSteps={currentDraftNextSteps}
+                lastPatchResult={props.lastPatchResult}
+                lastPatchResultCurrent={props.lastPatchResultCurrent}
                 t={props.t}
                 onLoadAppliedPatch={props.onLoadAppliedPatch}
-              />
-            </div>
-          ) : null}
-
-          {props.lastPatchResult ? (
-            <div className="mb-4">
-              <LastPatchResultCard
-                result={props.lastPatchResult}
-                isCurrent={props.lastPatchResultCurrent}
-                t={props.t}
+                onShowDraftOriginTrace={props.onShowDraftOriginTrace}
+                onShowDraftOriginArtifact={props.onShowDraftOriginArtifact}
               />
             </div>
           ) : null}
@@ -717,6 +685,82 @@ export function EditorPane(props: {
             </button>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function DraftLifecyclePanel(props: {
+  patchDraftOrigin: PatchDraftOrigin | null;
+  draftOps: PatchOpSummary[];
+  currentDraftRun: AiRunRecord | null;
+  currentDraftComparison: "matching" | "different" | null;
+  currentDraftNextSteps: string[];
+  lastPatchResult: PatchExecutionSummary | null;
+  lastPatchResultCurrent: boolean | null;
+  t: Translator;
+  onLoadAppliedPatch: (patchRunId: string) => void;
+  onShowDraftOriginTrace: () => void;
+  onShowDraftOriginArtifact: (kind: "request" | "response" | "metadata") => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-[color:var(--line-soft)] bg-[rgba(17,24,39,0.03)] p-4">
+      <div className="mb-4 space-y-1">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("composer.lifecycleTitle")}
+        </div>
+        <div className="text-sm leading-6 text-[color:var(--muted)]">
+          {props.t("composer.lifecycleMeta")}
+        </div>
+      </div>
+
+      {props.patchDraftOrigin ? (
+        <div className="mb-4">
+          <PatchDraftBanner
+            title={formatPatchDraftOriginTitle(props.patchDraftOrigin, props.t)}
+            meta={formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)}
+            ops={props.draftOps}
+            actions={[
+              {
+                label: props.t("composer.showOriginTrace"),
+                onClick: props.onShowDraftOriginTrace,
+              },
+              {
+                label: props.t("composer.showOriginRequest"),
+                onClick: () => props.onShowDraftOriginArtifact("request"),
+              },
+              {
+                label: props.t("composer.showOriginResponse"),
+                onClick: () => props.onShowDraftOriginArtifact("response"),
+              },
+              {
+                label: props.t("composer.showOriginMetadata"),
+                onClick: () => props.onShowDraftOriginArtifact("metadata"),
+              },
+            ]}
+            tone="neutral"
+          />
+        </div>
+      ) : null}
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        {props.currentDraftRun ? (
+          <CurrentDraftRunCard
+            run={props.currentDraftRun}
+            comparison={props.currentDraftComparison}
+            nextSteps={props.currentDraftNextSteps}
+            t={props.t}
+            onLoadAppliedPatch={props.onLoadAppliedPatch}
+          />
+        ) : null}
+
+        {props.lastPatchResult ? (
+          <LastPatchResultCard
+            result={props.lastPatchResult}
+            isCurrent={props.lastPatchResultCurrent}
+            t={props.t}
+          />
+        ) : null}
       </div>
     </section>
   );
