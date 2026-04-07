@@ -42,6 +42,7 @@ import type {
   NodeDetail,
   PatchDocument,
   PatchDraftOrigin,
+  PatchExecutionSummary,
   SourceDetail,
   WorkspaceOverview,
 } from "./types";
@@ -98,6 +99,8 @@ export default function App() {
   const [currentDraftRun, setCurrentDraftRun] = useState<AiRunRecord | null>(null);
   const [currentDraftAppliedPatch, setCurrentDraftAppliedPatch] =
     useState<PatchDocument | null>(null);
+  const [lastPatchResult, setLastPatchResult] =
+    useState<PatchExecutionSummary | null>(null);
   const [showAdvancedPatchEditor, setShowAdvancedPatchEditor] = useState(false);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeKind, setUpdateNodeKind] = useState("");
@@ -328,6 +331,10 @@ export default function App() {
     patchDraftState,
     patchEditor,
     currentDraftAppliedPatch,
+  );
+  const lastPatchResultCurrent = comparePatchTexts(
+    lastPatchResult?.patch_text ?? null,
+    patchEditor,
   );
   const isRootNodeSelected = selectedNodeDetail?.node.parent_id === null;
   const moveParentOptions =
@@ -584,6 +591,12 @@ export default function App() {
         start_path: workspacePath,
         patch_json: patchJson,
       });
+      setLastPatchResult({
+        kind: "preview",
+        report,
+        draft_origin: patchDraftOrigin,
+        patch_text: patchJson,
+      });
       setConsoleMessage(renderPatchReport(report, true, t, patchDraftOrigin), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
@@ -615,6 +628,12 @@ export default function App() {
         report.run_id,
       );
       setPatchDraftOrigin(nextDraftOrigin);
+      setLastPatchResult({
+        kind: "apply",
+        report,
+        draft_origin: nextDraftOrigin,
+        patch_text: patchJson,
+      });
       setCurrentDraftRun((current) =>
         nextDraftOrigin?.kind === "ai_run" && report.run_id
           ? attachPatchRunToRun(current, report.run_id, report.summary)
@@ -1066,6 +1085,8 @@ export default function App() {
             patchDraftOrigin={patchDraftOrigin}
             currentDraftRun={currentDraftRun}
             currentDraftComparison={currentDraftComparison}
+            lastPatchResult={lastPatchResult}
+            lastPatchResultCurrent={lastPatchResultCurrent}
             showAdvancedPatchEditor={showAdvancedPatchEditor}
             canRunStructureActions={canRunStructureActions}
             patchDraftState={patchDraftState}
@@ -1259,5 +1280,20 @@ function compareCurrentDraftWithAppliedPatch(
       : "different";
   } catch {
     return null;
+  }
+}
+
+function comparePatchTexts(
+  left: string | null,
+  right: string,
+): boolean | null {
+  if (!left) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(JSON.parse(left)) === JSON.stringify(JSON.parse(right));
+  } catch {
+    return left.trim() === right.trim();
   }
 }

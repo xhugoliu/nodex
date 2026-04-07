@@ -118,6 +118,13 @@ export interface PatchDraftOrigin {
   patch_run_id: string | null;
 }
 
+export interface PatchExecutionSummary {
+  kind: "preview" | "apply";
+  report: ApplyPatchReport;
+  draft_origin: PatchDraftOrigin | null;
+  patch_text: string;
+}
+
 export interface DesktopAiStatus {
   command: string;
   command_source: string;

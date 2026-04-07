@@ -15,6 +15,7 @@ import type {
   NodeDetail,
   ParentCandidate,
   PatchDraftOrigin,
+  PatchExecutionSummary,
   SourceDetail,
   TreeNode,
   WorkspaceOverview,
@@ -278,6 +279,8 @@ export function EditorPane(props: {
   patchDraftOrigin: PatchDraftOrigin | null;
   currentDraftRun: AiRunRecord | null;
   currentDraftComparison: "matching" | "different" | null;
+  lastPatchResult: PatchExecutionSummary | null;
+  lastPatchResultCurrent: boolean | null;
   showAdvancedPatchEditor: boolean;
   canRunStructureActions: boolean;
   patchDraftState: PatchDraftState;
@@ -631,6 +634,16 @@ export function EditorPane(props: {
             </div>
           ) : null}
 
+          {props.lastPatchResult ? (
+            <div className="mb-4">
+              <LastPatchResultCard
+                result={props.lastPatchResult}
+                isCurrent={props.lastPatchResultCurrent}
+                t={props.t}
+              />
+            </div>
+          ) : null}
+
           {props.patchDraftState.state === "ready" ? (
             <div className="rounded-2xl border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] p-4">
               <div className="font-medium text-[color:var(--text)]">
@@ -835,6 +848,79 @@ function CurrentDraftRunCard(props: {
               </div>
             ))}
           </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function LastPatchResultCard(props: {
+  result: PatchExecutionSummary;
+  isCurrent: boolean | null;
+  t: Translator;
+}) {
+  const title =
+    props.result.kind === "apply"
+      ? props.t("composer.lastPatchApplied")
+      : props.t("composer.lastPatchPreview");
+  const currentLabel =
+    props.isCurrent === true
+      ? props.t("composer.lastPatchCurrent")
+      : props.isCurrent === false
+        ? props.t("composer.lastPatchStale")
+        : props.t("detail.none");
+  const toneClass =
+    props.result.kind === "apply"
+      ? "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)]"
+      : "border-[color:var(--line)] bg-white/60";
+
+  return (
+    <section className={`rounded-xl border px-4 py-4 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("composer.lastPatchResultTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--text)]">
+            {title}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+            {currentLabel}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <StatusField
+          label={props.t("composer.lastPatchModeLabel")}
+          value={title}
+        />
+        <StatusField
+          label={props.t("composer.lastPatchSyncLabel")}
+          value={currentLabel}
+        />
+        <StatusField
+          label={props.t("detail.aiRunPatchSummaryLabel")}
+          value={props.result.report.summary || props.t("history.noSummary")}
+        />
+        <StatusField
+          label={props.t("composer.lastPatchRunIdLabel")}
+          value={props.result.report.run_id || props.t("detail.none")}
+        />
+      </div>
+
+      {props.result.report.preview.length ? (
+        <div className="mt-4 space-y-2">
+          {props.result.report.preview.map((line) => (
+            <div
+              key={line}
+              className="rounded-xl border border-[color:var(--line)] bg-white/85 px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+            >
+              {line}
+            </div>
+          ))}
         </div>
       ) : null}
     </section>
