@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -86,6 +88,28 @@ impl PatchDocument {
 
     pub fn preview_lines(&self) -> Vec<String> {
         self.ops.iter().map(PatchOp::describe).collect()
+    }
+
+    pub fn replayable(&self) -> Self {
+        let mut node_id_map = HashMap::new();
+        for op in &self.ops {
+            if let PatchOp::AddNode { id: Some(id), .. } = op {
+                node_id_map
+                    .entry(id.clone())
+                    .or_insert_with(|| Uuid::new_v4().to_string());
+            }
+        }
+
+        Self {
+            version: self.version,
+            summary: self.summary.clone(),
+            ops: self
+                .ops
+                .iter()
+                .cloned()
+                .map(|op| op.with_remapped_node_ids(&node_id_map))
+                .collect(),
+        }
     }
 }
 
@@ -192,5 +216,157 @@ impl PatchOp {
 
     fn body_is_set(&self) -> bool {
         matches!(self, Self::UpdateNode { body: Some(_), .. })
+    }
+
+    fn with_remapped_node_ids(self, node_id_map: &HashMap<String, String>) -> Self {
+        let remap = |value: String| node_id_map.get(&value).cloned().unwrap_or(value);
+
+        match self {
+            Self::AddNode {
+                id,
+                parent_id,
+                title,
+                kind,
+                body,
+                position,
+            } => Self::AddNode {
+                id: id.map(remap),
+                parent_id: remap(parent_id),
+                title,
+                kind,
+                body,
+                position,
+            },
+            Self::UpdateNode {
+                id,
+                title,
+                body,
+                kind,
+            } => Self::UpdateNode {
+                id: remap(id),
+                title,
+                body,
+                kind,
+            },
+            Self::MoveNode {
+                id,
+                parent_id,
+                position,
+            } => Self::MoveNode {
+                id: remap(id),
+                parent_id: remap(parent_id),
+                position,
+            },
+            Self::DeleteNode { id } => Self::DeleteNode { id: remap(id) },
+            Self::AttachSource { node_id, source_id } => Self::AttachSource {
+                node_id: remap(node_id),
+                source_id,
+            },
+            Self::AttachSourceChunk { node_id, chunk_id } => Self::AttachSourceChunk {
+                node_id: remap(node_id),
+                chunk_id,
+            },
+            Self::CiteSourceChunk {
+                node_id,
+                chunk_id,
+                citation_kind,
+                rationale,
+            } => Self::CiteSourceChunk {
+                node_id: remap(node_id),
+                chunk_id,
+                citation_kind,
+                rationale,
+            },
+            Self::DetachSource { node_id, source_id } => Self::DetachSource {
+                node_id: remap(node_id),
+                source_id,
+            },
+            Self::DetachSourceChunk { node_id, chunk_id } => Self::DetachSourceChunk {
+                node_id: remap(node_id),
+                chunk_id,
+            },
+            Self::UnciteSourceChunk { node_id, chunk_id } => Self::UnciteSourceChunk {
+                node_id: remap(node_id),
+                chunk_id,
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn replayable_patch_remaps_added_node_ids_and_internal_references() {
+        let patch = PatchDocument {
+            version: 1,
+            summary: Some("Replay me".to_string()),
+            ops: vec![
+                PatchOp::AddNode {
+                    id: Some("node-a".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "A".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::AddNode {
+                    id: Some("node-b".to_string()),
+                    parent_id: "node-a".to_string(),
+                    title: "B".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                },
+                PatchOp::MoveNode {
+                    id: "node-b".to_string(),
+                    parent_id: "node-a".to_string(),
+                    position: None,
+                },
+                PatchOp::UpdateNode {
+                    id: "node-a".to_string(),
+                    title: Some("A2".to_string()),
+                    body: None,
+                    kind: None,
+                },
+            ],
+        };
+
+        let replay = patch.replayable();
+
+        let new_a = match &replay.ops[0] {
+            PatchOp::AddNode { id: Some(id), .. } => id.clone(),
+            other => panic!("unexpected op: {other:?}"),
+        };
+        let new_b = match &replay.ops[1] {
+            PatchOp::AddNode {
+                id: Some(id),
+                parent_id,
+                ..
+            } => {
+                assert_eq!(parent_id, &new_a);
+                id.clone()
+            }
+            other => panic!("unexpected op: {other:?}"),
+        };
+
+        assert_ne!(new_a, "node-a");
+        assert_ne!(new_b, "node-b");
+
+        match &replay.ops[2] {
+            PatchOp::MoveNode { id, parent_id, .. } => {
+                assert_eq!(id, &new_b);
+                assert_eq!(parent_id, &new_a);
+            }
+            other => panic!("unexpected op: {other:?}"),
+        }
+
+        match &replay.ops[3] {
+            PatchOp::UpdateNode { id, .. } => {
+                assert_eq!(id, &new_a);
+            }
+            other => panic!("unexpected op: {other:?}"),
+        }
     }
 }

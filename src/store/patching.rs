@@ -167,6 +167,42 @@ impl Workspace {
         })
     }
 
+    pub fn replay_ai_run_patch(
+        &mut self,
+        run_id: &str,
+        dry_run: bool,
+    ) -> Result<AiRunReplayReport> {
+        let source_run = self
+            .ai_run_record_by_id(run_id)?
+            .with_context(|| format!("AI run {run_id} was not found"))?;
+        let patch_source = if source_run.patch_run_id.is_some() {
+            "patch_run"
+        } else {
+            "response_patch"
+        };
+        let replay_patch = self.ai_run_patch_document(run_id)?.replayable();
+        let link_original_ai_run = !dry_run && source_run.patch_run_id.is_none();
+        let report = self.apply_patch_document_with_ai_run(
+            replay_patch.clone(),
+            "ai_replay",
+            dry_run,
+            if link_original_ai_run {
+                Some(run_id)
+            } else {
+                None
+            },
+        )?;
+
+        Ok(AiRunReplayReport {
+            source_patch_run_id: source_run.patch_run_id.clone(),
+            source_run,
+            patch_source: patch_source.to_string(),
+            replay_patch,
+            dry_run,
+            report,
+        })
+    }
+
     pub fn patch_history(&self) -> Result<Vec<PatchRunRecord>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, summary, origin, file_name, applied_at

@@ -6,9 +6,9 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use uuid::Uuid;
 
 use crate::model::{
-    AiRunRecord, ApplyPatchReport, EvidenceCitationDetail, EvidenceNodeSummary, Node, NodeDetail,
-    NodeEvidenceChunkRecord, NodeEvidenceDetail, NodeSourceChunkRecord, NodeSourceDetail,
-    NodeSourceRecord, NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState,
+    AiRunRecord, AiRunReplayReport, ApplyPatchReport, EvidenceCitationDetail, EvidenceNodeSummary,
+    Node, NodeDetail, NodeEvidenceChunkRecord, NodeEvidenceDetail, NodeSourceChunkRecord,
+    NodeSourceDetail, NodeSourceRecord, NodeSummary, PatchRunRecord, SnapshotRecord, SnapshotState,
     SourceChunkDetail, SourceChunkRecord, SourceDetail, SourceImportPreview, SourceImportReport,
     SourceRecord, TreeNode,
 };
@@ -1357,6 +1357,165 @@ mod tests {
                 .content
                 .contains("\"provider\": \"test_runner\"")
         );
+        Ok(())
+    }
+
+    #[test]
+    fn replay_ai_run_patch_can_preview_response_patch() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let preview = workspace.preview_ai_expand("root")?;
+        let request_path = temp_dir.path().join("replay.request.json");
+        let response_path = temp_dir.path().join("replay.response.json");
+
+        crate::ai::write_ai_json_document(&request_path, &preview.request)?;
+        crate::ai::write_ai_json_document(&response_path, &preview.response_template)?;
+
+        workspace.upsert_ai_run_index(&crate::ai::AiRunMetadata {
+            run_id: "ai-run-replay".to_string(),
+            capability: "expand".to_string(),
+            explore_by: None,
+            node_id: "root".to_string(),
+            command: "python3 runner.py".to_string(),
+            dry_run: true,
+            status: "dry_run_succeeded".to_string(),
+            started_at: 20,
+            finished_at: 21,
+            request_path: request_path.display().to_string(),
+            response_path: response_path.display().to_string(),
+            exit_code: Some(0),
+            provider: Some("test_runner".to_string()),
+            model: Some("test-model".to_string()),
+            provider_run_id: Some("provider-run-2".to_string()),
+            retry_count: 0,
+            last_error_category: None,
+            last_error_message: None,
+            last_status_code: None,
+            patch_run_id: None,
+            patch_summary: None,
+        })?;
+
+        let replay = workspace.replay_ai_run_patch("ai-run-replay", true)?;
+
+        assert_eq!(replay.patch_source, "response_patch");
+        assert!(replay.source_patch_run_id.is_none());
+        assert!(replay.dry_run);
+        assert!(replay.report.run_id.is_none());
+        assert!(!replay.report.preview.is_empty());
+        assert!(workspace.patch_history()?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn replay_ai_run_patch_apply_links_original_dry_run() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let preview = workspace.preview_ai_expand("root")?;
+        let request_path = temp_dir.path().join("replay-apply.request.json");
+        let response_path = temp_dir.path().join("replay-apply.response.json");
+
+        crate::ai::write_ai_json_document(&request_path, &preview.request)?;
+        crate::ai::write_ai_json_document(&response_path, &preview.response_template)?;
+
+        workspace.upsert_ai_run_index(&crate::ai::AiRunMetadata {
+            run_id: "ai-run-replay-apply".to_string(),
+            capability: "expand".to_string(),
+            explore_by: None,
+            node_id: "root".to_string(),
+            command: "python3 runner.py".to_string(),
+            dry_run: true,
+            status: "dry_run_succeeded".to_string(),
+            started_at: 22,
+            finished_at: 23,
+            request_path: request_path.display().to_string(),
+            response_path: response_path.display().to_string(),
+            exit_code: Some(0),
+            provider: Some("test_runner".to_string()),
+            model: Some("test-model".to_string()),
+            provider_run_id: Some("provider-run-apply".to_string()),
+            retry_count: 0,
+            last_error_category: None,
+            last_error_message: None,
+            last_status_code: None,
+            patch_run_id: None,
+            patch_summary: None,
+        })?;
+
+        let replay = workspace.replay_ai_run_patch("ai-run-replay-apply", false)?;
+        let ai_run = workspace
+            .ai_run_record_by_id("ai-run-replay-apply")?
+            .context("AI run should still exist after replay apply")?;
+
+        assert_eq!(replay.patch_source, "response_patch");
+        assert!(replay.report.run_id.is_some());
+        assert_eq!(ai_run.patch_run_id, replay.report.run_id);
+        assert_eq!(ai_run.patch_summary, replay.report.summary);
+        Ok(())
+    }
+
+    #[test]
+    fn replay_ai_run_patch_reuses_applied_patch_with_fresh_node_ids() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+
+        workspace.upsert_ai_run_index(&crate::ai::AiRunMetadata {
+            run_id: "ai-run-applied".to_string(),
+            capability: "expand".to_string(),
+            explore_by: None,
+            node_id: "root".to_string(),
+            command: "python3 runner.py".to_string(),
+            dry_run: false,
+            status: "applied".to_string(),
+            started_at: 30,
+            finished_at: 31,
+            request_path: temp_dir.path().join("request.json").display().to_string(),
+            response_path: temp_dir.path().join("response.json").display().to_string(),
+            exit_code: Some(0),
+            provider: Some("test_runner".to_string()),
+            model: Some("test-model".to_string()),
+            provider_run_id: Some("provider-run-3".to_string()),
+            retry_count: 0,
+            last_error_category: None,
+            last_error_message: None,
+            last_status_code: None,
+            patch_run_id: None,
+            patch_summary: None,
+        })?;
+
+        let original_report = workspace.apply_patch_document_with_ai_run(
+            PatchDocument {
+                version: 1,
+                summary: Some("Replayable branch".to_string()),
+                ops: vec![PatchOp::AddNode {
+                    id: Some("idea".to_string()),
+                    parent_id: "root".to_string(),
+                    title: "Idea".to_string(),
+                    kind: Some("topic".to_string()),
+                    body: None,
+                    position: None,
+                }],
+            },
+            "desktop",
+            false,
+            Some("ai-run-applied"),
+        )?;
+        assert!(original_report.run_id.is_some());
+
+        let replay = workspace.replay_ai_run_patch("ai-run-applied", false)?;
+
+        assert_eq!(replay.patch_source, "patch_run");
+        assert_eq!(replay.source_patch_run_id, original_report.run_id);
+        assert!(!replay.dry_run);
+        assert!(replay.report.run_id.is_some());
+        assert_eq!(
+            workspace
+                .list_nodes()?
+                .into_iter()
+                .filter(|node| node.title == "Idea")
+                .count(),
+            2
+        );
+        assert_eq!(workspace.patch_history()?.len(), 2);
         Ok(())
     }
 

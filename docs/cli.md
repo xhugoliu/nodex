@@ -68,6 +68,7 @@ nodex ai history [--node-id <id>] [--format text|json]
 nodex ai show <run-id> [--format text|json]
 nodex ai artifact <run-id> --kind request|response|metadata [--format text|json]
 nodex ai patch <run-id> [--format text|json]
+nodex ai replay <run-id> [--dry-run|--apply] [--format text|json]
 nodex ai run-external <node-id> <command> [--capability expand|explore] [--by risk|question|action|evidence] [--dry-run] [--format text|json]
 ```
 
@@ -119,6 +120,11 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - `ai show <run-id>` 会汇总一条运行记录，并在 response 可读时继续显示 explanation、patch 预览和 response notes
 - `ai artifact <run-id> --kind ...` 会直接读取该次运行的 request / response / metadata 工件
 - `ai patch <run-id>` 会优先读取关联 `patch_run_id` 对应的最终 patch；如果这次运行只是 dry-run，则回退到 response 里的 patch
+- `ai replay <run-id>` 会把这次运行对应的 patch 重新送回统一 patch 引擎：
+  - 默认是安全的 dry-run 预览
+  - `--apply` 才会真正写入当前工作区
+  - 如果这条 AI run 原本还是 dry-run，`--apply` 后会把新产生的 patch run 反链回这条 `ai_runs` 记录
+  - 如果原始 patch 已经落盘到 `patch_runs`，replay 会先把其中 concrete 的新增节点 id 重映射成一组新 id，避免直接撞上旧节点
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据

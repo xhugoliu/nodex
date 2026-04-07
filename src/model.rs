@@ -94,6 +94,16 @@ pub struct AiRunArtifact {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct AiRunReplayReport {
+    pub source_run: AiRunRecord,
+    pub patch_source: String,
+    pub source_patch_run_id: Option<String>,
+    pub replay_patch: PatchDocument,
+    pub dry_run: bool,
+    pub report: ApplyPatchReport,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SourceRecord {
     pub id: String,

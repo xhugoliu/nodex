@@ -11,7 +11,8 @@ use nodex::{
         derive_ai_metadata_path, parse_ai_patch_response, write_ai_json_document,
     },
     model::{
-        AiRunArtifact, AiRunRecord, ApplyPatchReport, SourceImportPreview, SourceImportReport,
+        AiRunArtifact, AiRunRecord, AiRunReplayReport, ApplyPatchReport, SourceImportPreview,
+        SourceImportReport,
     },
     patch::PatchDocument,
     store::{Workspace, format_timestamp},
@@ -216,6 +217,20 @@ fn main() -> Result<()> {
                 match format {
                     OutputFormat::Text => print_patch_preview(&patch),
                     OutputFormat::Json => print_json(&patch)?,
+                }
+            }
+            AiCommand::Replay {
+                run_id,
+                dry_run,
+                apply,
+                format,
+            } => {
+                let mut workspace = Workspace::open_from(&cwd)?;
+                let effective_dry_run = !apply || dry_run;
+                let replay = workspace.replay_ai_run_patch(&run_id, effective_dry_run)?;
+                match format {
+                    OutputFormat::Text => print_ai_run_replay_report(&replay),
+                    OutputFormat::Json => print_json(&replay)?,
                 }
             }
             AiCommand::RunExternal {
@@ -1085,6 +1100,18 @@ fn print_ai_run_artifact(artifact: &AiRunArtifact) {
     println!("path: {}", artifact.path);
     println!();
     println!("{}", artifact.content);
+}
+
+fn print_ai_run_replay_report(replay: &AiRunReplayReport) {
+    println!("Replayed AI run {}.", replay.source_run.id);
+    println!("mode: {}", if replay.dry_run { "dry-run" } else { "apply" });
+    println!("patch source: {}", replay.patch_source);
+    if let Some(source_patch_run_id) = &replay.source_patch_run_id {
+        println!("source patch run: {}", source_patch_run_id);
+    }
+    println!("source node: {}", replay.source_run.node_id);
+    println!("source status: {}", replay.source_run.status);
+    print_patch_report(&replay.report);
 }
 
 fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {
