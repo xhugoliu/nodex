@@ -33,7 +33,7 @@ CLI 命令入口和输出分发。
 - 解析 CLI 参数
 - 调用共享内核
 - 调用 provider 调试辅助脚本
-- 输出人类可读结果
+- 输出文本和 JSON 两种结果
 
 ### `src/store.rs`
 
@@ -79,11 +79,13 @@ AI request / response 编排层。
 
 职责：
 
-- 在本地组装 `ai expand` 所需的节点、source 与 evidence 上下文
+- 在本地组装 `ai expand` / `ai explore` 所需的节点、source 与 evidence 上下文
 - 生成 prompt bundle 预览
 - 生成可审阅的 patch scaffold
 - 定义稳定的 request / response contract，供未来 runtime 对接
 - 提供 external runner bridge，把 request / response 文件交给本地命令处理
+- 校验外部 response，并把成功 apply 的 patch 继续复用到统一 patch 流程
+- 生成 AI run 元数据，并把最小运行索引写进 SQLite
 - 当前共享内核不直接内置 provider SDK，但已经支持通过 external runner 间接接入真实模型
 - 桌面 draft 默认通过统一 `provider_runner.py` 调度 `codex`，仍可用 `NODEX_DESKTOP_AI_COMMAND` 显式覆盖
 
@@ -94,7 +96,7 @@ AI request / response 编排层。
 职责：
 
 - 从当前目录向上发现 `.nodex/project.db`
-- 统一 `runs/`、`snapshots/`、`sources/`、`exports/` 路径
+- 统一 `runs/`、`snapshots/`、`sources/`、`exports/`、`ai/` 路径
 
 ### `scripts/`
 
@@ -255,10 +257,12 @@ AI request / response 编排层。
 - 保存 patch history
 - 保存 snapshots
 - 保存 source / chunk / evidence 相关关系
+- 保存 AI run 最小索引，并和本地 request / response / metadata 工件形成双层审计边界
 
 当前约束：
 
 - 继续保持 SQLite + 本地文件的 local-first 存储模型
+- 继续保留 `ai_runs` + `.nodex/ai/*.json` 这类“结构化索引 + 原始工件”分层
 - 不因为未来引入更高层表达，就改变当前 state layer 的基础职责
 
 ## 推荐链路

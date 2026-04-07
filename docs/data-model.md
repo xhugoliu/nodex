@@ -79,7 +79,7 @@
 
 - 查看 patch 历史
 - 记录 CLI convenience commands 和 `source import` 这类内部生成的结构化修改
-- 将来接 AI 后保留每次模型修改提案
+- 记录真正落地到工作区的 AI patch apply 结果，并通过 `ai_runs.patch_run_id` 反查来源运行
 
 ### `snapshots`
 
@@ -257,7 +257,7 @@
 
 1. 先自动保存一个 `auto-before-restore-*` 安全快照
 2. 清空当前内容状态相关数据
-3. 用目标快照完整重建 `metadata`、`nodes`、`sources` 以及基础来源关联
+3. 用目标快照完整重建 `metadata`、`nodes`、`sources` 以及 source / chunk / evidence 关联
 
 当前“内容状态相关数据”包括：
 
@@ -272,6 +272,7 @@
 当前快照没有纳入：
 
 - `patch_runs`
+- `ai_runs`
 - 已有 `snapshots` 记录本身
 - `.nodex/ai/` 下的 AI 运行文件
 
@@ -287,11 +288,16 @@
 
 - 更完整的节点与来源引用关系
 - 导出记录
-- 更完整的 AI 运行记录索引
+- 更完整的 AI 运行记录索引、过滤维度和聚合信息
 
 ## 当前 AI 运行文件
 
-当前 AI 运行记录还没有进 SQLite 表，而是先以本地文件形式保存到：
+当前 AI 运行持久化分成两层：
+
+- SQLite `ai_runs`：保存最小索引、状态、错误分类以及和 `patch_runs` 的关联
+- `.nodex/ai/`：保存原始 request / response / `.meta.json` 工件
+
+对应文件仍然保存在：
 
 ```text
 .nodex/ai/
@@ -305,8 +311,10 @@
 - `request.json`：一次 AI draft 请求的上下文与 contract，当前可能来自 `expand` 或 `explore`
 - `response.json`：外部 runner 或 provider 返回的结构化 response
 - `meta.json`：本地运行审计信息，例如 provider、model、provider run id、retry 次数、最后一次错误分类、patch run id
+- SQLite 索引和本地文件路径会一起写入 `ai_runs`
+- `ai history`、desktop 中的 AI 历史列表以及工件查看入口，都会先查 `ai_runs`，再按记录里的路径读取对应文件
 
-当前这些 AI 文件不会写入 snapshot，也还不属于 SQLite schema 的一部分。
+当前这些 AI 文件不会写入 snapshot；snapshot 恢复也不会回滚 `ai_runs` 或 `.nodex/ai/` 下已有工件。
 
 建议未来继续坚持两层存储：
 
