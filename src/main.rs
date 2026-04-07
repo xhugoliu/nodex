@@ -8,7 +8,7 @@ use clap::Parser;
 use nodex::{
     ai::{
         AiExpandPreview, AiPatchExplanation, AiPatchResponse, ExternalRunnerReport,
-        parse_ai_patch_response, write_ai_json_document,
+        derive_ai_metadata_path, parse_ai_patch_response, write_ai_json_document,
     },
     model::{ApplyPatchReport, SourceImportPreview, SourceImportReport},
     patch::PatchDocument,
@@ -206,11 +206,29 @@ fn main() -> Result<()> {
                                 if let Some(model) = &entry.model {
                                     println!("  model: {}", model);
                                 }
+                                if let Some(provider_run_id) = &entry.provider_run_id {
+                                    println!("  provider run: {}", provider_run_id);
+                                }
+                                println!("  retries: {}", entry.retry_count);
+                                if let Some(exit_code) = entry.exit_code {
+                                    println!("  exit code: {}", exit_code);
+                                }
                                 if let Some(category) = &entry.last_error_category {
                                     println!("  error: {}", category);
                                 }
                                 if let Some(message) = &entry.last_error_message {
                                     println!("  detail: {}", message);
+                                }
+                                println!("  request: {}", entry.request_path);
+                                println!("  response: {}", entry.response_path);
+                                match derive_ai_metadata_path(&entry.response_path) {
+                                    Some(metadata_path) => {
+                                        println!("  metadata: {}", metadata_path);
+                                    }
+                                    None => println!("  metadata: (unavailable)"),
+                                }
+                                if let Some(summary) = &entry.patch_summary {
+                                    println!("  patch summary: {}", summary);
                                 }
                                 if let Some(run_id) = &entry.patch_run_id {
                                     println!("  patch run: {}", run_id);

@@ -109,6 +109,10 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - `ai apply-response <file>` 会把外部 response 中的 patch 真正应用到当前工作区
 - `ai history` 会读取 SQLite 里的 AI 运行索引，而不是重新扫描 `.nodex/ai/*.json`
 - `ai history --node-id <id>` 可只看某个节点的运行记录
+- `ai history --format text` 现在会直接显示：
+  - request / response / derived metadata 路径
+  - provider run id、retry count、exit code
+  - 关联 patch run 与 patch summary（如果有）
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据

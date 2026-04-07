@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use nodex::{
-    ai::{ExternalRunnerReport, parse_ai_patch_response},
+    ai::{ExternalRunnerReport, derive_ai_metadata_path, parse_ai_patch_response},
     model::{
         AiRunRecord, ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord, SourceDetail,
         SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
@@ -1028,10 +1028,7 @@ fn get_ai_run_artifact(
     let artifact_path = match kind.as_str() {
         "request" => record.request_path.clone(),
         "response" => record.response_path.clone(),
-        "metadata" => record
-            .response_path
-            .strip_suffix(".response.json")
-            .map(|value| format!("{value}.meta.json"))
+        "metadata" => derive_ai_metadata_path(&record.response_path)
             .ok_or_else(|| format!("AI run {} has no derived metadata path", record.id))?,
         other => return Err(format!("unsupported AI run artifact kind `{other}`")),
     };

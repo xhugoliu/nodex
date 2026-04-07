@@ -257,6 +257,8 @@ fn timestamp_now() -> i64 {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use tempfile::tempdir;
 
     use super::*;
@@ -1275,6 +1277,86 @@ mod tests {
             .context("linked AI run should exist")?;
         assert_eq!(ai_run.patch_run_id, report.run_id);
         assert_eq!(ai_run.patch_summary.as_deref(), Some("Add linked child"));
+        Ok(())
+    }
+
+    #[test]
+    fn snapshot_restore_keeps_ai_runs_and_ai_artifacts() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let command = r#"python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+request = json.loads(Path(os.environ["NODEX_AI_REQUEST"]).read_text())
+response = {
+    "version": request["contract"]["version"],
+    "kind": request["contract"]["response_kind"],
+    "capability": request["capability"],
+    "request_node_id": request["target_node"]["id"],
+    "status": "ok",
+    "summary": "Snapshot boundary runner response",
+    "explanation": {
+        "rationale_summary": "Create one branch for snapshot boundary testing.",
+        "direct_evidence": [],
+        "inferred_suggestions": []
+    },
+    "generator": {
+        "provider": "test_runner",
+        "model": None,
+        "run_id": "snapshot-boundary-run"
+    },
+    "patch": {
+        "version": request["contract"]["patch_version"],
+        "summary": "Snapshot boundary runner response",
+        "ops": [
+            {
+                "type": "add_node",
+                "parent_id": request["target_node"]["id"],
+                "title": "Snapshot Boundary Branch",
+                "kind": "topic",
+                "body": "Generated for snapshot boundary coverage"
+            }
+        ]
+    },
+    "notes": []
+}
+Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
+PY"#;
+
+        let runner_report = workspace.run_external_ai_expand("root", command, true)?;
+        let snapshot = workspace.save_snapshot(Some("before-local-edit".to_string()))?;
+        workspace.add_node(
+            "Local Edit".to_string(),
+            "root".to_string(),
+            "topic".to_string(),
+            None,
+            None,
+        )?;
+
+        workspace.restore_snapshot(&snapshot.id)?;
+
+        let ai_history = workspace.ai_run_history(Some("root"))?;
+        assert_eq!(ai_history.len(), 1);
+        assert_eq!(ai_history[0].status, "dry_run_succeeded");
+        assert_eq!(
+            ai_history[0].request_path,
+            runner_report.metadata.request_path
+        );
+        assert_eq!(
+            ai_history[0].response_path,
+            runner_report.metadata.response_path
+        );
+        assert!(Path::new(&ai_history[0].request_path).exists());
+        assert!(Path::new(&ai_history[0].response_path).exists());
+        let metadata_path = crate::ai::derive_ai_metadata_path(&ai_history[0].response_path)
+            .context("expected metadata path to be derivable from response path")?;
+        assert!(Path::new(&metadata_path).exists());
+        assert!(
+            !workspace.tree_string()?.contains("Local Edit"),
+            "snapshot restore should rewind content state"
+        );
         Ok(())
     }
 

@@ -1066,6 +1066,12 @@ pub fn parse_ai_patch_response(response_json: &str) -> Result<AiPatchResponse> {
     Ok(response)
 }
 
+pub fn derive_ai_metadata_path(response_path: &str) -> Option<String> {
+    response_path
+        .strip_suffix(".response.json")
+        .map(|value| format!("{value}.meta.json"))
+}
+
 pub fn write_ai_json_document<T: Serialize>(path: &std::path::Path, value: &T) -> Result<()> {
     if let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)
@@ -1245,7 +1251,7 @@ mod tests {
     use tempfile::tempdir;
 
     use crate::{
-        ai::{AiRunMetadata, parse_ai_patch_response},
+        ai::{AiRunMetadata, derive_ai_metadata_path, parse_ai_patch_response},
         patch::{PatchDocument, PatchOp},
         store::Workspace,
     };
@@ -1753,5 +1759,14 @@ PY"#;
             Some("rate_limit")
         );
         Ok(())
+    }
+
+    #[test]
+    fn derives_metadata_path_from_response_path() {
+        assert_eq!(
+            derive_ai_metadata_path("/tmp/run-1.response.json").as_deref(),
+            Some("/tmp/run-1.meta.json")
+        );
+        assert!(derive_ai_metadata_path("/tmp/run-1.json").is_none());
     }
 }
