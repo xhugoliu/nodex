@@ -95,6 +95,7 @@ export default function App() {
   const [patchEditor, setPatchEditor] = useState("");
   const [patchDraftOrigin, setPatchDraftOrigin] =
     useState<PatchDraftOrigin | null>(null);
+  const [currentDraftRun, setCurrentDraftRun] = useState<AiRunRecord | null>(null);
   const [showAdvancedPatchEditor, setShowAdvancedPatchEditor] = useState(false);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeKind, setUpdateNodeKind] = useState("");
@@ -183,6 +184,38 @@ export default function App() {
     setAddChildKind("topic");
     setAddChildBody("");
   }, [selectedNodeDetail?.node.id]);
+
+  useEffect(() => {
+    if (!patchDraftOrigin || !workspacePath || !hasTauriRuntime()) {
+      setCurrentDraftRun(null);
+      return;
+    }
+
+    const draftRun = selectedNodeAiRuns.find(
+      (run) => run.id === patchDraftOrigin.run_id,
+    );
+    if (draftRun) {
+      setCurrentDraftRun(draftRun);
+      return;
+    }
+
+    let cancelled = false;
+    void getAiRunRecord(patchDraftOrigin.run_id)
+      .then((run) => {
+        if (!cancelled) {
+          setCurrentDraftRun(run);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentDraftRun(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patchDraftOrigin, selectedNodeAiRuns, workspacePath]);
 
   useEffect(() => {
     if (!hasTauriRuntime()) {
@@ -548,6 +581,11 @@ export default function App() {
         report.run_id,
       );
       setPatchDraftOrigin(nextDraftOrigin);
+      setCurrentDraftRun((current) =>
+        nextDraftOrigin?.kind === "ai_run" && report.run_id
+          ? attachPatchRunToRun(current, report.run_id, report.summary)
+          : current,
+      );
       if (nextDraftOrigin?.kind === "ai_run" && report.run_id) {
         setSelectedNodeAiRuns((current) =>
           attachPatchRunToAiRuns(
@@ -612,6 +650,7 @@ export default function App() {
       });
       setPatchEditor(JSON.stringify(result.patch, null, 2));
       setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
+      setCurrentDraftRun(aiMetadataToRunRecord(result.metadata));
       setSelectedNodeAiRuns((current) =>
         mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
       );
@@ -643,6 +682,7 @@ export default function App() {
       );
       setPatchEditor(JSON.stringify(result.patch, null, 2));
       setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
+      setCurrentDraftRun(aiMetadataToRunRecord(result.metadata));
       setSelectedNodeAiRuns((current) =>
         mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
       );
@@ -822,6 +862,7 @@ export default function App() {
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
       setPatchDraftOrigin(aiRunRecordToDraftOrigin(run));
+      setCurrentDraftRun(run);
       setConsoleMessage(t("messages.loadedAiRunPatch", { runId: run.id }), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
@@ -968,6 +1009,7 @@ export default function App() {
             moveParentOptions={moveParentOptions}
             patchEditor={patchEditor}
             patchDraftOrigin={patchDraftOrigin}
+            currentDraftRun={currentDraftRun}
             showAdvancedPatchEditor={showAdvancedPatchEditor}
             canRunStructureActions={canRunStructureActions}
             patchDraftState={patchDraftState}
@@ -1110,6 +1152,22 @@ function attachPatchRunToAiRuns(
         }
       : run,
   );
+}
+
+function attachPatchRunToRun(
+  current: AiRunRecord | null,
+  patchRunId: string,
+  patchSummary: string | null,
+): AiRunRecord | null {
+  if (!current) {
+    return current;
+  }
+
+  return {
+    ...current,
+    patch_run_id: patchRunId,
+    patch_summary: patchSummary ?? current.patch_summary,
+  };
 }
 
 function linkPatchRunToDraftOrigin(

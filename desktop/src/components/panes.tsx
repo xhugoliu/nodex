@@ -276,6 +276,7 @@ export function EditorPane(props: {
   moveParentOptions: ParentCandidate[];
   patchEditor: string;
   patchDraftOrigin: PatchDraftOrigin | null;
+  currentDraftRun: AiRunRecord | null;
   showAdvancedPatchEditor: boolean;
   canRunStructureActions: boolean;
   patchDraftState: PatchDraftState;
@@ -312,6 +313,12 @@ export function EditorPane(props: {
   const showNodeKindBadge =
     props.selectedNodeDetail?.node.kind &&
     props.selectedNodeDetail.node.kind !== "topic";
+  const currentDraftNextSteps =
+    props.currentDraftRun && props.desktopAiStatus
+      ? buildAiRunNextSteps(props.currentDraftRun, props.desktopAiStatus, props.t)
+      : props.currentDraftRun
+        ? buildAiRunNextSteps(props.currentDraftRun, null, props.t)
+        : [];
 
   return (
     <section className={`${panelClass} flex min-h-0 flex-col overflow-hidden`}>
@@ -610,6 +617,16 @@ export function EditorPane(props: {
             </div>
           ) : null}
 
+          {props.patchDraftOrigin && props.currentDraftRun ? (
+            <div className="mb-4">
+              <CurrentDraftRunCard
+                run={props.currentDraftRun}
+                nextSteps={currentDraftNextSteps}
+                t={props.t}
+              />
+            </div>
+          ) : null}
+
           {props.patchDraftState.state === "ready" ? (
             <div className="rounded-2xl border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] p-4">
               <div className="font-medium text-[color:var(--text)]">
@@ -684,6 +701,115 @@ export function EditorPane(props: {
           </div>
         </div>
       </div>
+    </section>
+  );
+}
+
+function CurrentDraftRunCard(props: {
+  run: AiRunRecord;
+  nextSteps: string[];
+  t: Translator;
+}) {
+  const statusLabel = formatAiRunStatusLabel(props.run.status, props.t);
+  const toneClass =
+    props.run.status === "failed"
+      ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.08)]"
+      : props.run.patch_run_id
+        ? "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)]"
+        : "border-[color:var(--line)] bg-white/60";
+  const summary =
+    props.run.patch_summary ||
+    props.run.last_error_message ||
+    props.t("history.noSummary");
+
+  return (
+    <section className={`rounded-xl border px-4 py-4 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("composer.currentDraftRunTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--text)]">
+            {props.t("composer.currentDraftRunMeta", { id: props.run.id })}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <span className="rounded-full border border-[color:var(--line)] bg-white/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+            {statusLabel}
+          </span>
+          {props.run.patch_run_id ? (
+            <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--text)]">
+              {props.t("detail.appliedPatch")}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <StatusField
+          label={props.t("detail.aiRunStatusLabel")}
+          value={statusLabel}
+        />
+        <StatusField
+          label={props.t("detail.aiRunModeLabel")}
+          value={
+            props.run.dry_run
+              ? props.t("detail.aiRunDryRun")
+              : props.t("detail.aiRunApplied")
+          }
+        />
+        <StatusField
+          label={props.t("detail.aiRunProviderLabel")}
+          value={props.run.provider || props.t("detail.none")}
+        />
+        <StatusField
+          label={props.t("detail.aiRunModelLabel")}
+          value={props.run.model || props.t("detail.none")}
+        />
+        <StatusField
+          label={props.t("detail.aiRunRetryLabel")}
+          value={String(props.run.retry_count)}
+        />
+        <StatusField
+          label={props.t("detail.aiRunPatchLinkLabel")}
+          value={props.run.patch_run_id || props.t("detail.aiRunPatchPending")}
+        />
+        <StatusField
+          label={props.t("detail.aiRunStartedLabel")}
+          value={formatTimestamp(props.run.started_at)}
+        />
+        <StatusField
+          label={props.t("detail.aiRunProviderRunLabel")}
+          value={props.run.provider_run_id || props.t("detail.none")}
+        />
+      </div>
+
+      <div className="mt-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.aiRunPatchSummaryLabel")}
+        </div>
+        <div className="mt-2 rounded-xl border border-[color:var(--line)] bg-white/85 px-3 py-2 text-sm leading-6 text-[color:var(--text)]">
+          {summary}
+        </div>
+      </div>
+
+      {props.nextSteps.length ? (
+        <div className="mt-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.aiRunNextSteps")}
+          </div>
+          <div className="mt-2 space-y-2">
+            {props.nextSteps.map((step) => (
+              <div
+                key={step}
+                className="rounded-xl border border-[color:var(--line)] bg-white/85 px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+              >
+                {step}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
