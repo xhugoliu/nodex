@@ -20,6 +20,32 @@
 
 更细的短期执行顺序请看 [短期执行清单](./next-steps.md)，各阶段当前落地情况见下文。
 
+## 跨阶段结构方向
+
+除阶段推进外，还有一条跨阶段都应保持的结构方向：
+
+> 高层入口可以多样，低层执行仍然统一收敛到 canonical patch。
+
+长期可以把 Nodex 理解成三层：
+
+- Intent Layer：面向 GUI / CLI convenience / 未来 AI / agent 的高层表达
+- Canonical Patch Layer：唯一稳定的 validate / apply / archive 边界
+- State Layer：SQLite + 本地文件的 local-first 存储
+
+这里要特别区分两件事：
+
+- 这是长期演化方向
+- 这不是当前要立即展开的一轮大重构
+
+当前仍然以现有 primitive patch 作为 canonical patch。
+
+如果后面推进这条方向，更适合优先验证：
+
+- `add_subtree` 这类高层动作是否真的降低 GUI / AI authoring 成本
+- selector-based 节点寻址是否值得引入
+- history 是否值得同时保留 authored intent 和 compiled patch
+- source / evidence 的高层语义是否能保持 patch-first 而不损失可解释性
+
 ## 阶段一：CLI 内核
 
 目标：
@@ -98,6 +124,11 @@
 - 而是把现有 external runner + 多 provider 调试工具链做成更清晰的真实运行体验
 - 包括配置状态、运行状态、失败反馈和 patch apply 链路的可见性
 
+长期方向补充：
+
+- 当前 AI contract 仍然直接产出 canonical patch，这条边界先继续保留
+- 等真实 provider 主路径足够稳定后，再评估是否让 AI authored output 上移到更高层 intent，再编译回 canonical patch
+
 关键问题：
 
 - 如何约束模型只输出合法 patch
@@ -148,6 +179,11 @@
 - 已有复用共享 Rust 内核的最小 Tauri 桌面壳
 - 已形成树、详情和编辑器组成的基础工作台，并保留 patch preview / apply 边界
 - 已接通 source import、snapshot、history、evidence draft 和 AI draft 的最小入口
+
+长期方向补充：
+
+- GUI 主工作流不应长期停留在“直接编辑 primitive patch”
+- 更适合让 GUI 动作逐步提升为高层 intent，patch 预览作为确认层，原始 patch JSON 退到高级模式或调试模式
 
 关键问题：
 

@@ -183,6 +183,113 @@ AI request / response 编排层。
            +-----------------------------+
 ```
 
+## 表达层分层方向
+
+在当前共享内核之外，Nodex 还保留一条明确的长期演化方向：
+
+> 多种高层入口，一种低层统一内核。
+
+这里的意思不是新增一套绕开 patch 的执行路径，而是把“如何表达修改意图”和“系统最终如何执行修改”分层。
+
+建议长期收敛成三层：
+
+### Intent Layer
+
+面向：
+
+- 用户
+- GUI
+- CLI convenience commands
+- 未来 AI / agent
+
+职责：
+
+- 表达“想做什么”
+- 尽量减少对底层 `node_id`、原始 patch JSON 的直接暴露
+- 允许更贴近交互语义的动作，例如：
+  - `add_subtree`
+  - `expand_node`
+  - `support_node_with_source`
+  - `import_source_as_outline`
+
+当前状态：
+
+- 仓库里还没有一套通用、显式落盘的 Intent Document / Intent Compiler
+- 但已经有一些“高层动作 -> 内层 patch”的雏形：
+  - `node add/update/move/delete`
+  - `source import`
+  - desktop 中的 draft / preview / apply 入口
+
+### Canonical Patch Layer
+
+面向：
+
+- 内核校验
+- 执行
+- patch history
+- 审计归档
+
+职责：
+
+- 表达“系统实际怎么改”
+- 作为唯一统一的执行格式
+- 保持 patch-first
+
+当前约束：
+
+- 继续以当前 primitive patch 作为 canonical patch
+- `version = 1` patch 仍然是当前真实执行和归档边界
+- 即使未来引入 Intent Layer，也应该先编译到 canonical patch，再复用现有 validate / apply / archive 流程
+
+### State Layer
+
+面向：
+
+- 本地工作区持久化
+- 查询
+- 恢复
+
+职责：
+
+- 保存当前状态
+- 保存 patch history
+- 保存 snapshots
+- 保存 source / chunk / evidence 相关关系
+
+当前约束：
+
+- 继续保持 SQLite + 本地文件的 local-first 存储模型
+- 不因为未来引入更高层表达，就改变当前 state layer 的基础职责
+
+## 推荐链路
+
+长期更适合的表达链路是：
+
+```text
+User / GUI / CLI / AI
+          |
+          v
+    Intent Layer
+          |
+          v
+Intent Resolver / Compiler
+          |
+          v
+ Canonical Patch Layer
+          |
+          v
+ validate + apply
+          |
+          +--> current workspace state
+          +--> patch history
+          +--> snapshots / exports / audits
+```
+
+这条链路当前还没有完整实现，但它描述了一个重要边界：
+
+- 高层入口可以继续增加
+- 底层执行路径不应该分叉
+
 ## 未来建议演化
 
 建议后续按这个方向继续拆：
@@ -231,6 +338,12 @@ AI request / response 编排层。
 - 本地优先的数据模型
 - 可追踪的结构演进
 
+如果未来进一步引入 Intent Layer，也应继续保持：
+
+- Intent：负责表达自然
+- Canonical Patch：负责执行稳定
+- State：负责 local-first 持久化
+
 CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 
 ## 当前还没落地的部分
@@ -241,6 +354,7 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - 更完整的来源与证据模型
 - PDF 导入
 - 完整脑图式 Tauri 图形界面
+- 通用 Intent Layer / selector resolver / authored intent history
 
 当前已经有一层最小 AI dry-run 骨架：
 
@@ -264,6 +378,12 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - `.nodex/ai/*.meta.json` 保存本地运行审计信息，便于排查 provider 调用过程
 
 短期更适合继续补的，不是把 provider SDK 直接塞进共享内核，而是把这条真实 provider 路径的配置、状态、失败反馈和 apply 链路做得更可见、更顺手。
+
+同理，短期更适合做的也不是直接发起一轮大规模“Intent Layer 重构”，而是先继续验证：
+
+- 哪些高层动作真的值得从 patch 中抽出来
+- 哪些 selector / 临时句柄能明显降低 GUI / AI authoring 成本
+- 哪些历史字段值得同时保留 intent 和 compiled patch
 
 其中资料导入已经有一版最小实现：
 
