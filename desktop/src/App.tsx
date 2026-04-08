@@ -103,6 +103,8 @@ export default function App() {
   const [selectedAiRunLoading, setSelectedAiRunLoading] = useState(false);
   const [selectedSourceDetail, setSelectedSourceDetail] =
     useState<SourceDetail | null>(null);
+  const [selectedSourceChunkId, setSelectedSourceChunkId] =
+    useState<string | null>(null);
   const [desktopAiStatus, setDesktopAiStatus] = useState<DesktopAiStatus | null>(null);
   const [contextNodeId, setContextNodeId] = useState<string | null>(null);
   const [contextSourceId, setContextSourceId] = useState<string | null>(null);
@@ -379,6 +381,7 @@ export default function App() {
               setSelectedAiRunCompare(null);
               setSelectedAiRunLoading(false);
               setSelectedSourceDetail(null);
+              setSelectedSourceChunkId(null);
               setContextNodeId(null);
               setContextSourceId(null);
               setPatchDraftOrigin(null);
@@ -521,7 +524,10 @@ export default function App() {
       const reloaded = await fetchSourceDetail(
         selectedSourceId,
         overview.root_dir,
-        { silentError: true },
+        {
+          silentError: true,
+          targetChunkId: selectedSourceChunkId,
+        },
       );
       if (reloaded) {
         return;
@@ -551,6 +557,7 @@ export default function App() {
     setSelectedAiRunCompare(null);
     setSelectedAiRunLoading(false);
     setSelectedSourceDetail(null);
+    setSelectedSourceChunkId(null);
     setContextNodeId(null);
     setContextSourceId(null);
   }
@@ -622,6 +629,7 @@ export default function App() {
       setSelectedNodeDetail(detail);
       setSelectedNodeAiRuns(aiRuns);
       setSelectedSourceDetail(null);
+      setSelectedSourceChunkId(null);
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -634,7 +642,7 @@ export default function App() {
   async function fetchSourceDetail(
     sourceId: string,
     path = workspacePath,
-    options: { silentError?: boolean } = {},
+    options: { silentError?: boolean; targetChunkId?: string | null } = {},
   ) {
     if (!ensureWorkspace(path)) {
       return false;
@@ -651,6 +659,7 @@ export default function App() {
       setSelectedSourceId(sourceId);
       setSelectedNodeId(null);
       setSelectedSourceDetail(detail);
+      setSelectedSourceChunkId(options.targetChunkId ?? null);
       setSelectedNodeDetail(null);
       setSelectedNodeAiRuns([]);
       setSelectedAiRunId(null);
@@ -1142,6 +1151,12 @@ export default function App() {
     }
   }
 
+  async function openAiEvidenceSourceChunk(sourceId: string, chunkId: string) {
+    await fetchSourceDetail(sourceId, workspacePath, {
+      targetChunkId: chunkId,
+    });
+  }
+
   async function showAiRunTraceById(runId: string) {
     if (!ensureWorkspace()) {
       return;
@@ -1225,6 +1240,7 @@ export default function App() {
             selectedAiRunLoading={selectedAiRunLoading}
             patchDraftOrigin={patchDraftOrigin}
             selectedSourceDetail={selectedSourceDetail}
+            selectedSourceChunkId={selectedSourceChunkId}
             contextNodeId={contextNodeId}
             contextSourceId={contextSourceId}
             consoleMessage={consoleMessage}
@@ -1254,6 +1270,9 @@ export default function App() {
             }}
             onClearAiRunCompare={() => {
               setSelectedAiRunCompare(null);
+            }}
+            onOpenAiEvidenceSourceChunk={(sourceId, chunkId) => {
+              void openAiEvidenceSourceChunk(sourceId, chunkId);
             }}
             onDraftCiteChunk={(chunkId) => {
               void draftSourceChunkCitation(chunkId, false);

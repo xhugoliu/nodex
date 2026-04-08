@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   buildAiDraftNextSteps,
@@ -159,6 +159,7 @@ export function InspectorPane(props: {
   selectedAiRunLoading: boolean;
   patchDraftOrigin: PatchDraftOrigin | null;
   selectedSourceDetail: SourceDetail | null;
+  selectedSourceChunkId: string | null;
   contextNodeId: string | null;
   contextSourceId: string | null;
   consoleMessage: string;
@@ -173,6 +174,7 @@ export function InspectorPane(props: {
   onReplayAiRunDryRun: (runId: string) => void;
   onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
   onClearAiRunCompare: () => void;
+  onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
 }) {
@@ -209,10 +211,12 @@ export function InspectorPane(props: {
               onReplayAiRunDryRun={props.onReplayAiRunDryRun}
               onCompareAiRuns={props.onCompareAiRuns}
               onClearAiRunCompare={props.onClearAiRunCompare}
+              onOpenAiEvidenceSourceChunk={props.onOpenAiEvidenceSourceChunk}
             />
           ) : props.selectedSourceDetail ? (
             <CompactSourceDetail
               detail={props.selectedSourceDetail}
+              selectedChunkId={props.selectedSourceChunkId}
               contextNodeId={props.contextNodeId}
               t={props.t}
               onSelectNode={props.onSelectNode}
@@ -1290,6 +1294,7 @@ function CompactNodeDetail(props: {
   onReplayAiRunDryRun: (runId: string) => void;
   onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
   onClearAiRunCompare: () => void;
+  onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
 }) {
   const showKindBadge = props.detail.node.kind !== "topic";
   const childrenSummary = props.detail.children.length
@@ -1589,6 +1594,7 @@ function CompactNodeDetail(props: {
               onReplayAiRunDryRun={props.onReplayAiRunDryRun}
               onCompareAiRuns={props.onCompareAiRuns}
               onClearAiRunCompare={props.onClearAiRunCompare}
+              onOpenAiEvidenceSourceChunk={props.onOpenAiEvidenceSourceChunk}
             />
           </div>
         ) : (
@@ -1632,6 +1638,7 @@ function RunInspectorCard(props: {
   onReplayAiRunDryRun: (runId: string) => void;
   onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
   onClearAiRunCompare: () => void;
+  onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<
     "overview" | "request" | "response" | "metadata" | "compare"
@@ -1754,7 +1761,11 @@ function RunInspectorCard(props: {
 
       <div className="mt-4">
         {activeTab === "overview" ? (
-          <RunInspectorOverview runShow={props.runShow} t={props.t} />
+          <RunInspectorOverview
+            runShow={props.runShow}
+            t={props.t}
+            onOpenAiEvidenceSourceChunk={props.onOpenAiEvidenceSourceChunk}
+          />
         ) : null}
         {activeTab === "request" ? (
           <AiRunArtifactPanel
@@ -1801,6 +1812,7 @@ function RunInspectorCard(props: {
 function RunInspectorOverview(props: {
   runShow: AiRunShowOutput;
   t: Translator;
+  onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
 }) {
   const { record, explanation, patch_preview, response_notes, load_notes } = props.runShow;
   const statusLabel = formatAiRunStatusLabel(record.status, props.t);
@@ -1879,18 +1891,28 @@ function RunInspectorOverview(props: {
           {explanation.direct_evidence.length ? (
             <div className="mt-2 space-y-2">
               {explanation.direct_evidence.map((item) => (
-                <div
+                <button
                   key={`${item.chunk_id}-${item.start_line}-${item.end_line}`}
-                  className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+                  className="w-full rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-left text-sm leading-6 text-[color:var(--text)] transition hover:border-[rgba(17,24,39,0.18)] hover:bg-white/90"
+                  onClick={() =>
+                    props.onOpenAiEvidenceSourceChunk(item.source_id, item.chunk_id)
+                  }
                 >
-                  <div className="font-medium">
-                    {item.source_name} [{item.start_line}-{item.end_line}]
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">
+                        {item.source_name} [{item.start_line}-{item.end_line}]
+                      </div>
+                      <div className="text-[color:var(--muted)]">
+                        {item.label || props.t("detail.noLabel")}
+                      </div>
+                      <div className="mt-1">{item.why_it_matters}</div>
+                    </div>
+                    <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                      {props.t("detail.openEvidenceChunk")}
+                    </span>
                   </div>
-                  <div className="text-[color:var(--muted)]">
-                    {item.label || props.t("detail.noLabel")}
-                  </div>
-                  <div className="mt-1">{item.why_it_matters}</div>
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -2202,6 +2224,7 @@ function AiRunCompareSide(props: {
 
 function CompactSourceDetail(props: {
   detail: SourceDetail;
+  selectedChunkId: string | null;
   contextNodeId: string | null;
   t: Translator;
   onSelectNode: (nodeId: string) => void;
@@ -2222,7 +2245,31 @@ function CompactSourceDetail(props: {
         .map((node) => [node.id, node]),
     ).values(),
   );
-  const previewChunks = props.detail.chunks.slice(0, 3);
+  const chunkRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const defaultPreviewChunks = props.detail.chunks.slice(0, 3);
+  const selectedChunkDetail = props.selectedChunkId
+    ? props.detail.chunks.find((chunkDetail) => chunkDetail.chunk.id === props.selectedChunkId)
+    : null;
+  const previewChunks = selectedChunkDetail
+    ? [
+        selectedChunkDetail,
+        ...defaultPreviewChunks.filter(
+          (chunkDetail) => chunkDetail.chunk.id !== selectedChunkDetail.chunk.id,
+        ),
+      ]
+    : defaultPreviewChunks;
+  const hiddenChunkCount =
+    props.detail.chunks.length -
+    new Set(previewChunks.map((chunkDetail) => chunkDetail.chunk.id)).size;
+
+  useEffect(() => {
+    if (!props.selectedChunkId) {
+      return;
+    }
+
+    const target = chunkRefs.current[props.selectedChunkId];
+    target?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [props.selectedChunkId, previewChunks]);
 
   return (
     <div className="space-y-5">
@@ -2286,12 +2333,27 @@ function CompactSourceDetail(props: {
             {previewChunks.map((chunkDetail) => (
               <div
                 key={chunkDetail.chunk.id}
-                className="rounded-lg border border-[color:var(--line-soft)] bg-white/75 p-3"
+                ref={(element) => {
+                  chunkRefs.current[chunkDetail.chunk.id] = element;
+                }}
+                className={[
+                  "rounded-lg border p-3",
+                  props.selectedChunkId === chunkDetail.chunk.id
+                    ? "border-[rgba(15,118,110,0.28)] bg-[rgba(15,118,110,0.08)] shadow-[0_8px_24px_rgba(15,23,42,0.06)]"
+                    : "border-[color:var(--line-soft)] bg-white/75",
+                ].join(" ")}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-[color:var(--text)]">
-                      {chunkDetail.chunk.label || props.t("detail.noLabel")}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="truncate text-sm font-medium text-[color:var(--text)]">
+                        {chunkDetail.chunk.label || props.t("detail.noLabel")}
+                      </div>
+                      {props.selectedChunkId === chunkDetail.chunk.id ? (
+                        <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-white/90 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--text)]">
+                          {props.t("detail.selectedChunk")}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-[color:var(--muted)]">
                       {props.t("detail.chunkMeta", {
@@ -2358,10 +2420,10 @@ function CompactSourceDetail(props: {
                 ) : null}
               </div>
             ))}
-            {props.detail.chunks.length > previewChunks.length ? (
+            {hiddenChunkCount > 0 ? (
               <div className="text-xs text-[color:var(--muted)]">
                 {props.t("detail.moreChunks", {
-                  count: props.detail.chunks.length - previewChunks.length,
+                  count: hiddenChunkCount,
                 })}
               </div>
             ) : null}

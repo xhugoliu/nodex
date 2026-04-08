@@ -152,6 +152,7 @@ AI request / response 编排层。
 - 负责在 patch 编辑器里展示当前草案是否来自某次 AI run
 - 负责在节点详情里提供 Run Inspector：
   - 选中某条 AI run 后直接查看 explanation、patch、request / response / metadata
+  - explanation 里的 direct evidence 可继续跳到对应 source chunk
   - 在同一处触发 replay dry-run
   - 在同一处比较两条 run 的差异
 - 负责 patch 预览与应用
