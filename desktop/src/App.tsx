@@ -88,6 +88,22 @@ export default function App() {
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceOverview, setWorkspaceOverview] =
     useState<WorkspaceOverview | null>(null);
+  const [inspectorMode, setInspectorMode] = useState<
+    "selection" | "workspace_runs"
+  >("selection");
+  const [workspaceAiRuns, setWorkspaceAiRuns] = useState<AiRunRecord[]>([]);
+  const [workspaceAiRunsHydrated, setWorkspaceAiRunsHydrated] = useState(false);
+  const [workspaceAiRunsLoading, setWorkspaceAiRunsLoading] = useState(false);
+  const [workspaceSelectedAiRunId, setWorkspaceSelectedAiRunId] =
+    useState<string | null>(null);
+  const [workspaceSelectedAiRunShow, setWorkspaceSelectedAiRunShow] =
+    useState<AiRunShowOutput | null>(null);
+  const [workspaceSelectedAiRunArtifacts, setWorkspaceSelectedAiRunArtifacts] =
+    useState<AiRunInspectorArtifacts | null>(null);
+  const [workspaceSelectedAiRunCompare, setWorkspaceSelectedAiRunCompare] =
+    useState<AiRunCompareOutput | null>(null);
+  const [workspaceSelectedAiRunLoading, setWorkspaceSelectedAiRunLoading] =
+    useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selectedNodeDetail, setSelectedNodeDetail] =
@@ -248,53 +264,67 @@ export default function App() {
     setSelectedAiRunLoading(true);
     setSelectedAiRunCompare(null);
 
-    void Promise.allSettled([
-      invokeCommand<AiRunShowOutput>("get_ai_run_show", {
-        start_path: workspacePath,
-        run_id: runId,
-      }),
-      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind: "request",
-      }),
-      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind: "response",
-      }),
-      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind: "metadata",
-      }),
-    ]).then((results) => {
-      if (cancelled || runId !== selectedAiRunId) {
-        return;
-      }
-
-      const [showResult, requestResult, responseResult, metadataResult] = results;
-      if (showResult.status !== "fulfilled") {
+    void fetchAiRunInspectorBundle(runId)
+      .then(({ show, artifacts }) => {
+        if (cancelled || runId !== selectedAiRunId) {
+          return;
+        }
+        setSelectedAiRunShow(show);
+        setSelectedAiRunArtifacts(artifacts);
+        setSelectedAiRunLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled || runId !== selectedAiRunId) {
+          return;
+        }
         setSelectedAiRunShow(null);
         setSelectedAiRunArtifacts(null);
         setSelectedAiRunLoading(false);
-        setConsoleMessage(formatError(showResult.reason), "error");
-        return;
-      }
-
-      setSelectedAiRunShow(showResult.value);
-      setSelectedAiRunArtifacts({
-        request: toAiRunArtifactState(requestResult),
-        response: toAiRunArtifactState(responseResult),
-        metadata: toAiRunArtifactState(metadataResult),
+        setConsoleMessage(formatError(error), "error");
       });
-      setSelectedAiRunLoading(false);
-    });
 
     return () => {
       cancelled = true;
     };
   }, [selectedAiRunId, selectedNodeAiRuns, workspacePath]);
+
+  useEffect(() => {
+    if (!workspaceSelectedAiRunId || !workspacePath || !hasTauriRuntime()) {
+      setWorkspaceSelectedAiRunShow(null);
+      setWorkspaceSelectedAiRunArtifacts(null);
+      setWorkspaceSelectedAiRunCompare(null);
+      setWorkspaceSelectedAiRunLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const runId = workspaceSelectedAiRunId;
+    setWorkspaceSelectedAiRunLoading(true);
+    setWorkspaceSelectedAiRunCompare(null);
+
+    void fetchAiRunInspectorBundle(runId)
+      .then(({ show, artifacts }) => {
+        if (cancelled || runId !== workspaceSelectedAiRunId) {
+          return;
+        }
+        setWorkspaceSelectedAiRunShow(show);
+        setWorkspaceSelectedAiRunArtifacts(artifacts);
+        setWorkspaceSelectedAiRunLoading(false);
+      })
+      .catch((error) => {
+        if (cancelled || runId !== workspaceSelectedAiRunId) {
+          return;
+        }
+        setWorkspaceSelectedAiRunShow(null);
+        setWorkspaceSelectedAiRunArtifacts(null);
+        setWorkspaceSelectedAiRunLoading(false);
+        setConsoleMessage(formatError(error), "error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceSelectedAiRunId, workspacePath]);
 
   useEffect(() => {
     if (!patchDraftOrigin || !workspacePath || !hasTauriRuntime()) {
@@ -370,6 +400,7 @@ export default function App() {
             startTransition(() => {
               setWorkspaceOverview(event.payload.overview);
               setWorkspacePath(event.payload.overview.root_dir);
+              setInspectorMode("selection");
               setTreeQuery("");
               setSelectedNodeId(null);
               setSelectedSourceId(null);
@@ -385,6 +416,7 @@ export default function App() {
               setContextNodeId(null);
               setContextSourceId(null);
               setPatchDraftOrigin(null);
+              resetWorkspaceAiRunsState();
             });
             setConsoleMessage(event.payload.message, event.payload.tone);
           },
@@ -458,6 +490,17 @@ export default function App() {
     !isRootNodeSelected &&
     moveParentOptions.length > 0;
 
+  function resetWorkspaceAiRunsState() {
+    setWorkspaceAiRuns([]);
+    setWorkspaceAiRunsHydrated(false);
+    setWorkspaceAiRunsLoading(false);
+    setWorkspaceSelectedAiRunId(null);
+    setWorkspaceSelectedAiRunShow(null);
+    setWorkspaceSelectedAiRunArtifacts(null);
+    setWorkspaceSelectedAiRunCompare(null);
+    setWorkspaceSelectedAiRunLoading(false);
+  }
+
   function setConsoleMessage(message: string, tone: ConsoleTone) {
     setConsoleEntry({ message, tone });
     setShowConsoleDetails(tone === "error");
@@ -491,6 +534,97 @@ export default function App() {
 
     setConsoleMessage(t("messages.selectNodeFirst"), "error");
     return false;
+  }
+
+  async function fetchAiRunInspectorBundle(runId: string) {
+    const results = await Promise.allSettled([
+      invokeCommand<AiRunShowOutput>("get_ai_run_show", {
+        start_path: workspacePath,
+        run_id: runId,
+      }),
+      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind: "request",
+      }),
+      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind: "response",
+      }),
+      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind: "metadata",
+      }),
+    ]);
+
+    const [showResult, requestResult, responseResult, metadataResult] = results;
+    if (showResult.status !== "fulfilled") {
+      throw showResult.reason;
+    }
+
+    return {
+      show: showResult.value,
+      artifacts: {
+        request: toAiRunArtifactState(requestResult),
+        response: toAiRunArtifactState(responseResult),
+        metadata: toAiRunArtifactState(metadataResult),
+      },
+    };
+  }
+
+  async function loadWorkspaceAiRuns(
+    path = workspacePath,
+    options: {
+      silentError?: boolean;
+      preserveSelected?: boolean;
+    } = {},
+  ) {
+    if (!ensureWorkspace(path)) {
+      return false;
+    }
+
+    setWorkspaceAiRunsLoading(true);
+    try {
+      const runs = await invokeCommand<AiRunRecord[]>("get_ai_run_history", {
+        start_path: path,
+      });
+      setWorkspaceAiRuns(runs);
+      setWorkspaceAiRunsHydrated(true);
+      setWorkspaceSelectedAiRunCompare(null);
+      setWorkspaceSelectedAiRunId((current) => {
+        if (
+          options.preserveSelected &&
+          current &&
+          runs.some((run) => run.id === current)
+        ) {
+          return current;
+        }
+        return runs[0]?.id ?? null;
+      });
+      if (!runs.length) {
+        setWorkspaceSelectedAiRunShow(null);
+        setWorkspaceSelectedAiRunArtifacts(null);
+        setWorkspaceSelectedAiRunLoading(false);
+      }
+      setWorkspaceAiRunsLoading(false);
+      return true;
+    } catch (error) {
+      setWorkspaceAiRunsLoading(false);
+      if (!options.silentError) {
+        setConsoleMessage(formatError(error), "error");
+      }
+      return false;
+    }
+  }
+
+  async function openWorkspaceAiRuns() {
+    setInspectorMode("workspace_runs");
+    if (workspaceAiRunsHydrated) {
+      return;
+    }
+    await loadWorkspaceAiRuns();
   }
 
   async function applyOverview(
@@ -534,6 +668,16 @@ export default function App() {
       }
     }
 
+    if (options.preserveSelection && inspectorMode === "workspace_runs") {
+      const reloaded = await loadWorkspaceAiRuns(overview.root_dir, {
+        silentError: true,
+        preserveSelected: true,
+      });
+      if (reloaded) {
+        return;
+      }
+    }
+
     const fallbackNodeId =
       overview.tree.node.id ||
       findNodeById(overview.tree, "root")?.node.id ||
@@ -560,6 +704,8 @@ export default function App() {
     setSelectedSourceChunkId(null);
     setContextNodeId(null);
     setContextSourceId(null);
+    setInspectorMode("selection");
+    resetWorkspaceAiRunsState();
   }
 
   async function openWorkspaceCommand(path: string) {
@@ -835,10 +981,15 @@ export default function App() {
       setSelectedNodeAiRuns((current) =>
         mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
       );
-      setConsoleMessage(
-        renderExternalRunnerReport(result, t),
-        "success",
-      );
+      if (workspaceAiRunsHydrated) {
+        setWorkspaceAiRuns((current) =>
+          mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
+        );
+        if (inspectorMode === "workspace_runs") {
+          setWorkspaceSelectedAiRunId(result.metadata.run_id);
+        }
+      }
+      setConsoleMessage(renderExternalRunnerReport(result, t), "success");
     } catch (error) {
       setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
     }
@@ -867,6 +1018,14 @@ export default function App() {
       setSelectedNodeAiRuns((current) =>
         mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
       );
+      if (workspaceAiRunsHydrated) {
+        setWorkspaceAiRuns((current) =>
+          mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
+        );
+        if (inspectorMode === "workspace_runs") {
+          setWorkspaceSelectedAiRunId(result.metadata.run_id);
+        }
+      }
       setConsoleMessage(renderExternalRunnerReport(result, t), "success");
     } catch (error) {
       setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
@@ -1085,9 +1244,18 @@ export default function App() {
       return selectedAiRunShow.record;
     }
 
+    if (workspaceSelectedAiRunShow?.record.id === runId) {
+      return workspaceSelectedAiRunShow.record;
+    }
+
     const currentRun = selectedNodeAiRuns.find((run) => run.id === runId);
     if (currentRun) {
       return currentRun;
+    }
+
+    const workspaceRun = workspaceAiRuns.find((run) => run.id === runId);
+    if (workspaceRun) {
+      return workspaceRun;
     }
 
     return invokeCommand<AiRunRecord>("get_ai_run_record", {
@@ -1151,10 +1319,41 @@ export default function App() {
     }
   }
 
+  async function compareWorkspaceAiRuns(leftRunId: string, rightRunId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const output = await invokeCommand<AiRunCompareOutput>("compare_ai_runs", {
+        start_path: workspacePath,
+        left_run_id: leftRunId,
+        right_run_id: rightRunId,
+      });
+      setWorkspaceSelectedAiRunCompare(output);
+      setConsoleMessage(
+        t("messages.loadedAiRunCompare", {
+          leftRunId: leftRunId,
+          rightRunId: rightRunId,
+        }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function openAiEvidenceSourceChunk(sourceId: string, chunkId: string) {
-    await fetchSourceDetail(sourceId, workspacePath, {
+    const focused = await fetchSourceDetail(sourceId, workspacePath, {
       targetChunkId: chunkId,
     });
+    if (focused) {
+      setInspectorMode("selection");
+    }
+  }
+
+  async function openNodeForAiRun(runId: string) {
+    await focusAiRunInInspector(runId);
   }
 
   async function focusAiRunInInspector(runId: string) {
@@ -1174,6 +1373,7 @@ export default function App() {
         );
         return;
       }
+      setInspectorMode("selection");
       setSelectedAiRunId(runId);
       setConsoleMessage(
         t("messages.focusedAiRunInspector", { runId }),
@@ -1252,12 +1452,22 @@ export default function App() {
             t={t}
             onQueryChange={setTreeQuery}
             onSelectNode={(nodeId) => {
+              setInspectorMode("selection");
               void fetchNodeDetail(nodeId);
             }}
           />
           <InspectorPane
             hasWorkspace
+            inspectorMode={inspectorMode}
             desktopAiStatus={desktopAiStatus}
+            workspaceAiRuns={workspaceAiRuns}
+            workspaceAiRunsHydrated={workspaceAiRunsHydrated}
+            workspaceAiRunsLoading={workspaceAiRunsLoading}
+            workspaceSelectedAiRunId={workspaceSelectedAiRunId}
+            workspaceSelectedAiRunShow={workspaceSelectedAiRunShow}
+            workspaceSelectedAiRunArtifacts={workspaceSelectedAiRunArtifacts}
+            workspaceSelectedAiRunCompare={workspaceSelectedAiRunCompare}
+            workspaceSelectedAiRunLoading={workspaceSelectedAiRunLoading}
             selectedNodeDetail={selectedNodeDetail}
             selectedNodeAiRuns={selectedNodeAiRuns}
             selectedAiRunId={selectedAiRunId}
@@ -1277,14 +1487,25 @@ export default function App() {
             onToggleConsoleDetails={() => {
               setShowConsoleDetails((current) => !current);
             }}
+            onOpenWorkspaceAiRuns={() => {
+              void openWorkspaceAiRuns();
+            }}
+            onReturnToSelection={() => {
+              setInspectorMode("selection");
+            }}
             onSelectNode={(nodeId) => {
+              setInspectorMode("selection");
               void fetchNodeDetail(nodeId);
             }}
             onSelectSource={(sourceId) => {
+              setInspectorMode("selection");
               void fetchSourceDetail(sourceId);
             }}
             onSelectAiRun={(runId) => {
               setSelectedAiRunId(runId);
+            }}
+            onSelectWorkspaceAiRun={(runId) => {
+              setWorkspaceSelectedAiRunId(runId);
             }}
             onLoadAiRunPatch={(runId) => {
               void loadAiRunPatchById(runId);
@@ -1297,6 +1518,15 @@ export default function App() {
             }}
             onClearAiRunCompare={() => {
               setSelectedAiRunCompare(null);
+            }}
+            onCompareWorkspaceAiRuns={(leftRunId, rightRunId) => {
+              void compareWorkspaceAiRuns(leftRunId, rightRunId);
+            }}
+            onClearWorkspaceAiRunCompare={() => {
+              setWorkspaceSelectedAiRunCompare(null);
+            }}
+            onOpenNodeForAiRun={(runId) => {
+              void openNodeForAiRun(runId);
             }}
             onOpenAiEvidenceSourceChunk={(sourceId, chunkId) => {
               void openAiEvidenceSourceChunk(sourceId, chunkId);

@@ -149,7 +149,16 @@ export function WorkspaceStartPane(props: {
 
 export function InspectorPane(props: {
   hasWorkspace: boolean;
+  inspectorMode: "selection" | "workspace_runs";
   desktopAiStatus: DesktopAiStatus | null;
+  workspaceAiRuns: AiRunRecord[];
+  workspaceAiRunsHydrated: boolean;
+  workspaceAiRunsLoading: boolean;
+  workspaceSelectedAiRunId: string | null;
+  workspaceSelectedAiRunShow: AiRunShowOutput | null;
+  workspaceSelectedAiRunArtifacts: AiRunInspectorArtifacts | null;
+  workspaceSelectedAiRunCompare: AiRunCompareOutput | null;
+  workspaceSelectedAiRunLoading: boolean;
   selectedNodeDetail: NodeDetail | null;
   selectedNodeAiRuns: AiRunRecord[];
   selectedAiRunId: string | null;
@@ -167,13 +176,19 @@ export function InspectorPane(props: {
   showConsoleDetails: boolean;
   t: Translator;
   onToggleConsoleDetails: () => void;
+  onOpenWorkspaceAiRuns: () => void;
+  onReturnToSelection: () => void;
   onSelectNode: (nodeId: string) => void;
   onSelectSource: (sourceId: string) => void;
   onSelectAiRun: (runId: string) => void;
+  onSelectWorkspaceAiRun: (runId: string) => void;
   onLoadAiRunPatch: (runId: string) => void;
   onReplayAiRunDryRun: (runId: string) => void;
   onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
   onClearAiRunCompare: () => void;
+  onCompareWorkspaceAiRuns: (leftRunId: string, rightRunId: string) => void;
+  onClearWorkspaceAiRunCompare: () => void;
+  onOpenNodeForAiRun: (runId: string) => void;
   onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
@@ -189,10 +204,47 @@ export function InspectorPane(props: {
   return (
     <section className={`${panelClass} flex min-h-0 flex-col overflow-hidden`}>
       <SectionHeader title={props.t("detail.title")} />
+      {props.hasWorkspace ? (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            className={ghostButtonClass}
+            onClick={props.onOpenWorkspaceAiRuns}
+          >
+            {props.t("detail.workspaceAiRuns")}
+          </button>
+          {props.inspectorMode === "workspace_runs" ? (
+            <button
+              className={ghostButtonClass}
+              onClick={props.onReturnToSelection}
+            >
+              {props.t("detail.returnToSelection")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid min-h-0 flex-1 gap-3 grid-rows-[minmax(0,1fr)_auto]">
         <div className={`${cardClass} scroll-panel min-h-0 overflow-auto`}>
-          {props.selectedNodeDetail ? (
+          {props.inspectorMode === "workspace_runs" ? (
+            <WorkspaceAiRunsView
+              aiRuns={props.workspaceAiRuns}
+              runsHydrated={props.workspaceAiRunsHydrated}
+              runsLoading={props.workspaceAiRunsLoading}
+              selectedAiRunId={props.workspaceSelectedAiRunId}
+              selectedAiRunShow={props.workspaceSelectedAiRunShow}
+              selectedAiRunArtifacts={props.workspaceSelectedAiRunArtifacts}
+              selectedAiRunCompare={props.workspaceSelectedAiRunCompare}
+              selectedAiRunLoading={props.workspaceSelectedAiRunLoading}
+              t={props.t}
+              onSelectAiRun={props.onSelectWorkspaceAiRun}
+              onLoadAiRunPatch={props.onLoadAiRunPatch}
+              onReplayAiRunDryRun={props.onReplayAiRunDryRun}
+              onCompareAiRuns={props.onCompareWorkspaceAiRuns}
+              onClearAiRunCompare={props.onClearWorkspaceAiRunCompare}
+              onOpenNodeForAiRun={props.onOpenNodeForAiRun}
+              onOpenAiEvidenceSourceChunk={props.onOpenAiEvidenceSourceChunk}
+            />
+          ) : props.selectedNodeDetail ? (
             <CompactNodeDetail
               detail={props.selectedNodeDetail}
               aiRuns={props.selectedNodeAiRuns}
@@ -1638,6 +1690,145 @@ function CompactNodeDetail(props: {
           })}
         </div>
       </section>
+    </div>
+  );
+}
+
+function WorkspaceAiRunsView(props: {
+  aiRuns: AiRunRecord[];
+  runsHydrated: boolean;
+  runsLoading: boolean;
+  selectedAiRunId: string | null;
+  selectedAiRunShow: AiRunShowOutput | null;
+  selectedAiRunArtifacts: AiRunInspectorArtifacts | null;
+  selectedAiRunCompare: AiRunCompareOutput | null;
+  selectedAiRunLoading: boolean;
+  t: Translator;
+  onSelectAiRun: (runId: string) => void;
+  onLoadAiRunPatch: (runId: string) => void;
+  onReplayAiRunDryRun: (runId: string) => void;
+  onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
+  onClearAiRunCompare: () => void;
+  onOpenNodeForAiRun: (runId: string) => void;
+  onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
+}) {
+  if (props.runsLoading && !props.runsHydrated) {
+    return (
+      <div className="space-y-4">
+        <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-4 py-4">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.workspaceAiRuns")}
+          </div>
+          <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("detail.workspaceAiRunsLoading")}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (props.runsHydrated && !props.aiRuns.length) {
+    return (
+      <EmptyState
+        title={props.t("detail.workspaceAiRunsEmptyTitle")}
+        body={props.t("detail.workspaceAiRunsEmptyBody")}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-lg bg-[rgba(17,24,39,0.03)] p-3 space-y-2">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.workspaceAiRuns")}
+        </div>
+        <div className="text-sm leading-6 text-[color:var(--text)]">
+          {props.t("detail.workspaceAiRunsMeta", {
+            count: props.aiRuns.length,
+          })}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        {props.aiRuns.map((run) => {
+          const selected = props.selectedAiRunId === run.id;
+          const hasAppliedPatch = Boolean(run.patch_run_id);
+          const statusLabel = formatAiRunStatusLabel(run.status, props.t);
+
+          return (
+            <div
+              key={run.id}
+              className={[
+                "rounded-xl border bg-white/80 px-3 py-3",
+                selected
+                  ? "border-[rgba(17,24,39,0.18)] shadow-[0_6px_18px_rgba(15,23,42,0.05)]"
+                  : "border-[color:var(--line)]",
+              ].join(" ")}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  className="min-w-0 flex-1 text-left"
+                  onClick={() => props.onSelectAiRun(run.id)}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-medium text-[color:var(--text)]">
+                      {run.capability}
+                      {run.explore_by ? ` / ${run.explore_by}` : ""}
+                    </div>
+                    <span className="rounded-full border border-[color:var(--line-soft)] bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                      {statusLabel}
+                    </span>
+                    {selected ? (
+                      <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--text)]">
+                        {props.t("detail.runInspectorSelected")}
+                      </span>
+                    ) : null}
+                    {hasAppliedPatch ? (
+                      <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--text)]">
+                        {props.t("detail.appliedPatch")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-xs text-[color:var(--muted)]">
+                    {formatTimestamp(run.started_at)}
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                    {props.t("detail.workspaceAiRunsNode", { nodeId: run.node_id })}
+                  </div>
+                  <div className="mt-1 text-sm leading-6 text-[color:var(--muted)]">
+                    {run.patch_summary || run.last_error_message || props.t("history.noSummary")}
+                  </div>
+                </button>
+
+                <div className="flex shrink-0 flex-col gap-2">
+                  <button
+                    className={ghostButtonClass}
+                    onClick={() => props.onOpenNodeForAiRun(run.id)}
+                  >
+                    {props.t("detail.workspaceAiRunsOpenNode")}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </section>
+
+      <RunInspectorCard
+        runId={props.selectedAiRunId}
+        aiRuns={props.aiRuns}
+        runShow={props.selectedAiRunShow}
+        artifacts={props.selectedAiRunArtifacts}
+        compare={props.selectedAiRunCompare}
+        loading={props.selectedAiRunLoading}
+        t={props.t}
+        onLoadAiRunPatch={props.onLoadAiRunPatch}
+        onOpenAiRunInspector={props.onOpenNodeForAiRun}
+        onReplayAiRunDryRun={props.onReplayAiRunDryRun}
+        onCompareAiRuns={props.onCompareAiRuns}
+        onClearAiRunCompare={props.onClearAiRunCompare}
+        onOpenAiEvidenceSourceChunk={props.onOpenAiEvidenceSourceChunk}
+      />
     </div>
   );
 }

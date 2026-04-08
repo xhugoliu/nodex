@@ -157,6 +157,9 @@ AI request / response 编排层。
   - 在同一处触发 replay dry-run
   - 在同一处比较两条 run 的差异，并高亮 rationale / patch summary / notes / patch preview 的变化
   - 也能把 compare 两侧的 patch 重新送回 patch 编辑器
+- 也负责提供工作区级 AI run 浏览入口：
+  - 不依赖当前节点选择也能查看全局已索引 AI runs
+  - 可从某条全局 run 直接回到对应节点与该 run 的 inspector
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里

@@ -62,6 +62,15 @@ const translations: Record<Locale, TranslationTree> = {
     },
     detail: {
       title: "Inspector",
+      workspaceAiRuns: "Workspace AI Runs",
+      returnToSelection: "Return To Selection",
+      workspaceAiRunsLoading: "Loading indexed AI runs for this workspace...",
+      workspaceAiRunsEmptyTitle: "No AI Runs Yet",
+      workspaceAiRunsEmptyBody:
+        "Run one AI draft first, then review the indexed history here at workspace scope.",
+      workspaceAiRunsMeta: "{count} indexed AI runs across the workspace.",
+      workspaceAiRunsNode: "node: {nodeId}",
+      workspaceAiRunsOpenNode: "Open Node",
       emptyMeta: "Select a node or source.",
       emptyBody: "Select a node or source.",
       workspaceEmptyMeta: "Open A Workspace First",
@@ -476,6 +485,15 @@ const translations: Record<Locale, TranslationTree> = {
     },
     detail: {
       title: "详情面板",
+      workspaceAiRuns: "工作区 AI Runs",
+      returnToSelection: "返回当前选择",
+      workspaceAiRunsLoading: "正在加载当前工作区的 AI run 索引...",
+      workspaceAiRunsEmptyTitle: "还没有 AI Runs",
+      workspaceAiRunsEmptyBody:
+        "先跑一条 AI draft，再回到这里从工作区范围查看它的索引历史。",
+      workspaceAiRunsMeta: "当前工作区共有 {count} 条已索引 AI runs。",
+      workspaceAiRunsNode: "节点：{nodeId}",
+      workspaceAiRunsOpenNode: "打开节点",
       emptyMeta: "请选择一个节点或来源。",
       emptyBody: "请选择一个节点或来源。",
       workspaceEmptyMeta: "请先打开工作区",
