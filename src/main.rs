@@ -7,8 +7,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use nodex::{
     ai::{
-        AiExpandPreview, AiPatchExplanation, AiPatchResponse, ExternalRunnerReport,
-        derive_ai_metadata_path, parse_ai_patch_response, write_ai_json_document,
+        AiExpandPreview, AiPatchExplanation, AiPatchResponse, AiRunCompareOutput, AiRunShowOutput,
+        ExternalRunnerReport, derive_ai_metadata_path, parse_ai_patch_response,
+        write_ai_json_document,
     },
     model::{
         AiRunArtifact, AiRunRecord, AiRunReplayReport, ApplyPatchReport, SourceImportPreview,
@@ -193,7 +194,7 @@ fn main() -> Result<()> {
             }
             AiCommand::Show { run_id, format } => {
                 let workspace = Workspace::open_from(&cwd)?;
-                let output = load_ai_run_show_output(&workspace, &run_id)?;
+                let output = workspace.ai_run_show_output(&run_id)?;
                 match format {
                     OutputFormat::Text => print_ai_run_show_output(&output),
                     OutputFormat::Json => print_json(&output)?,
@@ -239,7 +240,7 @@ fn main() -> Result<()> {
                 format,
             } => {
                 let workspace = Workspace::open_from(&cwd)?;
-                let output = load_ai_run_compare_output(&workspace, &left_run_id, &right_run_id)?;
+                let output = workspace.ai_run_compare_output(&left_run_id, &right_run_id)?;
                 match format {
                     OutputFormat::Text => print_ai_run_compare_output(&output),
                     OutputFormat::Json => print_json(&output)?,
@@ -970,121 +971,6 @@ struct AiResponseApplyOutput {
     response: AiPatchResponse,
     report: ApplyPatchReport,
     dry_run: bool,
-}
-
-#[derive(Debug, Serialize)]
-struct AiRunShowOutput {
-    record: AiRunRecord,
-    metadata_path: Option<String>,
-    explanation: Option<AiPatchExplanation>,
-    patch: Option<PatchDocument>,
-    response_notes: Vec<String>,
-    load_notes: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-struct AiRunCompareOutput {
-    left: AiRunShowOutput,
-    right: AiRunShowOutput,
-    comparison: AiRunCompareSummary,
-}
-
-#[derive(Debug, Serialize)]
-struct AiRunCompareSummary {
-    same_node_id: bool,
-    same_capability: bool,
-    same_provider: bool,
-    same_model: bool,
-    same_status: bool,
-    same_rationale_summary: bool,
-    same_patch_summary: bool,
-    same_patch_preview: bool,
-    same_response_notes: bool,
-}
-
-fn load_ai_run_show_output(workspace: &Workspace, run_id: &str) -> Result<AiRunShowOutput> {
-    let record = workspace
-        .ai_run_record_by_id(run_id)?
-        .with_context(|| format!("AI run {run_id} was not found"))?;
-    let metadata_path = derive_ai_metadata_path(&record.response_path);
-    let mut explanation = None;
-    let mut patch = workspace.ai_run_patch_document(run_id).ok();
-    let mut response_notes = Vec::new();
-    let mut load_notes = Vec::new();
-
-    match workspace.ai_run_response(run_id) {
-        Ok(response) => {
-            explanation = Some(response.explanation);
-            if patch.is_none() {
-                patch = Some(response.patch);
-            }
-            response_notes = response.notes;
-        }
-        Err(err) => {
-            load_notes.push(format!("Response artifact could not be loaded: {}", err));
-        }
-    }
-
-    Ok(AiRunShowOutput {
-        record,
-        metadata_path,
-        explanation,
-        patch,
-        response_notes,
-        load_notes,
-    })
-}
-
-fn load_ai_run_compare_output(
-    workspace: &Workspace,
-    left_run_id: &str,
-    right_run_id: &str,
-) -> Result<AiRunCompareOutput> {
-    let left = load_ai_run_show_output(workspace, left_run_id)?;
-    let right = load_ai_run_show_output(workspace, right_run_id)?;
-
-    let left_rationale = left
-        .explanation
-        .as_ref()
-        .map(|value| value.rationale_summary.as_str());
-    let right_rationale = right
-        .explanation
-        .as_ref()
-        .map(|value| value.rationale_summary.as_str());
-    let left_patch_summary = left
-        .patch
-        .as_ref()
-        .and_then(|value| value.summary.as_deref());
-    let right_patch_summary = right
-        .patch
-        .as_ref()
-        .and_then(|value| value.summary.as_deref());
-    let left_patch_preview = left
-        .patch
-        .as_ref()
-        .map(PatchDocument::preview_lines)
-        .unwrap_or_default();
-    let right_patch_preview = right
-        .patch
-        .as_ref()
-        .map(PatchDocument::preview_lines)
-        .unwrap_or_default();
-
-    Ok(AiRunCompareOutput {
-        comparison: AiRunCompareSummary {
-            same_node_id: left.record.node_id == right.record.node_id,
-            same_capability: left.record.capability == right.record.capability,
-            same_provider: left.record.provider == right.record.provider,
-            same_model: left.record.model == right.record.model,
-            same_status: left.record.status == right.record.status,
-            same_rationale_summary: left_rationale == right_rationale,
-            same_patch_summary: left_patch_summary == right_patch_summary,
-            same_patch_preview: left_patch_preview == right_patch_preview,
-            same_response_notes: left.response_notes == right.response_notes,
-        },
-        left,
-        right,
-    })
 }
 
 fn print_ai_run_record(entry: &AiRunRecord) {

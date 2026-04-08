@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
   buildAiDraftNextSteps,
   buildAiRunNextSteps,
@@ -11,7 +13,10 @@ import {
   type Translator,
 } from "../app-helpers";
 import type {
+  AiRunCompareOutput,
+  AiRunInspectorArtifacts,
   AiRunRecord,
+  AiRunShowOutput,
   DesktopAiStatus,
   NodeDetail,
   ParentCandidate,
@@ -147,6 +152,11 @@ export function InspectorPane(props: {
   desktopAiStatus: DesktopAiStatus | null;
   selectedNodeDetail: NodeDetail | null;
   selectedNodeAiRuns: AiRunRecord[];
+  selectedAiRunId: string | null;
+  selectedAiRunShow: AiRunShowOutput | null;
+  selectedAiRunArtifacts: AiRunInspectorArtifacts | null;
+  selectedAiRunCompare: AiRunCompareOutput | null;
+  selectedAiRunLoading: boolean;
   patchDraftOrigin: PatchDraftOrigin | null;
   selectedSourceDetail: SourceDetail | null;
   contextNodeId: string | null;
@@ -158,9 +168,11 @@ export function InspectorPane(props: {
   onToggleConsoleDetails: () => void;
   onSelectNode: (nodeId: string) => void;
   onSelectSource: (sourceId: string) => void;
+  onSelectAiRun: (runId: string) => void;
   onLoadAiRunPatch: (runId: string) => void;
-  onShowAiRunTrace: (run: AiRunRecord) => void;
-  onShowAiRunArtifact: (runId: string, kind: "request" | "response" | "metadata") => void;
+  onReplayAiRunDryRun: (runId: string) => void;
+  onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
+  onClearAiRunCompare: () => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
 }) {
@@ -182,14 +194,21 @@ export function InspectorPane(props: {
             <CompactNodeDetail
               detail={props.selectedNodeDetail}
               aiRuns={props.selectedNodeAiRuns}
+              selectedAiRunId={props.selectedAiRunId}
+              selectedAiRunShow={props.selectedAiRunShow}
+              selectedAiRunArtifacts={props.selectedAiRunArtifacts}
+              selectedAiRunCompare={props.selectedAiRunCompare}
+              selectedAiRunLoading={props.selectedAiRunLoading}
               desktopAiStatus={props.desktopAiStatus}
               patchDraftOrigin={props.patchDraftOrigin}
               contextSourceId={props.contextSourceId}
               t={props.t}
               onSelectSource={props.onSelectSource}
+              onSelectAiRun={props.onSelectAiRun}
               onLoadAiRunPatch={props.onLoadAiRunPatch}
-              onShowAiRunTrace={props.onShowAiRunTrace}
-              onShowAiRunArtifact={props.onShowAiRunArtifact}
+              onReplayAiRunDryRun={props.onReplayAiRunDryRun}
+              onCompareAiRuns={props.onCompareAiRuns}
+              onClearAiRunCompare={props.onClearAiRunCompare}
             />
           ) : props.selectedSourceDetail ? (
             <CompactSourceDetail
@@ -1104,6 +1123,15 @@ function AiDraftStatusCard(props: {
   );
 }
 
+function runInspectorTabButtonClass(active: boolean) {
+  return [
+    "rounded-full border px-3 py-1 text-xs font-medium uppercase tracking-[0.08em] transition",
+    active
+      ? "border-[rgba(17,24,39,0.18)] bg-white text-[color:var(--accent)] shadow-[0_4px_12px_rgba(15,23,42,0.05)]"
+      : "border-[color:var(--line)] bg-white/70 text-[color:var(--muted)] hover:border-[rgba(17,24,39,0.18)] hover:bg-white",
+  ].join(" ");
+}
+
 function StatusField(props: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-[color:var(--line-soft)] bg-white/70 px-3 py-2">
@@ -1247,14 +1275,21 @@ function summarizeChunkLabels(
 function CompactNodeDetail(props: {
   detail: NodeDetail;
   aiRuns: AiRunRecord[];
+  selectedAiRunId: string | null;
+  selectedAiRunShow: AiRunShowOutput | null;
+  selectedAiRunArtifacts: AiRunInspectorArtifacts | null;
+  selectedAiRunCompare: AiRunCompareOutput | null;
+  selectedAiRunLoading: boolean;
   desktopAiStatus: DesktopAiStatus | null;
   patchDraftOrigin: PatchDraftOrigin | null;
   contextSourceId: string | null;
   t: Translator;
   onSelectSource: (sourceId: string) => void;
+  onSelectAiRun: (runId: string) => void;
   onLoadAiRunPatch: (runId: string) => void;
-  onShowAiRunTrace: (run: AiRunRecord) => void;
-  onShowAiRunArtifact: (runId: string, kind: "request" | "response" | "metadata") => void;
+  onReplayAiRunDryRun: (runId: string) => void;
+  onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
+  onClearAiRunCompare: () => void;
 }) {
   const showKindBadge = props.detail.node.kind !== "topic";
   const childrenSummary = props.detail.children.length
@@ -1421,8 +1456,9 @@ function CompactNodeDetail(props: {
         </div>
         {props.aiRuns.length ? (
           <div className="space-y-2">
-            {props.aiRuns.slice(0, 5).map((run) => {
+            {props.aiRuns.map((run) => {
               const isCurrentDraft = props.patchDraftOrigin?.run_id === run.id;
+              const isSelectedRun = props.selectedAiRunId === run.id;
               const hasAppliedPatch = Boolean(run.patch_run_id);
               const nextSteps = buildAiRunNextSteps(
                 run,
@@ -1438,14 +1474,15 @@ function CompactNodeDetail(props: {
                     : "border-[color:var(--line-soft)] bg-white text-[color:var(--muted)]";
 
               return (
-              <div
+              <button
                 key={run.id}
                 className={[
-                  "rounded-xl border bg-white/80 px-3 py-3",
-                  isCurrentDraft
+                  "w-full rounded-xl border bg-white/80 px-3 py-3 text-left transition",
+                  isSelectedRun || isCurrentDraft
                     ? "border-[rgba(17,24,39,0.18)] shadow-[0_6px_18px_rgba(15,23,42,0.05)]"
-                    : "border-[color:var(--line)]",
+                    : "border-[color:var(--line)] hover:border-[rgba(17,24,39,0.18)] hover:bg-white",
                 ].join(" ")}
+                onClick={() => props.onSelectAiRun(run.id)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -1465,6 +1502,11 @@ function CompactNodeDetail(props: {
                       {isCurrentDraft ? (
                         <span className="rounded-full border border-[rgba(17,24,39,0.18)] bg-[rgba(17,24,39,0.06)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--accent)]">
                           {props.t("detail.currentDraft")}
+                        </span>
+                      ) : null}
+                      {isSelectedRun ? (
+                        <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--text)]">
+                          {props.t("detail.runInspectorSelected")}
                         </span>
                       ) : null}
                       {hasAppliedPatch ? (
@@ -1527,46 +1569,27 @@ function CompactNodeDetail(props: {
                         ? props.t("detail.aiRunDryRun")
                         : props.t("detail.aiRunApplied")}
                     </div>
-                    <button
-                      className={ghostButtonClass}
-                      onClick={() => props.onShowAiRunTrace(run)}
-                    >
-                      {props.t("detail.showAiRunTrace")}
-                    </button>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        className={ghostButtonClass}
-                        onClick={() => props.onShowAiRunArtifact(run.id, "request")}
-                      >
-                        {props.t("detail.showAiRunRequest")}
-                      </button>
-                      <button
-                        className={ghostButtonClass}
-                        onClick={() => props.onShowAiRunArtifact(run.id, "response")}
-                      >
-                        {props.t("detail.showAiRunResponse")}
-                      </button>
-                      <button
-                        className={ghostButtonClass}
-                        onClick={() => props.onShowAiRunArtifact(run.id, "metadata")}
-                      >
-                        {props.t("detail.showAiRunMetadata")}
-                      </button>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                      {props.t("detail.openRunInspector")}
                     </div>
-                    {run.status !== "failed" ? (
-                      <button
-                        className={ghostButtonClass}
-                        onClick={() => props.onLoadAiRunPatch(run.id)}
-                      >
-                        {hasAppliedPatch
-                          ? props.t("detail.loadAppliedPatch")
-                          : props.t("detail.loadAiRunPatch")}
-                      </button>
-                    ) : null}
                   </div>
                 </div>
-              </div>
+              </button>
             )})}
+
+            <RunInspectorCard
+              runId={props.selectedAiRunId}
+              aiRuns={props.aiRuns}
+              runShow={props.selectedAiRunShow}
+              artifacts={props.selectedAiRunArtifacts}
+              compare={props.selectedAiRunCompare}
+              loading={props.selectedAiRunLoading}
+              t={props.t}
+              onLoadAiRunPatch={props.onLoadAiRunPatch}
+              onReplayAiRunDryRun={props.onReplayAiRunDryRun}
+              onCompareAiRuns={props.onCompareAiRuns}
+              onClearAiRunCompare={props.onClearAiRunCompare}
+            />
           </div>
         ) : (
           <div className="text-sm leading-6 text-[color:var(--muted)]">
@@ -1594,6 +1617,586 @@ function CompactNodeDetail(props: {
         </div>
       </section>
     </div>
+  );
+}
+
+function RunInspectorCard(props: {
+  runId: string | null;
+  aiRuns: AiRunRecord[];
+  runShow: AiRunShowOutput | null;
+  artifacts: AiRunInspectorArtifacts | null;
+  compare: AiRunCompareOutput | null;
+  loading: boolean;
+  t: Translator;
+  onLoadAiRunPatch: (runId: string) => void;
+  onReplayAiRunDryRun: (runId: string) => void;
+  onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
+  onClearAiRunCompare: () => void;
+}) {
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "request" | "response" | "metadata" | "compare"
+  >("overview");
+  const compareOptions = props.aiRuns.filter((run) => run.id !== props.runId);
+  const [compareTargetId, setCompareTargetId] = useState(
+    compareOptions[0]?.id ?? "",
+  );
+  const selectedRun =
+    props.runShow?.record ??
+    props.aiRuns.find((run) => run.id === props.runId) ??
+    null;
+
+  useEffect(() => {
+    setActiveTab("overview");
+    setCompareTargetId(compareOptions[0]?.id ?? "");
+  }, [props.runId, props.aiRuns]);
+
+  useEffect(() => {
+    if (props.compare) {
+      setActiveTab("compare");
+    }
+  }, [props.compare]);
+
+  if (!props.runId) {
+    return null;
+  }
+
+  if (props.loading && !props.runShow) {
+    return (
+      <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-4 py-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.runInspectorTitle")}
+        </div>
+        <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+          {props.t("detail.runInspectorLoading")}
+        </div>
+      </section>
+    );
+  }
+
+  if (!selectedRun || !props.runShow) {
+    return (
+      <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-4 py-4">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.runInspectorTitle")}
+        </div>
+        <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+          {props.t("detail.runInspectorUnavailable")}
+        </div>
+      </section>
+    );
+  }
+
+  const hasPatchToLoad = selectedRun.status !== "failed";
+  const loadPatchLabel = selectedRun.patch_run_id
+    ? props.t("detail.loadAppliedPatch")
+    : props.t("detail.loadAiRunPatch");
+
+  return (
+    <section className="rounded-xl border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] px-4 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.runInspectorTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--text)]">
+            {props.t("detail.runInspectorMeta", { id: selectedRun.id })}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          {hasPatchToLoad ? (
+            <button
+              className={ghostButtonClass}
+              onClick={() => props.onLoadAiRunPatch(selectedRun.id)}
+            >
+              {loadPatchLabel}
+            </button>
+          ) : null}
+          {hasPatchToLoad ? (
+            <button
+              className={ghostButtonClass}
+              onClick={() => props.onReplayAiRunDryRun(selectedRun.id)}
+            >
+              {props.t("detail.runInspectorReplay")}
+            </button>
+          ) : null}
+          {compareOptions.length ? (
+            <button
+              className={ghostButtonClass}
+              onClick={() => setActiveTab("compare")}
+            >
+              {props.t("detail.runInspectorCompareAction")}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {[
+          ["overview", props.t("detail.runInspectorOverview")],
+          ["request", props.t("detail.showAiRunRequest")],
+          ["response", props.t("detail.showAiRunResponse")],
+          ["metadata", props.t("detail.showAiRunMetadata")],
+          ["compare", props.t("detail.runInspectorCompare")],
+        ].map(([tab, label]) => (
+          <button
+            key={tab}
+            className={runInspectorTabButtonClass(activeTab === tab)}
+            onClick={() =>
+              setActiveTab(
+                tab as "overview" | "request" | "response" | "metadata" | "compare",
+              )
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4">
+        {activeTab === "overview" ? (
+          <RunInspectorOverview runShow={props.runShow} t={props.t} />
+        ) : null}
+        {activeTab === "request" ? (
+          <AiRunArtifactPanel
+            title={props.t("detail.showAiRunRequest")}
+            artifactState={props.artifacts?.request ?? null}
+            t={props.t}
+          />
+        ) : null}
+        {activeTab === "response" ? (
+          <AiRunArtifactPanel
+            title={props.t("detail.showAiRunResponse")}
+            artifactState={props.artifacts?.response ?? null}
+            t={props.t}
+          />
+        ) : null}
+        {activeTab === "metadata" ? (
+          <AiRunArtifactPanel
+            title={props.t("detail.showAiRunMetadata")}
+            artifactState={props.artifacts?.metadata ?? null}
+            t={props.t}
+          />
+        ) : null}
+        {activeTab === "compare" ? (
+          <AiRunComparePanel
+            runId={selectedRun.id}
+            compare={props.compare}
+            compareOptions={compareOptions}
+            compareTargetId={compareTargetId}
+            t={props.t}
+            onChangeTarget={setCompareTargetId}
+            onCompare={() => {
+              if (compareTargetId) {
+                props.onCompareAiRuns(selectedRun.id, compareTargetId);
+              }
+            }}
+            onClear={props.onClearAiRunCompare}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function RunInspectorOverview(props: {
+  runShow: AiRunShowOutput;
+  t: Translator;
+}) {
+  const { record, explanation, patch_preview, response_notes, load_notes } = props.runShow;
+  const statusLabel = formatAiRunStatusLabel(record.status, props.t);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <StatusField
+          label={props.t("detail.aiRunStatusLabel")}
+          value={statusLabel}
+        />
+        <StatusField
+          label={props.t("detail.aiRunModeLabel")}
+          value={
+            record.dry_run
+              ? props.t("detail.aiRunDryRun")
+              : props.t("detail.aiRunApplied")
+          }
+        />
+        <StatusField
+          label={props.t("detail.aiRunProviderLabel")}
+          value={record.provider || props.t("detail.none")}
+        />
+        <StatusField
+          label={props.t("detail.aiRunModelLabel")}
+          value={record.model || props.t("detail.none")}
+        />
+        <StatusField
+          label={props.t("detail.aiRunRetryLabel")}
+          value={String(record.retry_count)}
+        />
+        <StatusField
+          label={props.t("detail.aiRunProviderRunLabel")}
+          value={record.provider_run_id || props.t("detail.none")}
+        />
+        <StatusField
+          label={props.t("detail.aiRunStartedLabel")}
+          value={formatTimestamp(record.started_at)}
+        />
+        <StatusField
+          label={props.t("detail.aiRunPatchLinkLabel")}
+          value={record.patch_run_id || props.t("detail.aiRunPatchPending")}
+        />
+      </div>
+
+      <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.runInspectorCommandLabel")}
+        </div>
+        <div className="mt-2 break-all text-sm leading-6 text-[color:var(--text)]">
+          {record.command}
+        </div>
+        <div className="mt-3 space-y-1 text-sm leading-6 text-[color:var(--muted)]">
+          <div>{props.t("detail.aiRunRequest", { value: record.request_path })}</div>
+          <div>{props.t("detail.aiRunResponse", { value: record.response_path })}</div>
+          <div>
+            {props.t("detail.aiRunMetadata", {
+              value: props.runShow.metadata_path || props.t("detail.none"),
+            })}
+          </div>
+        </div>
+      </section>
+
+      {explanation ? (
+        <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.runInspectorRationale")}
+          </div>
+          <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+            {explanation.rationale_summary}
+          </div>
+
+          <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.runInspectorDirectEvidence")}
+          </div>
+          {explanation.direct_evidence.length ? (
+            <div className="mt-2 space-y-2">
+              {explanation.direct_evidence.map((item) => (
+                <div
+                  key={`${item.chunk_id}-${item.start_line}-${item.end_line}`}
+                  className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+                >
+                  <div className="font-medium">
+                    {item.source_name} [{item.start_line}-{item.end_line}]
+                  </div>
+                  <div className="text-[color:var(--muted)]">
+                    {item.label || props.t("detail.noLabel")}
+                  </div>
+                  <div className="mt-1">{item.why_it_matters}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+              {props.t("detail.none")}
+            </div>
+          )}
+
+          <div className="mt-4 text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.runInspectorInferredSuggestions")}
+          </div>
+          {explanation.inferred_suggestions.length ? (
+            <div className="mt-2 space-y-2">
+              {explanation.inferred_suggestions.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+              {props.t("detail.none")}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {patch_preview.length ? (
+        <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+            {props.t("detail.runInspectorPatchPreview")}
+          </div>
+          <div className="mt-2 space-y-2">
+            {patch_preview.map((line) => (
+              <div
+                key={line}
+                className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {response_notes.length ? (
+        <RunInspectorNoteSection
+          title={props.t("detail.runInspectorResponseNotes")}
+          items={response_notes}
+        />
+      ) : null}
+
+      {load_notes.length ? (
+        <RunInspectorNoteSection
+          title={props.t("detail.runInspectorLoadNotes")}
+          items={load_notes}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function RunInspectorNoteSection(props: {
+  title: string;
+  items: string[];
+}) {
+  return (
+    <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+        {props.title}
+      </div>
+      <div className="mt-2 space-y-2">
+        {props.items.map((item) => (
+          <div
+            key={item}
+            className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+          >
+            {item}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AiRunArtifactPanel(props: {
+  title: string;
+  artifactState: AiRunInspectorArtifacts[keyof AiRunInspectorArtifacts] | null;
+  t: Translator;
+}) {
+  return (
+    <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+        {props.title}
+      </div>
+      {props.artifactState?.artifact ? (
+        <>
+          <div className="mt-2 break-all text-sm leading-6 text-[color:var(--muted)]">
+            {props.artifactState.artifact.path}
+          </div>
+          <pre className="scroll-panel mt-3 max-h-80 overflow-auto whitespace-pre-wrap rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-3 text-xs leading-6 text-[color:var(--text)]">
+            {props.artifactState.artifact.content}
+          </pre>
+        </>
+      ) : (
+        <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+          {props.artifactState?.error || props.t("detail.runInspectorArtifactUnavailable")}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AiRunComparePanel(props: {
+  runId: string;
+  compare: AiRunCompareOutput | null;
+  compareOptions: AiRunRecord[];
+  compareTargetId: string;
+  t: Translator;
+  onChangeTarget: (value: string) => void;
+  onCompare: () => void;
+  onClear: () => void;
+}) {
+  const summaryItems: Array<{ label: string; same: boolean }> = props.compare
+    ? [
+        {
+          label: props.t("detail.compareSameNode"),
+          same: props.compare.comparison.same_node_id,
+        },
+        {
+          label: props.t("detail.compareSameCapability"),
+          same: props.compare.comparison.same_capability,
+        },
+        {
+          label: props.t("detail.compareSameProvider"),
+          same: props.compare.comparison.same_provider,
+        },
+        {
+          label: props.t("detail.compareSameModel"),
+          same: props.compare.comparison.same_model,
+        },
+        {
+          label: props.t("detail.compareSameStatus"),
+          same: props.compare.comparison.same_status,
+        },
+        {
+          label: props.t("detail.compareSameRationale"),
+          same: props.compare.comparison.same_rationale_summary,
+        },
+        {
+          label: props.t("detail.compareSamePatchSummary"),
+          same: props.compare.comparison.same_patch_summary,
+        },
+        {
+          label: props.t("detail.compareSamePatchPreview"),
+          same: props.compare.comparison.same_patch_preview,
+        },
+        {
+          label: props.t("detail.compareSameNotes"),
+          same: props.compare.comparison.same_response_notes,
+        },
+      ]
+    : [];
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.runInspectorCompare")}
+        </div>
+        {props.compareOptions.length ? (
+          <>
+            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+              <select
+                className={inputClass}
+                value={props.compareTargetId}
+                onChange={(event) => props.onChangeTarget(event.target.value)}
+              >
+                {props.compareOptions.map((run) => (
+                  <option key={run.id} value={run.id}>
+                    {run.id} · {formatAiRunStatusLabel(run.status, props.t)}
+                  </option>
+                ))}
+              </select>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={secondaryButtonClass}
+                  disabled={!props.compareTargetId}
+                  onClick={props.onCompare}
+                >
+                  {props.t("detail.runInspectorCompareButton")}
+                </button>
+                {props.compare ? (
+                  <button className={ghostButtonClass} onClick={props.onClear}>
+                    {props.t("detail.runInspectorCompareClear")}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+              {props.t("detail.runInspectorCompareSelect", { id: props.runId })}
+            </div>
+          </>
+        ) : (
+          <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("detail.runInspectorCompareEmpty")}
+          </div>
+        )}
+      </div>
+
+      {props.compare ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {summaryItems.map(({ label, same }) => (
+              <div
+                key={label}
+                className="rounded-lg border border-[color:var(--line-soft)] bg-white/80 px-3 py-2"
+              >
+                <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                  {label}
+                </div>
+                <div className="mt-1 text-sm leading-6 text-[color:var(--text)]">
+                  {same ? props.t("detail.compareSame") : props.t("detail.compareDifferent")}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-2">
+            <AiRunCompareSide
+              title={props.t("detail.runInspectorCompareLeft")}
+              runShow={props.compare.left}
+              t={props.t}
+            />
+            <AiRunCompareSide
+              title={props.t("detail.runInspectorCompareRight")}
+              runShow={props.compare.right}
+              t={props.t}
+            />
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function AiRunCompareSide(props: {
+  title: string;
+  runShow: AiRunShowOutput;
+  t: Translator;
+}) {
+  return (
+    <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+      <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+        {props.title}
+      </div>
+      <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+        {props.runShow.record.id}
+      </div>
+      <div className="mt-2 space-y-2">
+        <StatusField
+          label={props.t("detail.aiRunStatusLabel")}
+          value={formatAiRunStatusLabel(props.runShow.record.status, props.t)}
+        />
+        <StatusField
+          label={props.t("detail.aiRunPatchSummaryLabel")}
+          value={
+            props.runShow.patch?.summary ||
+            props.runShow.record.patch_summary ||
+            props.t("history.noSummary")
+          }
+        />
+      </div>
+      {props.runShow.explanation ? (
+        <div className="mt-4 rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]">
+          {props.runShow.explanation.rationale_summary}
+        </div>
+      ) : null}
+      {props.runShow.patch_preview.length ? (
+        <div className="mt-4 space-y-2">
+          {props.runShow.patch_preview.map((line) => (
+            <div
+              key={`${props.runShow.record.id}-${line}`}
+              className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+            >
+              {line}
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {props.runShow.response_notes.length ? (
+        <div className="mt-4 space-y-2">
+          {props.runShow.response_notes.map((note) => (
+            <div
+              key={`${props.runShow.record.id}-${note}`}
+              className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
+            >
+              {note}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

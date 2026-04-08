@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    model::{ApplyPatchReport, NodeDetail, SourceChunkRecord},
+    model::{AiRunRecord, ApplyPatchReport, NodeDetail, SourceChunkRecord},
     patch::{PatchDocument, PatchOp},
     project::ProjectPaths,
     store::Workspace,
@@ -161,6 +161,37 @@ pub struct ExternalRunnerReport {
     pub notes: Vec<String>,
     pub patch: PatchDocument,
     pub report: ApplyPatchReport,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AiRunShowOutput {
+    pub record: AiRunRecord,
+    pub metadata_path: Option<String>,
+    pub explanation: Option<AiPatchExplanation>,
+    pub patch: Option<PatchDocument>,
+    pub patch_preview: Vec<String>,
+    pub response_notes: Vec<String>,
+    pub load_notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AiRunCompareOutput {
+    pub left: AiRunShowOutput,
+    pub right: AiRunShowOutput,
+    pub comparison: AiRunCompareSummary,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AiRunCompareSummary {
+    pub same_node_id: bool,
+    pub same_capability: bool,
+    pub same_provider: bool,
+    pub same_model: bool,
+    pub same_status: bool,
+    pub same_rationale_summary: bool,
+    pub same_patch_summary: bool,
+    pub same_patch_preview: bool,
+    pub same_response_notes: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -499,6 +530,87 @@ impl Workspace {
             notes: response.notes,
             patch: response.patch,
             report,
+        })
+    }
+
+    pub fn ai_run_show_output(&self, run_id: &str) -> Result<AiRunShowOutput> {
+        let record = self
+            .ai_run_record_by_id(run_id)?
+            .with_context(|| format!("AI run {run_id} was not found"))?;
+        let metadata_path = derive_ai_metadata_path(&record.response_path);
+        let mut explanation = None;
+        let mut patch = self.ai_run_patch_document(run_id).ok();
+        let mut response_notes = Vec::new();
+        let mut load_notes = Vec::new();
+
+        match self.ai_run_response(run_id) {
+            Ok(response) => {
+                explanation = Some(response.explanation);
+                if patch.is_none() {
+                    patch = Some(response.patch);
+                }
+                response_notes = response.notes;
+            }
+            Err(err) => {
+                load_notes.push(format!("Response artifact could not be loaded: {}", err));
+            }
+        }
+
+        let patch_preview = patch
+            .as_ref()
+            .map(PatchDocument::preview_lines)
+            .unwrap_or_default();
+
+        Ok(AiRunShowOutput {
+            record,
+            metadata_path,
+            explanation,
+            patch,
+            patch_preview,
+            response_notes,
+            load_notes,
+        })
+    }
+
+    pub fn ai_run_compare_output(
+        &self,
+        left_run_id: &str,
+        right_run_id: &str,
+    ) -> Result<AiRunCompareOutput> {
+        let left = self.ai_run_show_output(left_run_id)?;
+        let right = self.ai_run_show_output(right_run_id)?;
+
+        let left_rationale = left
+            .explanation
+            .as_ref()
+            .map(|value| value.rationale_summary.as_str());
+        let right_rationale = right
+            .explanation
+            .as_ref()
+            .map(|value| value.rationale_summary.as_str());
+        let left_patch_summary = left
+            .patch
+            .as_ref()
+            .and_then(|value| value.summary.as_deref());
+        let right_patch_summary = right
+            .patch
+            .as_ref()
+            .and_then(|value| value.summary.as_deref());
+
+        Ok(AiRunCompareOutput {
+            comparison: AiRunCompareSummary {
+                same_node_id: left.record.node_id == right.record.node_id,
+                same_capability: left.record.capability == right.record.capability,
+                same_provider: left.record.provider == right.record.provider,
+                same_model: left.record.model == right.record.model,
+                same_status: left.record.status == right.record.status,
+                same_rationale_summary: left_rationale == right_rationale,
+                same_patch_summary: left_patch_summary == right_patch_summary,
+                same_patch_preview: left.patch_preview == right.patch_preview,
+                same_response_notes: left.response_notes == right.response_notes,
+            },
+            left,
+            right,
         })
     }
 }
@@ -1719,6 +1831,177 @@ PY"#;
         );
         assert!(report.report.run_id.is_none());
         assert_eq!(report.report.preview.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn ai_run_show_output_loads_explanation_patch_preview_and_notes() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let command = r#"python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+request = json.loads(Path(os.environ["NODEX_AI_REQUEST"]).read_text())
+response = {
+    "version": request["contract"]["version"],
+    "kind": request["contract"]["response_kind"],
+    "capability": request["capability"],
+    "request_node_id": request["target_node"]["id"],
+    "status": "ok",
+    "summary": "Runner preview branch",
+    "explanation": {
+        "rationale_summary": "Show output should include this rationale.",
+        "direct_evidence": [],
+        "inferred_suggestions": [
+            "Keep this as a dry-run until the branch is reviewed."
+        ]
+    },
+    "generator": {
+        "provider": "test_runner",
+        "model": None,
+        "run_id": "show-output-run"
+    },
+    "patch": {
+        "version": request["contract"]["patch_version"],
+        "summary": "Runner preview branch",
+        "ops": [
+            {
+                "type": "add_node",
+                "parent_id": request["target_node"]["id"],
+                "title": "Show Output Branch",
+                "kind": "topic",
+                "body": "Generated for show output test"
+            }
+        ]
+    },
+    "notes": ["show-note"]
+}
+Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
+PY"#;
+
+        let report = workspace.run_external_ai_expand("root", command, true)?;
+        let output = workspace.ai_run_show_output(&report.metadata.run_id)?;
+
+        assert_eq!(output.record.id, report.metadata.run_id);
+        assert!(output.load_notes.is_empty());
+        assert_eq!(output.response_notes, vec!["show-note".to_string()]);
+        assert_eq!(
+            output
+                .explanation
+                .as_ref()
+                .map(|value| value.rationale_summary.as_str()),
+            Some("Show output should include this rationale.")
+        );
+        assert_eq!(output.patch_preview.len(), 1);
+        assert!(
+            output.patch_preview[0].contains("\"Show Output Branch\""),
+            "expected preview line to mention the replayable branch"
+        );
+        assert_eq!(
+            output.metadata_path.as_deref(),
+            derive_ai_metadata_path(&report.response_path).as_deref()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ai_run_compare_output_detects_patch_and_note_differences() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let mut workspace = Workspace::init_at(temp_dir.path())?;
+        let first_command = r#"python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+request = json.loads(Path(os.environ["NODEX_AI_REQUEST"]).read_text())
+response = {
+    "version": request["contract"]["version"],
+    "kind": request["contract"]["response_kind"],
+    "capability": request["capability"],
+    "request_node_id": request["target_node"]["id"],
+    "status": "ok",
+    "summary": "Compare Left",
+    "explanation": {
+        "rationale_summary": "First compare rationale.",
+        "direct_evidence": [],
+        "inferred_suggestions": []
+    },
+    "generator": {
+        "provider": "test_runner",
+        "model": None,
+        "run_id": "compare-left"
+    },
+    "patch": {
+        "version": request["contract"]["patch_version"],
+        "summary": "Compare Left",
+        "ops": [
+            {
+                "type": "add_node",
+                "parent_id": request["target_node"]["id"],
+                "title": "Left Branch",
+                "kind": "topic",
+                "body": "Left branch"
+            }
+        ]
+    },
+    "notes": ["left-note"]
+}
+Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
+PY"#;
+        let second_command = r#"python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+request = json.loads(Path(os.environ["NODEX_AI_REQUEST"]).read_text())
+response = {
+    "version": request["contract"]["version"],
+    "kind": request["contract"]["response_kind"],
+    "capability": request["capability"],
+    "request_node_id": request["target_node"]["id"],
+    "status": "ok",
+    "summary": "Compare Right",
+    "explanation": {
+        "rationale_summary": "Second compare rationale.",
+        "direct_evidence": [],
+        "inferred_suggestions": []
+    },
+    "generator": {
+        "provider": "test_runner",
+        "model": None,
+        "run_id": "compare-right"
+    },
+    "patch": {
+        "version": request["contract"]["patch_version"],
+        "summary": "Compare Right",
+        "ops": [
+            {
+                "type": "add_node",
+                "parent_id": request["target_node"]["id"],
+                "title": "Right Branch",
+                "kind": "topic",
+                "body": "Right branch"
+            }
+        ]
+    },
+    "notes": ["right-note"]
+}
+Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
+PY"#;
+
+        let left = workspace.run_external_ai_expand("root", first_command, true)?;
+        let right = workspace.run_external_ai_expand("root", second_command, true)?;
+        let compare =
+            workspace.ai_run_compare_output(&left.metadata.run_id, &right.metadata.run_id)?;
+
+        assert!(compare.comparison.same_node_id);
+        assert!(compare.comparison.same_capability);
+        assert!(!compare.comparison.same_rationale_summary);
+        assert!(!compare.comparison.same_patch_summary);
+        assert!(!compare.comparison.same_patch_preview);
+        assert!(!compare.comparison.same_response_notes);
         Ok(())
     }
 

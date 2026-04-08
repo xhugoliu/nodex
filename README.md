@@ -34,7 +34,7 @@ cargo run -- export outline
 - evidence 最小语义：显式 citation、`direct` / `inferred`、rationale
 - AI request / response contract：`expand` / `explore` dry-run、external runner bridge、解释层
 - 多 provider 调试工具链：`openai` / `codex` / `gemini` runner，统一 `doctor` / `status` / `providers` / `smoke`
-- 最小 Tauri 桌面壳：三栏工作台、AI draft 入口、AI 历史回看 / trace / 工件查看、原生菜单驱动的低频动作
+- 最小 Tauri 桌面壳：三栏工作台、AI draft 入口、节点详情里的 Run Inspector、AI run compare / replay dry-run、原生菜单驱动的低频动作
 
 当前还没落地：
 

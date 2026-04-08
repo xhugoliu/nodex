@@ -2,6 +2,7 @@ import type {
   ApplyPatchReport,
   AiRunArtifact,
   AiRunRecord,
+  AiRunReplayReport,
   DesktopAiStatus,
   ExternalRunnerReport,
   ParentCandidate,
@@ -533,6 +534,28 @@ export function renderAiRunArtifact(
     "",
     artifact.content,
   ].join("\n");
+}
+
+export function renderAiRunReplayReport(
+  replay: AiRunReplayReport,
+  t: Translator,
+): string {
+  return [
+    t("reports.aiRunReplayReady", { runId: replay.source_run.id }),
+    t("reports.aiRunReplayMode", {
+      value: replay.dry_run ? t("detail.aiRunDryRun") : t("detail.aiRunApplied"),
+    }),
+    t("reports.aiRunReplayPatchSource", { value: replay.patch_source }),
+    replay.source_patch_run_id
+      ? t("reports.aiRunReplaySourcePatchRun", {
+          value: replay.source_patch_run_id,
+        })
+      : null,
+    replay.report.summary ? t("reports.summary", { value: replay.report.summary }) : null,
+    ...replay.report.preview.map((line) => `- ${line}`),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function formatPatchDraftOriginTitle(

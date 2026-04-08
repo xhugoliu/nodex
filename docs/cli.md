@@ -131,6 +131,11 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - explanation.rationale_summary
   - patch summary 与 patch preview
   - response notes
+- desktop 节点详情里的 Run Inspector 会直接复用这几条 run-id 审计链路：
+  - `ai show`
+  - `ai artifact`
+  - `ai replay --dry-run`
+  - `ai compare`
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据
@@ -164,6 +169,11 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `python3 scripts/provider_runner.py --provider codex`
   - `python3 scripts/provider_runner.py --provider gemini`
   - `python3 scripts/provider_runner.py --list`
+- desktop 默认 AI draft route 也会走这条统一入口：
+  - `python3 scripts/provider_runner.py --provider codex --use-default-args`
+- 对 `codex` 来说，这条 desktop 默认链路当前会：
+  - 继续沿用 `~/.codex/config.toml` 里的 `model`
+  - 通过 provider 默认参数把 `reasoning-effort` 固定为 `low`
 - `codex_runner.py` 会复用本机 Codex CLI 的登录态和 provider 配置，而不是直接手写 Bearer 请求
 - `codex_runner.py` 默认优先读取：
   - `~/.codex/config.toml` 里的 `model` / `model_reasoning_effort`

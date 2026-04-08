@@ -6,10 +6,11 @@ use std::{
 
 use anyhow::{Context, Result};
 use nodex::{
-    ai::ExternalRunnerReport,
+    ai::{AiRunCompareOutput, AiRunShowOutput, ExternalRunnerReport},
     model::{
-        AiRunArtifact, AiRunRecord, ApplyPatchReport, NodeDetail, PatchRunRecord, SnapshotRecord,
-        SourceDetail, SourceImportPreview, SourceImportReport, SourceRecord, TreeNode,
+        AiRunArtifact, AiRunRecord, AiRunReplayReport, ApplyPatchReport, NodeDetail,
+        PatchRunRecord, SnapshotRecord, SourceDetail, SourceImportPreview, SourceImportReport,
+        SourceRecord, TreeNode,
     },
     patch::{PatchDocument, PatchOp},
     store::Workspace,
@@ -269,15 +270,31 @@ fn normalize_source_detail(mut detail: SourceDetail) -> SourceDetail {
     detail
 }
 
+fn normalize_ai_run_record(mut record: AiRunRecord) -> AiRunRecord {
+    record.request_path = display_path_text(&record.request_path);
+    record.response_path = display_path_text(&record.response_path);
+    record
+}
+
 fn normalize_ai_run_records(records: Vec<AiRunRecord>) -> Vec<AiRunRecord> {
-    records
-        .into_iter()
-        .map(|mut record| {
-            record.request_path = display_path_text(&record.request_path);
-            record.response_path = display_path_text(&record.response_path);
-            record
-        })
-        .collect()
+    records.into_iter().map(normalize_ai_run_record).collect()
+}
+
+fn normalize_ai_run_show_output(mut output: AiRunShowOutput) -> AiRunShowOutput {
+    output.record = normalize_ai_run_record(output.record);
+    output.metadata_path = output.metadata_path.map(|path| display_path_text(&path));
+    output
+}
+
+fn normalize_ai_run_compare_output(mut output: AiRunCompareOutput) -> AiRunCompareOutput {
+    output.left = normalize_ai_run_show_output(output.left);
+    output.right = normalize_ai_run_show_output(output.right);
+    output
+}
+
+fn normalize_ai_run_replay_report(mut replay: AiRunReplayReport) -> AiRunReplayReport {
+    replay.source_run = normalize_ai_run_record(replay.source_run);
+    replay
 }
 
 fn normalize_external_runner_report(mut report: ExternalRunnerReport) -> ExternalRunnerReport {
@@ -539,6 +556,70 @@ fn parse_provider_doctor_summary(provider: &str, json_text: &str) -> Result<Prov
     })
 }
 
+fn extract_command_flag_value(command: &str, flag: &str) -> Option<String> {
+    let spaced_flag = format!("{flag} ");
+    let equals_flag = format!("{flag}=");
+
+    if let Some(value) = command.split_once(&equals_flag).map(|(_, value)| value) {
+        return extract_flag_token(value);
+    }
+
+    if let Some(value) = command.split_once(&spaced_flag).map(|(_, value)| value) {
+        return extract_flag_token(value);
+    }
+
+    None
+}
+
+fn extract_flag_token(value: &str) -> Option<String> {
+    let trimmed = value.trim_start();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let end = trimmed
+        .char_indices()
+        .find_map(|(index, ch)| ch.is_whitespace().then_some(index))
+        .unwrap_or(trimmed.len());
+    let token = trimmed[..end].trim_matches(|ch| ch == '\'' || ch == '"');
+    if token.is_empty() {
+        None
+    } else {
+        Some(token.to_string())
+    }
+}
+
+fn provider_default_reasoning_effort(provider: Option<&str>) -> Option<&'static str> {
+    match provider {
+        Some("codex") => Some("low"),
+        _ => None,
+    }
+}
+
+fn effective_model_for_command(
+    command: &str,
+    doctor_model: Option<String>,
+) -> Option<String> {
+    extract_command_flag_value(command, "--model").or(doctor_model)
+}
+
+fn effective_reasoning_for_command(
+    command: &str,
+    provider: Option<&str>,
+    uses_provider_defaults: bool,
+    doctor_reasoning_effort: Option<String>,
+) -> Option<String> {
+    extract_command_flag_value(command, "--reasoning-effort")
+        .or_else(|| {
+            if uses_provider_defaults {
+                provider_default_reasoning_effort(provider).map(|value| value.to_string())
+            } else {
+                None
+            }
+        })
+        .or(doctor_reasoning_effort)
+}
+
 fn detected_provider_from_command(command: &str) -> Option<&'static str> {
     if command.contains("--provider codex")
         || command.contains("--provider=codex")
@@ -610,11 +691,14 @@ fn desktop_ai_status() -> DesktopAiStatus {
         status_error: None,
     };
 
-    match provider {
-        Some(provider_name) => match run_provider_doctor(&provider_name) {
+    let mut doctor_model = None;
+    let mut doctor_reasoning_effort = None;
+
+    match provider.as_deref() {
+        Some(provider_name) => match run_provider_doctor(provider_name) {
             Ok(summary) => {
-                status.model = summary.model;
-                status.reasoning_effort = summary.reasoning_effort;
+                doctor_model = summary.model;
+                doctor_reasoning_effort = summary.reasoning_effort;
                 status.has_auth = Some(summary.has_auth);
                 status.has_process_env_conflict = Some(summary.has_process_env_conflict);
                 status.has_shell_env_conflict = Some(summary.has_shell_env_conflict);
@@ -630,6 +714,14 @@ fn desktop_ai_status() -> DesktopAiStatus {
         }
         None => {}
     }
+
+    status.model = effective_model_for_command(&command, doctor_model);
+    status.reasoning_effort = effective_reasoning_for_command(
+        &command,
+        provider.as_deref(),
+        status.uses_provider_defaults,
+        doctor_reasoning_effort,
+    );
 
     status
 }
@@ -984,10 +1076,32 @@ fn get_ai_run_record(start_path: String, run_id: String) -> Result<AiRunRecord, 
 }
 
 #[command]
+fn get_ai_run_show(start_path: String, run_id: String) -> Result<AiRunShowOutput, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    workspace
+        .ai_run_show_output(&run_id)
+        .map(normalize_ai_run_show_output)
+        .map_err(|err| err.to_string())
+}
+
+#[command]
 fn get_ai_run_patch(start_path: String, run_id: String) -> Result<PatchDocument, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     workspace
         .ai_run_patch_document(&run_id)
+        .map_err(|err| err.to_string())
+}
+
+#[command]
+fn compare_ai_runs(
+    start_path: String,
+    left_run_id: String,
+    right_run_id: String,
+) -> Result<AiRunCompareOutput, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    workspace
+        .ai_run_compare_output(&left_run_id, &right_run_id)
+        .map(normalize_ai_run_compare_output)
         .map_err(|err| err.to_string())
 }
 
@@ -1003,6 +1117,15 @@ fn get_ai_run_artifact(
         .map_err(|err| err.to_string())?;
     artifact.path = display_path_text(&artifact.path);
     Ok(artifact)
+}
+
+#[command]
+fn preview_ai_run_replay(start_path: String, run_id: String) -> Result<AiRunReplayReport, String> {
+    let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    workspace
+        .replay_ai_run_patch(&run_id, true)
+        .map(normalize_ai_run_replay_report)
+        .map_err(|err| err.to_string())
 }
 
 #[command]
@@ -1184,8 +1307,11 @@ pub fn run() {
             get_node_detail,
             get_ai_run_history,
             get_ai_run_record,
+            get_ai_run_show,
+            compare_ai_runs,
             get_ai_run_artifact,
             get_ai_run_patch,
+            preview_ai_run_replay,
             get_desktop_ai_status,
             get_patch_document,
             get_source_detail,
@@ -1209,7 +1335,7 @@ mod tests {
 
     use super::{
         desktop_default_ai_runner_command, detected_provider_from_command,
-        parse_provider_doctor_summary,
+        effective_model_for_command, effective_reasoning_for_command, parse_provider_doctor_summary,
     };
 
     #[cfg(windows)]
@@ -1264,6 +1390,46 @@ mod tests {
         assert!(summary.has_auth);
         assert!(!summary.has_process_env_conflict);
         assert!(summary.has_shell_env_conflict);
+    }
+
+    #[test]
+    fn effective_model_prefers_command_override_over_doctor_summary() {
+        assert_eq!(
+            effective_model_for_command(
+                "python3 scripts/codex_runner.py --model gpt-5.4-mini",
+                Some("gpt-5.4".to_string())
+            )
+            .as_deref(),
+            Some("gpt-5.4-mini")
+        );
+    }
+
+    #[test]
+    fn effective_reasoning_prefers_provider_defaults_for_desktop_codex_route() {
+        assert_eq!(
+            effective_reasoning_for_command(
+                "python3 '/tmp/provider_runner.py' --provider codex --use-default-args",
+                Some("codex"),
+                true,
+                Some("xhigh".to_string())
+            )
+            .as_deref(),
+            Some("low")
+        );
+    }
+
+    #[test]
+    fn effective_reasoning_prefers_explicit_command_override() {
+        assert_eq!(
+            effective_reasoning_for_command(
+                "python3 scripts/codex_runner.py --reasoning-effort medium",
+                Some("codex"),
+                true,
+                Some("xhigh".to_string())
+            )
+            .as_deref(),
+            Some("medium")
+        );
     }
 
     #[test]

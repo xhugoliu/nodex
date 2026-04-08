@@ -108,6 +108,45 @@ export interface AiRunArtifact {
   content: string;
 }
 
+export interface AiRunArtifactState {
+  artifact: AiRunArtifact | null;
+  error: string | null;
+}
+
+export interface AiRunInspectorArtifacts {
+  request: AiRunArtifactState;
+  response: AiRunArtifactState;
+  metadata: AiRunArtifactState;
+}
+
+export interface AiRunShowOutput {
+  record: AiRunRecord;
+  metadata_path: string | null;
+  explanation: AiPatchExplanation | null;
+  patch: PatchDocument | null;
+  patch_preview: string[];
+  response_notes: string[];
+  load_notes: string[];
+}
+
+export interface AiRunCompareSummary {
+  same_node_id: boolean;
+  same_capability: boolean;
+  same_provider: boolean;
+  same_model: boolean;
+  same_status: boolean;
+  same_rationale_summary: boolean;
+  same_patch_summary: boolean;
+  same_patch_preview: boolean;
+  same_response_notes: boolean;
+}
+
+export interface AiRunCompareOutput {
+  left: AiRunShowOutput;
+  right: AiRunShowOutput;
+  comparison: AiRunCompareSummary;
+}
+
 export interface PatchDraftOrigin {
   kind: "ai_run";
   run_id: string;
@@ -149,6 +188,15 @@ export interface ExternalRunnerReport {
   explanation: AiPatchExplanation;
   notes: string[];
   patch: PatchDocument;
+  report: ApplyPatchReport;
+}
+
+export interface AiRunReplayReport {
+  source_run: AiRunRecord;
+  patch_source: string;
+  source_patch_run_id: string | null;
+  replay_patch: PatchDocument;
+  dry_run: boolean;
   report: ApplyPatchReport;
 }
 

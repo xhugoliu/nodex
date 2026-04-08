@@ -13,6 +13,7 @@ import {
   optionalText,
   renderAiDraftFailure,
   renderAiRunArtifact,
+  renderAiRunReplayReport,
   renderAiRunTrace,
   renderExternalRunnerReport,
   renderPatchReport,
@@ -33,7 +34,11 @@ import {
 import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
   AiRunArtifact,
+  AiRunCompareOutput,
+  AiRunInspectorArtifacts,
   AiRunRecord,
+  AiRunReplayReport,
+  AiRunShowOutput,
   ApplyPatchReport,
   DesktopAiStatus,
   ExternalRunnerReport,
@@ -88,6 +93,14 @@ export default function App() {
   const [selectedNodeDetail, setSelectedNodeDetail] =
     useState<NodeDetail | null>(null);
   const [selectedNodeAiRuns, setSelectedNodeAiRuns] = useState<AiRunRecord[]>([]);
+  const [selectedAiRunId, setSelectedAiRunId] = useState<string | null>(null);
+  const [selectedAiRunShow, setSelectedAiRunShow] =
+    useState<AiRunShowOutput | null>(null);
+  const [selectedAiRunArtifacts, setSelectedAiRunArtifacts] =
+    useState<AiRunInspectorArtifacts | null>(null);
+  const [selectedAiRunCompare, setSelectedAiRunCompare] =
+    useState<AiRunCompareOutput | null>(null);
+  const [selectedAiRunLoading, setSelectedAiRunLoading] = useState(false);
   const [selectedSourceDetail, setSelectedSourceDetail] =
     useState<SourceDetail | null>(null);
   const [desktopAiStatus, setDesktopAiStatus] = useState<DesktopAiStatus | null>(null);
@@ -175,6 +188,11 @@ export default function App() {
       setUpdateNodeBody("");
       setMoveNodeParent("");
       setSelectedNodeAiRuns([]);
+      setSelectedAiRunId(null);
+      setSelectedAiRunShow(null);
+      setSelectedAiRunArtifacts(null);
+      setSelectedAiRunCompare(null);
+      setSelectedAiRunLoading(false);
       return;
     }
 
@@ -189,6 +207,92 @@ export default function App() {
     setAddChildKind("topic");
     setAddChildBody("");
   }, [selectedNodeDetail?.node.id]);
+
+  useEffect(() => {
+    if (!selectedNodeDetail) {
+      return;
+    }
+
+    if (!selectedNodeAiRuns.length) {
+      setSelectedAiRunId(null);
+      setSelectedAiRunShow(null);
+      setSelectedAiRunArtifacts(null);
+      setSelectedAiRunCompare(null);
+      setSelectedAiRunLoading(false);
+      return;
+    }
+
+    if (
+      selectedAiRunId &&
+      selectedNodeAiRuns.some((run) => run.id === selectedAiRunId)
+    ) {
+      return;
+    }
+
+    setSelectedAiRunId(selectedNodeAiRuns[0].id);
+  }, [selectedAiRunId, selectedNodeAiRuns, selectedNodeDetail]);
+
+  useEffect(() => {
+    if (!selectedAiRunId || !workspacePath || !hasTauriRuntime()) {
+      setSelectedAiRunShow(null);
+      setSelectedAiRunArtifacts(null);
+      setSelectedAiRunCompare(null);
+      setSelectedAiRunLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const runId = selectedAiRunId;
+    setSelectedAiRunLoading(true);
+    setSelectedAiRunCompare(null);
+
+    void Promise.allSettled([
+      invokeCommand<AiRunShowOutput>("get_ai_run_show", {
+        start_path: workspacePath,
+        run_id: runId,
+      }),
+      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind: "request",
+      }),
+      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind: "response",
+      }),
+      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
+        start_path: workspacePath,
+        run_id: runId,
+        kind: "metadata",
+      }),
+    ]).then((results) => {
+      if (cancelled || runId !== selectedAiRunId) {
+        return;
+      }
+
+      const [showResult, requestResult, responseResult, metadataResult] = results;
+      if (showResult.status !== "fulfilled") {
+        setSelectedAiRunShow(null);
+        setSelectedAiRunArtifacts(null);
+        setSelectedAiRunLoading(false);
+        setConsoleMessage(formatError(showResult.reason), "error");
+        return;
+      }
+
+      setSelectedAiRunShow(showResult.value);
+      setSelectedAiRunArtifacts({
+        request: toAiRunArtifactState(requestResult),
+        response: toAiRunArtifactState(responseResult),
+        metadata: toAiRunArtifactState(metadataResult),
+      });
+      setSelectedAiRunLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAiRunId, selectedNodeAiRuns, workspacePath]);
 
   useEffect(() => {
     if (!patchDraftOrigin || !workspacePath || !hasTauriRuntime()) {
@@ -269,6 +373,11 @@ export default function App() {
               setSelectedSourceId(null);
               setSelectedNodeDetail(null);
               setSelectedNodeAiRuns([]);
+              setSelectedAiRunId(null);
+              setSelectedAiRunShow(null);
+              setSelectedAiRunArtifacts(null);
+              setSelectedAiRunCompare(null);
+              setSelectedAiRunLoading(false);
               setSelectedSourceDetail(null);
               setContextNodeId(null);
               setContextSourceId(null);
@@ -436,6 +545,11 @@ export default function App() {
     setSelectedSourceId(null);
     setSelectedNodeDetail(null);
     setSelectedNodeAiRuns([]);
+    setSelectedAiRunId(null);
+    setSelectedAiRunShow(null);
+    setSelectedAiRunArtifacts(null);
+    setSelectedAiRunCompare(null);
+    setSelectedAiRunLoading(false);
     setSelectedSourceDetail(null);
     setContextNodeId(null);
     setContextSourceId(null);
@@ -539,6 +653,11 @@ export default function App() {
       setSelectedSourceDetail(detail);
       setSelectedNodeDetail(null);
       setSelectedNodeAiRuns([]);
+      setSelectedAiRunId(null);
+      setSelectedAiRunShow(null);
+      setSelectedAiRunArtifacts(null);
+      setSelectedAiRunCompare(null);
+      setSelectedAiRunLoading(false);
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -922,6 +1041,15 @@ export default function App() {
     }
   }
 
+  async function loadAiRunPatchById(runId: string) {
+    try {
+      const run = await getAiRunRecord(runId);
+      await loadAiRunPatch(run);
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function loadPatchRunPatch(patchRunId: string) {
     if (!ensureWorkspace()) {
       return;
@@ -944,6 +1072,10 @@ export default function App() {
   }
 
   async function getAiRunRecord(runId: string): Promise<AiRunRecord> {
+    if (selectedAiRunShow?.record.id === runId) {
+      return selectedAiRunShow.record;
+    }
+
     const currentRun = selectedNodeAiRuns.find((run) => run.id === runId);
     if (currentRun) {
       return currentRun;
@@ -953,6 +1085,61 @@ export default function App() {
       start_path: workspacePath,
       run_id: runId,
     });
+  }
+
+  async function replayAiRunDryRun(runId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      setShowAdvancedPatchEditor(false);
+      const replay = await invokeCommand<AiRunReplayReport>("preview_ai_run_replay", {
+        start_path: workspacePath,
+        run_id: runId,
+      });
+      const patchJson = JSON.stringify(replay.replay_patch, null, 2);
+      const draftOrigin = aiRunRecordToDraftOrigin(replay.source_run);
+      setPatchEditor(patchJson);
+      setPatchDraftOrigin(draftOrigin);
+      setCurrentDraftRun(replay.source_run);
+      setLastPatchResult({
+        kind: "preview",
+        report: replay.report,
+        draft_origin: draftOrigin,
+        patch_text: patchJson,
+      });
+      setSelectedNodeAiRuns((current) =>
+        mergeAiRunRecord(current, replay.source_run),
+      );
+      setConsoleMessage(renderAiRunReplayReport(replay, t), "success");
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
+  async function compareAiRuns(leftRunId: string, rightRunId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const output = await invokeCommand<AiRunCompareOutput>("compare_ai_runs", {
+        start_path: workspacePath,
+        left_run_id: leftRunId,
+        right_run_id: rightRunId,
+      });
+      setSelectedAiRunCompare(output);
+      setConsoleMessage(
+        t("messages.loadedAiRunCompare", {
+          leftRunId: leftRunId,
+          rightRunId: rightRunId,
+        }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
   }
 
   async function showAiRunTraceById(runId: string) {
@@ -1031,6 +1218,11 @@ export default function App() {
             desktopAiStatus={desktopAiStatus}
             selectedNodeDetail={selectedNodeDetail}
             selectedNodeAiRuns={selectedNodeAiRuns}
+            selectedAiRunId={selectedAiRunId}
+            selectedAiRunShow={selectedAiRunShow}
+            selectedAiRunArtifacts={selectedAiRunArtifacts}
+            selectedAiRunCompare={selectedAiRunCompare}
+            selectedAiRunLoading={selectedAiRunLoading}
             patchDraftOrigin={patchDraftOrigin}
             selectedSourceDetail={selectedSourceDetail}
             contextNodeId={contextNodeId}
@@ -1048,19 +1240,20 @@ export default function App() {
             onSelectSource={(sourceId) => {
               void fetchSourceDetail(sourceId);
             }}
+            onSelectAiRun={(runId) => {
+              setSelectedAiRunId(runId);
+            }}
             onLoadAiRunPatch={(runId) => {
-              const run = selectedNodeAiRuns.find((entry) => entry.id === runId);
-              if (!run) {
-                setConsoleMessage(t("messages.patchDraftOriginTraceUnavailable", { runId }), "error");
-                return;
-              }
-              void loadAiRunPatch(run);
+              void loadAiRunPatchById(runId);
             }}
-            onShowAiRunTrace={(run) => {
-              void showAiRunTraceById(run.id);
+            onReplayAiRunDryRun={(runId) => {
+              void replayAiRunDryRun(runId);
             }}
-            onShowAiRunArtifact={(runId, kind) => {
-              void showAiRunArtifactById(runId, kind);
+            onCompareAiRuns={(leftRunId, rightRunId) => {
+              void compareAiRuns(leftRunId, rightRunId);
+            }}
+            onClearAiRunCompare={() => {
+              setSelectedAiRunCompare(null);
             }}
             onDraftCiteChunk={(chunkId) => {
               void draftSourceChunkCitation(chunkId, false);
@@ -1296,4 +1489,20 @@ function comparePatchTexts(
   } catch {
     return left.trim() === right.trim();
   }
+}
+
+function toAiRunArtifactState(
+  result: PromiseSettledResult<AiRunArtifact>,
+) {
+  if (result.status === "fulfilled") {
+    return {
+      artifact: result.value,
+      error: null,
+    };
+  }
+
+  return {
+    artifact: null,
+    error: formatError(result.reason),
+  };
 }

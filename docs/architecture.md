@@ -128,8 +128,12 @@ AI request / response 编排层。
 - 也负责为桌面前端暴露 AI expand / explore dry-run draft 入口
 - 也负责为桌面前端暴露 AI run 相关读取入口：
   - 最近运行记录
+  - 单条 run 的 explanation / patch / request / response / metadata 汇总读取
   - patch 草案回放
+  - run 与 run 的差异对比
   - request / response / metadata 工件查看
+- desktop 默认 AI draft route 会走统一 `provider_runner.py --provider codex --use-default-args`
+  - 对当前 codex provider entry 来说，这意味着模型仍跟随本机 Codex 配置，但 reasoning effort 会固定为 `low`
 - 把菜单动作和工作区状态变化通过事件发回前端
 
 ### `desktop/src`
@@ -146,7 +150,10 @@ AI request / response 编排层。
 - 负责把节点编辑动作起草为 patch
 - 负责把 AI expand / explore 结果作为 patch 草案载入编辑器
 - 负责在 patch 编辑器里展示当前草案是否来自某次 AI run
-- 负责在节点详情里展示当前节点最近的 AI 运行记录、trace 和工件查看入口
+- 负责在节点详情里提供 Run Inspector：
+  - 选中某条 AI run 后直接查看 explanation、patch、request / response / metadata
+  - 在同一处触发 replay dry-run
+  - 在同一处比较两条 run 的差异
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里
