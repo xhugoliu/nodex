@@ -21,6 +21,11 @@ def run_script(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_langchain_openai_runner_help(self) -> None:
+        result = run_script("scripts/langchain_openai_runner.py", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Experimental LangChain + OpenAI runner", result.stdout)
+
     def test_provider_runner_list(self) -> None:
         result = run_script("scripts/provider_runner.py", "--list")
         self.assertEqual(result.returncode, 0, result.stderr)

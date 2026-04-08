@@ -87,6 +87,7 @@ AI request / response 编排层。
 - 校验外部 response，并把成功 apply 的 patch 继续复用到统一 patch 流程
 - 生成 AI run 元数据，并把最小运行索引写进 SQLite
 - 当前共享内核不直接内置 provider SDK，但已经支持通过 external runner 间接接入真实模型
+- 当前 LangChain 最小试点也复用这条 contract / external runner 边界，而不是新增另一套 apply 路径
 - 桌面 draft 默认通过统一 `provider_runner.py` 调度 `codex`，仍可用 `NODEX_DESKTOP_AI_COMMAND` 显式覆盖
 
 ### `src/project.rs`
@@ -105,9 +106,11 @@ AI request / response 编排层。
 职责：
 
 - 承载 `openai` / `codex` / `gemini` 的最小 runner
+- 也承载一个独立的 LangChain 最小试点 runner：`langchain_openai_runner.py`
 - 提供统一的 `provider_doctor` / `provider_runner` / `provider_smoke` 入口
 - 收口 provider config 发现、环境变量冲突诊断、共享 contract 校验与 smoke 参数
 - 继续保持 external runner 边界，而不是把 provider SDK 直接塞进 Rust 内核
+- LangChain 当前仍然停留在这个脚本层试点，不直接进入 Rust core，也还没有成为 desktop 默认主路
 
 ### `desktop/src-tauri`
 

@@ -24,6 +24,7 @@
 - `sources/`：归档导入过的原始资料文件
 - `exports/`：导出结果
 - `ai/`：归档 AI 运行过程中的 request / response / `.meta.json`
+  当前这些工件既可能来自最小 provider runner，也可能来自 LangChain 最小试点 runner
 
 ## 当前数据库表
 
@@ -129,6 +130,7 @@
 - 查看哪次成功、哪次失败
 - 查看失败原因和最后一次错误分类
 - 查看哪次最终落成了 patch run
+- 在不新增存储边界的前提下，对比最小 runner 和 LangChain 试点的运行结果
 
 ### `sources`
 

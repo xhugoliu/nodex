@@ -105,6 +105,7 @@
 
 - 已有 `ai expand` / `ai explore` 的最小 dry-run 能力，可在本地组装上下文并预览 patch scaffold
 - 已形成 request / response contract、external runner bridge 和最小 provider runner
+- 已开始在同一条 external runner 边界上做 LangChain 最小试点，先验证它是否适合作为后续 AI runtime / 编排层
 - 已把最小 explainability contract 接到 AI response：理由摘要、直接证据、推断建议
 - 已能保存本地 AI 运行审计信息，并把最小运行索引写进 SQLite，供后续排查和查询扩展
 - 已把 provider 调试工具链收口成：
@@ -122,11 +123,13 @@
 
 - 不是再发明一条新的 provider 接入路径
 - 而是把现有 external runner + 多 provider 调试工具链做成更清晰的真实运行体验
+- 同时把 LangChain 控制在“最小外部试点”范围内，先验证它能否提升真实 runtime 质量，而不是抢先替换默认主路
 - 包括配置状态、运行状态、失败反馈和 patch apply 链路的可见性
 
 长期方向补充：
 
 - 当前 AI contract 仍然直接产出 canonical patch，这条边界先继续保留
+- LangChain 如果后续继续推进，也应该优先作为这条 contract 的 runtime / orchestration 层，而不是新的状态边界
 - 等真实 provider 主路径足够稳定后，再评估是否让 AI authored output 上移到更高层 intent，再编译回 canonical patch
 
 关键问题：

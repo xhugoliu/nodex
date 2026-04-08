@@ -163,6 +163,10 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - 成功和失败都会尽量写 `.meta.json`，方便之后排查一次调用到底发生了什么
 - 这条命令当前仍然不内置任何 provider SDK；它只是本地执行桥
 - 仓库内提供了一个最小 OpenAI runner：`python3 scripts/openai_runner.py`
+- 仓库内也有一个 LangChain 最小试点 runner：
+  - `python3 scripts/langchain_openai_runner.py`
+  - 这条试点继续复用同一套 request / response contract 和 `.meta.json` 审计边界
+  - 它当前仍然是独立试点，不在 `ai doctor` / `ai providers` / `ai smoke` 的 provider 列表里
 - 如果你的 provider 已经通过本机 `codex login` 和 `~/.codex/config.toml` 跑通，也可以改用：
   - `python3 scripts/codex_runner.py`
 - Gemini 路径现在也有最小 runner：
@@ -219,6 +223,13 @@ cp .env.example .env.local
 # 编辑 .env.local，填入 OPENAI_API_KEY
 
 cargo run -- ai run-external root "python3 scripts/openai_runner.py" --dry-run
+```
+
+如果你想在同一条 external runner 边界上试 LangChain 最小试点：
+
+```bash
+python3 -m pip install -U langchain-openai
+cargo run -- ai run-external root "python3 scripts/langchain_openai_runner.py" --dry-run
 ```
 
 如果当前机器上的 `codex exec` 已经能正常调用目标 provider，也可以直接复用它：

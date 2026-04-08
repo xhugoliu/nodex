@@ -18,6 +18,8 @@
   长期阶段目标与阶段判断；不要把短期执行细节无限堆回这里。
 - `docs/next-steps.md`
   当前短期优先级、主路径和最小执行切口；不记录按轮次累积的完成项。
+- `docs/langchain-pilot.md`
+  LangChain 最小试点的当前边界、安装方式和推荐运行路径来源。
 - `AGENTS.md`
   仓库级协作约束、文档同步要求和反哺规则。
 
@@ -38,6 +40,7 @@
 5. [架构说明](./architecture.md)
 6. [长期路线图](./roadmap.md)
 7. [短期执行清单](./next-steps.md)
-8. [Agent 协作约束](../AGENTS.md)
+8. [LangChain 最小试点](./langchain-pilot.md)
+9. [Agent 协作约束](../AGENTS.md)
 
 除 [CLI 使用说明](./cli.md) 外，这里的大多数文档描述的是产品方向、模型和路线，不等于已经落地的功能。
