@@ -110,6 +110,7 @@ AI request / response 编排层。
   - `langchain_openai_runner.py`
   - `langchain_anthropic_runner.py`
 - 提供统一的 `provider_doctor` / `provider_runner` / `provider_smoke` 入口
+- 也提供 `runner_compare.py`，把多条 external runner 的 dry-run / show / compare 串成一次本地对照流程
 - 收口 provider config 发现、环境变量冲突诊断、共享 contract 校验与 smoke 参数
 - 继续保持 external runner 边界，而不是把 provider SDK 直接塞进 Rust 内核
 - LangChain 当前仍然停留在这个脚本层试点，不直接进入 Rust core，也还没有成为 desktop 默认主路

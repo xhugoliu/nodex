@@ -94,6 +94,7 @@
 
 - 以 `codex` 作为真实验证主路
 - 以 `openai_runner.py` 和 `langchain_openai_runner.py` 作为同 provider 的平行对照
+- 也允许通过 `scripts/runner_compare.py --preset langchain-pilot` 把这条对照流程收成统一入口
 - 优先覆盖这些动作的最小闭环：
   - `draft`
   - `show`

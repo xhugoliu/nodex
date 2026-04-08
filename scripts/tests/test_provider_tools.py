@@ -1,5 +1,8 @@
+import json
+import shlex
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -21,6 +24,82 @@ def run_script(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_runner_compare_lists_presets(self) -> None:
+        result = run_script("scripts/runner_compare.py", "--list-presets")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("langchain-pilot", result.stdout)
+        self.assertIn("langchain-openai", result.stdout)
+        self.assertIn("langchain-anthropic", result.stdout)
+
+    def test_runner_compare_can_compare_two_fake_runners(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "import sys",
+                        "from pathlib import Path",
+                        "",
+                        "label = sys.argv[1]",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': f'{label} summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': f'{label} rationale',",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [f'{label} suggestion'],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': label,",
+                        "        'run_id': label,",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': f'{label} summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': f'{label} branch',",
+                        "                'kind': 'topic',",
+                        "                'body': f'{label} body',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [f'{label} note'],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            left_command = shlex.join([sys.executable, str(fake_runner), "left"])
+            right_command = shlex.join([sys.executable, str(fake_runner), "right"])
+
+            result = run_script(
+                "scripts/runner_compare.py",
+                "--json",
+                "--runner",
+                f"left={left_command}",
+                "--runner",
+                f"right={right_command}",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["successful_runs"], 2)
+        self.assertEqual(len(payload["comparisons"]), 1)
+        self.assertEqual(payload["comparisons"][0]["status"], "ok")
+
     def test_langchain_anthropic_runner_help(self) -> None:
         result = run_script("scripts/langchain_anthropic_runner.py", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)

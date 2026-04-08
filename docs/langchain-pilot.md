@@ -126,6 +126,29 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py" --dry-run
 ```
 
+如果你想把这条对照流程直接收成一次统一执行，也可以使用：
+
+```bash
+python3 scripts/runner_compare.py --preset langchain-pilot
+python3 scripts/runner_compare.py --preset langchain-pilot --json
+```
+
+这条脚本会：
+
+- 在临时 workspace 里初始化 Nodex
+- 对同一个节点依次运行多条 external runner 命令
+- 自动收集每条运行的 `run-id`
+- 自动读取 `ai show`
+- 对成功的运行自动做两两 `ai compare`
+
+如果你只想比较两条显式 runner，也可以手动指定：
+
+```bash
+python3 scripts/runner_compare.py \
+  --runner 'openai=python3 scripts/openai_runner.py' \
+  --runner 'langchain-openai=python3 scripts/langchain_openai_runner.py'
+```
+
 ## 当前判断标准
 
 这轮试点是否值得继续推进，优先看这些问题：
