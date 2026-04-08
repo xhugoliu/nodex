@@ -292,10 +292,12 @@ const translations: Record<Locale, TranslationTree> = {
       patchOps: "{count} ops in draft",
       showAdvanced: "Show Advanced JSON",
       hideAdvanced: "Hide Advanced JSON",
+      openOriginInspector: "Open In Inspector",
       showOriginTrace: "Show Source Trace",
       showOriginRequest: "Show Request",
       showOriginResponse: "Show Response",
       showOriginMetadata: "Show Meta",
+      openCurrentDraftInspector: "Open Current Run",
       openPatch: "Open patch",
       invalidPatch: "Patch draft cannot be parsed.",
       untitledNode: "Untitled node",
@@ -385,6 +387,7 @@ const translations: Record<Locale, TranslationTree> = {
         "Run `cargo run -- ai doctor --provider {provider} --format json` to inspect the current provider route.",
       patchDraftOriginTraceUnavailable:
         "Could not find AI run {runId} in the current node context. Re-open the node or load the run again from its history.",
+      focusedAiRunInspector: "Focused AI run {runId} in the inspector.",
       loadedAiRunCompare:
         "Loaded AI run comparison for {leftRunId} and {rightRunId}.",
     },
@@ -697,10 +700,12 @@ const translations: Record<Locale, TranslationTree> = {
       patchOps: "当前草案包含 {count} 个操作",
       showAdvanced: "显示高级 JSON",
       hideAdvanced: "隐藏高级 JSON",
+      openOriginInspector: "在 Inspector 中打开",
       showOriginTrace: "查看来源 Trace",
       showOriginRequest: "查看 Request",
       showOriginResponse: "查看 Response",
       showOriginMetadata: "查看 Meta",
+      openCurrentDraftInspector: "打开当前 run",
       openPatch: "打开 Patch",
       invalidPatch: "Patch 草案解析失败。",
       untitledNode: "未命名节点",
@@ -789,6 +794,7 @@ const translations: Record<Locale, TranslationTree> = {
         "运行 `cargo run -- ai doctor --provider {provider} --format json`，检查当前 provider 路径。",
       patchDraftOriginTraceUnavailable:
         "在当前节点上下文里找不到 AI run {runId}。请重新打开对应节点，或从它的历史里重新载入。",
+      focusedAiRunInspector: "已在 Inspector 中定位到 AI run {runId}。",
       loadedAiRunCompare:
         "已载入 AI run 对比：{leftRunId} vs {rightRunId}。",
     },

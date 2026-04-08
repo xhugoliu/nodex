@@ -328,6 +328,7 @@ export function EditorPane(props: {
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
   onLoadAppliedPatch: (patchRunId: string) => void;
+  onOpenAiRunInspector: (runId: string) => void;
   onShowDraftOriginTrace: () => void;
   onShowDraftOriginArtifact: (kind: "request" | "response" | "metadata") => void;
 }) {
@@ -629,6 +630,7 @@ export function EditorPane(props: {
                 lastPatchResultCurrent={props.lastPatchResultCurrent}
                 t={props.t}
                 onLoadAppliedPatch={props.onLoadAppliedPatch}
+                onOpenAiRunInspector={props.onOpenAiRunInspector}
                 onShowDraftOriginTrace={props.onShowDraftOriginTrace}
                 onShowDraftOriginArtifact={props.onShowDraftOriginArtifact}
               />
@@ -723,6 +725,7 @@ function DraftLifecyclePanel(props: {
   lastPatchResultCurrent: boolean | null;
   t: Translator;
   onLoadAppliedPatch: (patchRunId: string) => void;
+  onOpenAiRunInspector: (runId: string) => void;
   onShowDraftOriginTrace: () => void;
   onShowDraftOriginArtifact: (kind: "request" | "response" | "metadata") => void;
 }) {
@@ -744,6 +747,10 @@ function DraftLifecyclePanel(props: {
             meta={formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)}
             ops={props.draftOps}
             actions={[
+              {
+                label: props.t("composer.openOriginInspector"),
+                onClick: () => props.onOpenAiRunInspector(props.patchDraftOrigin!.run_id),
+              },
               {
                 label: props.t("composer.showOriginTrace"),
                 onClick: props.onShowDraftOriginTrace,
@@ -774,6 +781,7 @@ function DraftLifecyclePanel(props: {
             nextSteps={props.currentDraftNextSteps}
             t={props.t}
             onLoadAppliedPatch={props.onLoadAppliedPatch}
+            onOpenAiRunInspector={props.onOpenAiRunInspector}
           />
         ) : null}
 
@@ -795,6 +803,7 @@ function CurrentDraftRunCard(props: {
   nextSteps: string[];
   t: Translator;
   onLoadAppliedPatch: (patchRunId: string) => void;
+  onOpenAiRunInspector: (runId: string) => void;
 }) {
   const statusLabel = formatAiRunStatusLabel(props.run.status, props.t);
   const toneClass =
@@ -889,16 +898,22 @@ function CurrentDraftRunCard(props: {
         </div>
       </div>
 
-      {props.run.patch_run_id ? (
-        <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button
+          className={ghostButtonClass}
+          onClick={() => props.onOpenAiRunInspector(props.run.id)}
+        >
+          {props.t("composer.openCurrentDraftInspector")}
+        </button>
+        {props.run.patch_run_id ? (
           <button
             className={ghostButtonClass}
             onClick={() => props.onLoadAppliedPatch(props.run.patch_run_id!)}
           >
             {props.t("detail.loadAppliedPatch")}
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {props.nextSteps.length ? (
         <div className="mt-4">
@@ -1591,6 +1606,7 @@ function CompactNodeDetail(props: {
               loading={props.selectedAiRunLoading}
               t={props.t}
               onLoadAiRunPatch={props.onLoadAiRunPatch}
+              onOpenAiRunInspector={props.onSelectAiRun}
               onReplayAiRunDryRun={props.onReplayAiRunDryRun}
               onCompareAiRuns={props.onCompareAiRuns}
               onClearAiRunCompare={props.onClearAiRunCompare}
@@ -1635,6 +1651,7 @@ function RunInspectorCard(props: {
   loading: boolean;
   t: Translator;
   onLoadAiRunPatch: (runId: string) => void;
+  onOpenAiRunInspector: (runId: string) => void;
   onReplayAiRunDryRun: (runId: string) => void;
   onCompareAiRuns: (leftRunId: string, rightRunId: string) => void;
   onClearAiRunCompare: () => void;
@@ -1802,6 +1819,8 @@ function RunInspectorCard(props: {
               }
             }}
             onClear={props.onClearAiRunCompare}
+            onLoadAiRunPatch={props.onLoadAiRunPatch}
+            onOpenAiRunInspector={props.onOpenAiRunInspector}
           />
         ) : null}
       </div>
@@ -2038,6 +2057,8 @@ function AiRunComparePanel(props: {
   onChangeTarget: (value: string) => void;
   onCompare: () => void;
   onClear: () => void;
+  onLoadAiRunPatch: (runId: string) => void;
+  onOpenAiRunInspector: (runId: string) => void;
 }) {
   const summaryItems: Array<{ label: string; same: boolean }> = props.compare
     ? [
@@ -2149,11 +2170,15 @@ function AiRunComparePanel(props: {
               title={props.t("detail.runInspectorCompareLeft")}
               runShow={props.compare.left}
               t={props.t}
+              onLoadAiRunPatch={props.onLoadAiRunPatch}
+              onOpenAiRunInspector={props.onOpenAiRunInspector}
             />
             <AiRunCompareSide
               title={props.t("detail.runInspectorCompareRight")}
               runShow={props.compare.right}
               t={props.t}
+              onLoadAiRunPatch={props.onLoadAiRunPatch}
+              onOpenAiRunInspector={props.onOpenAiRunInspector}
             />
           </div>
         </>
@@ -2166,7 +2191,13 @@ function AiRunCompareSide(props: {
   title: string;
   runShow: AiRunShowOutput;
   t: Translator;
+  onLoadAiRunPatch: (runId: string) => void;
+  onOpenAiRunInspector: (runId: string) => void;
 }) {
+  const loadPatchLabel = props.runShow.record.patch_run_id
+    ? props.t("detail.loadAppliedPatch")
+    : props.t("detail.loadAiRunPatch");
+
   return (
     <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
       <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
@@ -2218,6 +2249,22 @@ function AiRunCompareSide(props: {
           ))}
         </div>
       ) : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {props.runShow.patch ? (
+          <button
+            className={ghostButtonClass}
+            onClick={() => props.onLoadAiRunPatch(props.runShow.record.id)}
+          >
+            {loadPatchLabel}
+          </button>
+        ) : null}
+        <button
+          className={ghostButtonClass}
+          onClick={() => props.onOpenAiRunInspector(props.runShow.record.id)}
+        >
+          {props.t("detail.openRunInspector")}
+        </button>
+      </div>
     </section>
   );
 }

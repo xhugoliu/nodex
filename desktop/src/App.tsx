@@ -1157,6 +1157,33 @@ export default function App() {
     });
   }
 
+  async function focusAiRunInInspector(runId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const run = await getAiRunRecord(runId);
+      const focused = await fetchNodeDetail(run.node_id, workspacePath, {
+        silentError: true,
+      });
+      if (!focused) {
+        setConsoleMessage(
+          t("messages.patchDraftOriginTraceUnavailable", { runId }),
+          "error",
+        );
+        return;
+      }
+      setSelectedAiRunId(runId);
+      setConsoleMessage(
+        t("messages.focusedAiRunInspector", { runId }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function showAiRunTraceById(runId: string) {
     if (!ensureWorkspace()) {
       return;
@@ -1341,6 +1368,9 @@ export default function App() {
             }}
             onLoadAppliedPatch={(patchRunId) => {
               void loadPatchRunPatch(patchRunId);
+            }}
+            onOpenAiRunInspector={(runId) => {
+              void focusAiRunInInspector(runId);
             }}
             onShowDraftOriginTrace={showCurrentDraftOriginTrace}
             onShowDraftOriginArtifact={(kind) => {
