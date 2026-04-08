@@ -106,7 +106,9 @@ AI request / response 编排层。
 职责：
 
 - 承载 `openai` / `codex` / `gemini` 的最小 runner
-- 也承载一个独立的 LangChain 最小试点 runner：`langchain_openai_runner.py`
+- 也承载独立的 LangChain 最小试点 runner：
+  - `langchain_openai_runner.py`
+  - `langchain_anthropic_runner.py`
 - 提供统一的 `provider_doctor` / `provider_runner` / `provider_smoke` 入口
 - 收口 provider config 发现、环境变量冲突诊断、共享 contract 校验与 smoke 参数
 - 继续保持 external runner 边界，而不是把 provider SDK 直接塞进 Rust 内核

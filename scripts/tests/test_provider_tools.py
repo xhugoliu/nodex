@@ -21,6 +21,13 @@ def run_script(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_langchain_anthropic_runner_help(self) -> None:
+        result = run_script("scripts/langchain_anthropic_runner.py", "--help")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(
+            "Experimental LangChain + Anthropic-compatible runner", result.stdout
+        )
+
     def test_langchain_openai_runner_help(self) -> None:
         result = run_script("scripts/langchain_openai_runner.py", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
