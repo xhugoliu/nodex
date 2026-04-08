@@ -155,7 +155,8 @@ AI request / response 编排层。
   - 选中某条 AI run 后直接查看 explanation、patch、request / response / metadata
   - explanation 里的 direct evidence 可继续跳到对应 source chunk
   - 在同一处触发 replay dry-run
-  - 在同一处比较两条 run 的差异，并把 compare 两侧的 patch 重新送回 patch 编辑器
+  - 在同一处比较两条 run 的差异，并高亮 rationale / patch summary / notes / patch preview 的变化
+  - 也能把 compare 两侧的 patch 重新送回 patch 编辑器
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里

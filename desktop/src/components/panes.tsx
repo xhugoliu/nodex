@@ -2169,6 +2169,7 @@ function AiRunComparePanel(props: {
             <AiRunCompareSide
               title={props.t("detail.runInspectorCompareLeft")}
               runShow={props.compare.left}
+              counterpart={props.compare.right}
               t={props.t}
               onLoadAiRunPatch={props.onLoadAiRunPatch}
               onOpenAiRunInspector={props.onOpenAiRunInspector}
@@ -2176,6 +2177,7 @@ function AiRunComparePanel(props: {
             <AiRunCompareSide
               title={props.t("detail.runInspectorCompareRight")}
               runShow={props.compare.right}
+              counterpart={props.compare.left}
               t={props.t}
               onLoadAiRunPatch={props.onLoadAiRunPatch}
               onOpenAiRunInspector={props.onOpenAiRunInspector}
@@ -2190,6 +2192,7 @@ function AiRunComparePanel(props: {
 function AiRunCompareSide(props: {
   title: string;
   runShow: AiRunShowOutput;
+  counterpart: AiRunShowOutput;
   t: Translator;
   onLoadAiRunPatch: (runId: string) => void;
   onOpenAiRunInspector: (runId: string) => void;
@@ -2197,6 +2200,38 @@ function AiRunCompareSide(props: {
   const loadPatchLabel = props.runShow.record.patch_run_id
     ? props.t("detail.loadAppliedPatch")
     : props.t("detail.loadAiRunPatch");
+  const patchSummary =
+    props.runShow.patch?.summary ||
+    props.runShow.record.patch_summary ||
+    props.t("history.noSummary");
+  const counterpartPatchSummary =
+    props.counterpart.patch?.summary ||
+    props.counterpart.record.patch_summary ||
+    props.t("history.noSummary");
+  const rationale =
+    props.runShow.explanation?.rationale_summary || props.t("detail.none");
+  const counterpartRationale =
+    props.counterpart.explanation?.rationale_summary || props.t("detail.none");
+  const sameStatus =
+    props.runShow.record.status === props.counterpart.record.status;
+  const samePatchSummary = patchSummary === counterpartPatchSummary;
+  const sameRationale = rationale === counterpartRationale;
+  const samePatchPreview = compareOrderedLines(
+    props.runShow.patch_preview,
+    props.counterpart.patch_preview,
+  );
+  const sameResponseNotes = compareOrderedLines(
+    props.runShow.response_notes,
+    props.counterpart.response_notes,
+  );
+  const patchPreviewStates = buildCompareLineStates(
+    props.runShow.patch_preview,
+    props.counterpart.patch_preview,
+  );
+  const responseNoteStates = buildCompareLineStates(
+    props.runShow.response_notes,
+    props.counterpart.response_notes,
+  );
 
   return (
     <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
@@ -2206,49 +2241,41 @@ function AiRunCompareSide(props: {
       <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
         {props.runShow.record.id}
       </div>
-      <div className="mt-2 space-y-2">
-        <StatusField
+      <div className="mt-3 grid gap-3">
+        <CompareFieldBlock
           label={props.t("detail.aiRunStatusLabel")}
           value={formatAiRunStatusLabel(props.runShow.record.status, props.t)}
+          same={sameStatus}
+          t={props.t}
         />
-        <StatusField
+        <CompareFieldBlock
           label={props.t("detail.aiRunPatchSummaryLabel")}
-          value={
-            props.runShow.patch?.summary ||
-            props.runShow.record.patch_summary ||
-            props.t("history.noSummary")
-          }
+          value={patchSummary}
+          same={samePatchSummary}
+          t={props.t}
+        />
+        <CompareFieldBlock
+          label={props.t("detail.runInspectorRationale")}
+          value={rationale}
+          same={sameRationale}
+          t={props.t}
+          multiline
+        />
+        <CompareListBlock
+          label={props.t("detail.runInspectorPatchPreview")}
+          same={samePatchPreview}
+          lines={patchPreviewStates}
+          emptyLabel={props.t("detail.none")}
+          t={props.t}
+        />
+        <CompareListBlock
+          label={props.t("detail.runInspectorResponseNotes")}
+          same={sameResponseNotes}
+          lines={responseNoteStates}
+          emptyLabel={props.t("detail.none")}
+          t={props.t}
         />
       </div>
-      {props.runShow.explanation ? (
-        <div className="mt-4 rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]">
-          {props.runShow.explanation.rationale_summary}
-        </div>
-      ) : null}
-      {props.runShow.patch_preview.length ? (
-        <div className="mt-4 space-y-2">
-          {props.runShow.patch_preview.map((line) => (
-            <div
-              key={`${props.runShow.record.id}-${line}`}
-              className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
-            >
-              {line}
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {props.runShow.response_notes.length ? (
-        <div className="mt-4 space-y-2">
-          {props.runShow.response_notes.map((note) => (
-            <div
-              key={`${props.runShow.record.id}-${note}`}
-              className="rounded-lg border border-[color:var(--line-soft)] bg-white px-3 py-2 text-sm leading-6 text-[color:var(--text)]"
-            >
-              {note}
-            </div>
-          ))}
-        </div>
-      ) : null}
       <div className="mt-4 flex flex-wrap gap-2">
         {props.runShow.patch ? (
           <button
@@ -2266,6 +2293,137 @@ function AiRunCompareSide(props: {
         </button>
       </div>
     </section>
+  );
+}
+
+function CompareFieldBlock(props: {
+  label: string;
+  value: string;
+  same: boolean;
+  t: Translator;
+  multiline?: boolean;
+}) {
+  return (
+    <section className={compareBlockToneClass(props.same)}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.label}
+        </div>
+        <CompareDiffBadge same={props.same} t={props.t} />
+      </div>
+      <div
+        className={[
+          "mt-2 text-sm leading-6 text-[color:var(--text)]",
+          props.multiline ? "whitespace-pre-wrap" : "",
+        ].join(" ")}
+      >
+        {props.value}
+      </div>
+    </section>
+  );
+}
+
+function CompareListBlock(props: {
+  label: string;
+  same: boolean;
+  lines: CompareLineState[];
+  emptyLabel: string;
+  t: Translator;
+}) {
+  return (
+    <section className={compareBlockToneClass(props.same)}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.label}
+        </div>
+        <CompareDiffBadge same={props.same} t={props.t} />
+      </div>
+      {props.lines.length ? (
+        <div className="mt-2 space-y-2">
+          {props.lines.map((line) => (
+            <div
+              key={line.key}
+              className={[
+                "rounded-lg border px-3 py-2 text-sm leading-6",
+                line.shared
+                  ? "border-[color:var(--line-soft)] bg-white/85 text-[color:var(--text)]"
+                  : "border-[rgba(201,140,39,0.28)] bg-[rgba(201,140,39,0.10)] text-[color:var(--text)]",
+              ].join(" ")}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 whitespace-pre-wrap">{line.text}</div>
+                {!line.shared ? <CompareDiffBadge same={false} t={props.t} /> : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+          {props.emptyLabel}
+        </div>
+      )}
+    </section>
+  );
+}
+
+interface CompareLineState {
+  key: string;
+  text: string;
+  shared: boolean;
+}
+
+function buildCompareLineStates(
+  lines: string[],
+  counterpartLines: string[],
+): CompareLineState[] {
+  const remaining = new Map<string, number>();
+  for (const line of counterpartLines) {
+    remaining.set(line, (remaining.get(line) ?? 0) + 1);
+  }
+
+  return lines.map((line, index) => {
+    const current = remaining.get(line) ?? 0;
+    const shared = current > 0;
+    if (shared) {
+      remaining.set(line, current - 1);
+    }
+    return {
+      key: `${index}-${line}`,
+      text: line,
+      shared,
+    };
+  });
+}
+
+function compareOrderedLines(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((line, index) => line === right[index]);
+}
+
+function compareBlockToneClass(same: boolean): string {
+  return [
+    "rounded-lg border px-3 py-3",
+    same
+      ? "border-[color:var(--line-soft)] bg-white/80"
+      : "border-[rgba(201,140,39,0.28)] bg-[rgba(201,140,39,0.10)]",
+  ].join(" ");
+}
+
+function CompareDiffBadge(props: { same: boolean; t: Translator }) {
+  return (
+    <span
+      className={[
+        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em]",
+        props.same
+          ? "border-[color:var(--line-soft)] bg-white/85 text-[color:var(--muted)]"
+          : "border-[rgba(201,140,39,0.28)] bg-white/90 text-[color:var(--text)]",
+      ].join(" ")}
+    >
+      {props.same ? props.t("detail.compareSame") : props.t("detail.compareDifferent")}
+    </span>
   );
 }
 
