@@ -33,123 +33,108 @@
 
 ## 当前判断
 
-当前已经不再缺“能力是否存在”，而是缺“主路径是否足够顺手、默认路径是否足够清楚”。
+当前已经不再缺“desktop 里能不能看 run / compare / replay / activity”，而是缺：
 
-另外还要补一条边界：
+- 文档是否和当前实现完全对齐
+- 真实 provider 路径是否有稳定、可回归的验证入口
+- 默认链路是否足够清楚，而不是继续扩更多壳层入口
 
-- Intent / Canonical / State 的分层方向已经纳入长期架构判断
-- 但它不改变当前短期优先级
-- 现阶段不把“通用 intent compiler / selector resolver / 双份 history 重构”作为主线任务
+另外有一条新的短期边界需要明确：
 
-因此这里不再逐条复述已完成项；已落地能力请以这些文档为准：
+- 当前桌面壳的节点级 Run Inspector、工作区级 AI runs 和 Activity 视图，已经足够承担当前审计与回看任务
+- 短期内不再把“继续扩 desktop 主视图”作为优先级
+- 如果桌面端再改，只做最小的修补、回归修复和与当前实现对齐的收口
 
-- `docs/cli.md`
-- `docs/architecture.md`
-- `README.md`
+因此这里优先描述“下一步该压实什么”，而不是继续把已完成的 desktop 能力当成待办。
 
 ## 当前执行顺序
 
-### 1. 把真实 provider 路径做成产品态
+### 1. 先收口文档与行为边界
 
 状态：当前优先级最高
 
 目标：
 
-- 不再停留在“桥接能力已存在但用户感知不强”的状态
-- 把现有 external runner 路径做成默认可理解、默认可排查、默认可回看的真实运行路径
-- 保持 external runner 边界，不急着把 provider SDK 写进 Rust 内核
+- 避免 README、CLI、架构、数据模型和短期清单之间出现实现漂移
+- 把 desktop 当前已经落地的审计链路准确写清楚
+- 删除已经失效的短期优先级描述，避免后续协作继续按旧方向推进
 
 下一轮最小切口：
 
-- 把 Codex 这条调试链路继续压实成默认可用路径：
-  - 让一次 Codex draft 的 request / response / patch / 最终 apply 状态更容易串起来看
-  - 把 relay `502`、schema 输出不稳定、环境变量覆盖这三类问题区分清楚
-- 继续收口“默认路径”：
-  - 优先让桌面和 CLI 都更少依赖手写命令
-  - 优先让用户看到当前 provider / runner / model / mode，而不是去猜
-- 继续收口“排查动作”：
-  - 让失败提示直接链接到更可执行的下一步
-  - 让 request / response / metadata / patch run 之间的关系更少靠人工拼接
+- 同步这些文档里的当前 desktop / AI run 审计描述：
+  - `README.md`
+  - `docs/cli.md`
+  - `docs/architecture.md`
+  - `docs/data-model.md`
+  - `docs/next-steps.md`
+- 优先保留：
+  - 推荐路径
+  - 已验证路径
+  - 默认行为
+- 直接移除：
+  - 已不再推荐的 desktop 方向
+  - 已经被实现替代的旧表述
+  - 与当前行为冲突的短期计划
 
-短期只关心这条流程是否顺手：
+### 2. 把真实 provider 路径做成可回归验证
 
-- 选节点
-- 用真实 provider 起草 expand / explore
-- 查看理由和证据
-- 预览 patch
-- 应用 patch
-- 回看历史
-
-补充说明：
-
-- 当前更适合把 `codex_runner.py` 作为后端调试主路，而不是继续依赖裸 HTTP 的 `openai_runner.py`
-- 如果同一机器上还保留 `OPENAI_*` 环境变量，优先先跑 `nodex ai doctor --provider codex --format json`
-
-### 2. 串顺桌面主流程
-
-状态：和 1 配套推进，但不抢前面优先级
+状态：文档收口后立即进入
 
 目标：
 
-- 用现有 Tauri 壳把核心链路串顺
-- 不急着把 GUI 做大
+- 把现有 `codex` 默认链路整理成可重复执行的 smoke / e2e 路径
+- 让 `run-id -> artifact -> compare -> replay -> apply` 这条链路能做回归，而不是只靠手动演示
+- 继续保持 external runner 边界，不把 provider SDK 直接塞进 Rust 内核
 
-当前最小关注点：
+当前最小切口：
 
-- 当前节点上下文在 draft / apply / refresh 之后保持稳定
-- 节点详情里的最近 AI 运行记录、patch 编辑器和 apply 结果之间切换更自然
-- AI run 相关信息优先在现有详情区和控制台里收口，不急着另起重型调试面板
+- 以 `codex` 作为真实验证主路
+- 优先覆盖这些动作的最小闭环：
+  - `draft`
+  - `show`
+  - `artifact`
+  - `compare`
+  - `replay`
+  - 可选的最终 apply
+- 如果同一机器上还保留 `OPENAI_*` 环境变量，优先先跑：
+  - `nodex ai doctor --provider codex --format json`
 
-### 3. 再补来源能力
+### 3. 桌面壳只做必要修补
 
-状态：前面主路径顺了之后再进入
+状态：维护态，不再主动扩新主视图
+
+目标：
+
+- 如果文档梳理或回归验证暴露出问题，只做最小修补
+- 不再继续主动增加新的 desktop 审计面板或大块交互
+
+当前 scope 先冻结在这些已落地入口：
+
+- 节点级 Run Inspector
+- 工作区级 AI runs
+- 工作区级 Activity
+- patch 编辑器和 run inspector 的互跳
+
+### 4. 再补来源能力与多 provider 抽象
+
+状态：前面两项压实后再进入
 
 当前暂缓但明确在后面的项：
 
 - `PDF import`
 - 来源问答
 - 更完整的 evidence 视图
-
-### 3.5 推进多 provider 抽象
-
-状态：在 Codex 链路稳定后立即进入，不晚于来源能力前期设计
-
-目标：
-
-- 不把当前 Codex 路径做成一次性的脚本特判
-- 在保持 external runner 边界的前提下，为后续多 provider 接入预留稳定抽象
-
-当前判断：
-
-- `cc-switch` 的借鉴点主要不在“再写一个更重的代理”，而在：
-  - 把 live config 读写当作一等能力
-  - 把环境变量冲突当作显式诊断项
-  - 把不同 provider 的 URL / auth / config 语义拆成独立适配层
-
-进入这个阶段时，优先看这几个问题：
-
-- 当前 provider 抽象是否已经能覆盖默认路径，而不是只覆盖脚本层
-- `provider_runner.py` 是否已经足够承担统一入口，而不是继续叠 provider-specific 调用样式
-- future runners 是否至少统一这些能力：
+- 多 provider 抽象的进一步统一
   - provider config 发现
   - auth/source 诊断
   - transient error 分类与重试
   - runner mode（schema / plain / fallback）
 
-### 4. 最后再做更完整的脑图 GUI
-
-状态：当前不是短期重点
-
-说明：
-
-- 画布、大型交互、完整脑图主界面都重要
-- 但它们应该建立在“AI 节点拓展主路径已经足够可信和顺手”的前提上
-
 ## 暂不优先
 
 下面这些方向没有被否定，只是当前不应抢占前面顺序：
 
-- 先把桌面壳做成很重的完整应用
+- 继续扩 desktop 主视图或把桌面壳做成更重的完整应用
 - 过早扩很多 AI 入口，但每条都不够可解释
 - 把 evidence 语义一次性做成很重的文献系统
 - 为未来能力提前铺太多空壳结构

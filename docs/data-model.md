@@ -312,7 +312,8 @@
 - `response.json`：外部 runner 或 provider 返回的结构化 response
 - `meta.json`：本地运行审计信息，例如 provider、model、provider run id、retry 次数、最后一次错误分类、patch run id
 - SQLite 索引和本地文件路径会一起写入 `ai_runs`
-- `ai history`、desktop 中的 AI 历史列表以及工件查看入口，都会先查 `ai_runs`，再按记录里的路径读取对应文件
+- `ai history`、desktop 中的节点级 / 工作区级 AI run 列表以及工件查看入口，都会先查 `ai_runs`，再按记录里的路径读取对应文件
+- desktop 的 `Activity` 视图会额外把 `ai_runs`、`patch_runs` 和 `snapshots` 在本地做时间线聚合，但不会新增第四套持久化存储
 
 当前这些 AI 文件不会写入 snapshot；snapshot 恢复也不会回滚 `ai_runs` 或 `.nodex/ai/` 下已有工件。
 

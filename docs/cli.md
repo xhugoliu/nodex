@@ -136,6 +136,9 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `ai artifact`
   - `ai replay --dry-run`
   - `ai compare`
+- desktop 现在也有两层工作区级视图，仍然复用同一套本地审计边界，而不是新增存储路径：
+  - `Workspace AI Runs`：直接读取 SQLite `ai_runs` 做全局浏览和筛选
+  - `Activity`：把 `ai_runs`、`patch history`、`snapshots` 混排到同一条时间线里
 - `ai apply-response` 和 `ai run-external --format text` 会直接显示：
   - 理由摘要
   - 直接证据
