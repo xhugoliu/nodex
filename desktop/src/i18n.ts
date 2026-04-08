@@ -69,6 +69,10 @@ const translations: Record<Locale, TranslationTree> = {
       workspaceAiRunsEmptyBody:
         "Run one AI draft first, then review the indexed history here at workspace scope.",
       workspaceAiRunsMeta: "{count} indexed AI runs across the workspace.",
+      workspaceAiRunsFilteredMeta: "{count} matching runs out of {total}.",
+      workspaceAiRunsFilterPlaceholder:
+        "Filter by run id, node id, capability, provider, model, or status",
+      workspaceAiRunsNoMatches: "No AI runs matched this filter.",
       workspaceAiRunsNode: "node: {nodeId}",
       workspaceAiRunsOpenNode: "Open Node",
       emptyMeta: "Select a node or source.",
@@ -492,6 +496,11 @@ const translations: Record<Locale, TranslationTree> = {
       workspaceAiRunsEmptyBody:
         "先跑一条 AI draft，再回到这里从工作区范围查看它的索引历史。",
       workspaceAiRunsMeta: "当前工作区共有 {count} 条已索引 AI runs。",
+      workspaceAiRunsFilteredMeta:
+        "当前筛选命中 {count} 条，共 {total} 条已索引 AI runs。",
+      workspaceAiRunsFilterPlaceholder:
+        "按 run id、node id、capability、provider、model 或状态筛选",
+      workspaceAiRunsNoMatches: "没有匹配当前筛选条件的 AI runs。",
       workspaceAiRunsNode: "节点：{nodeId}",
       workspaceAiRunsOpenNode: "打开节点",
       emptyMeta: "请选择一个节点或来源。",

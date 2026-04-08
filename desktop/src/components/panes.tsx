@@ -1712,6 +1712,35 @@ function WorkspaceAiRunsView(props: {
   onOpenNodeForAiRun: (runId: string) => void;
   onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
 }) {
+  const [filterQuery, setFilterQuery] = useState("");
+  const normalizedQuery = filterQuery.trim().toLowerCase();
+  const filteredRuns = normalizedQuery
+    ? props.aiRuns.filter((run) =>
+        [
+          run.id,
+          run.node_id,
+          run.capability,
+          run.explore_by ?? "",
+          run.provider ?? "",
+          run.model ?? "",
+          run.status,
+        ].some((field) => field.toLowerCase().includes(normalizedQuery)),
+      )
+    : props.aiRuns;
+
+  useEffect(() => {
+    if (!filteredRuns.length) {
+      return;
+    }
+    if (
+      props.selectedAiRunId &&
+      filteredRuns.some((run) => run.id === props.selectedAiRunId)
+    ) {
+      return;
+    }
+    props.onSelectAiRun(filteredRuns[0].id);
+  }, [filteredRuns, props.onSelectAiRun, props.selectedAiRunId]);
+
   if (props.runsLoading && !props.runsHydrated) {
     return (
       <div className="space-y-4">
@@ -1742,15 +1771,26 @@ function WorkspaceAiRunsView(props: {
         <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
           {props.t("detail.workspaceAiRuns")}
         </div>
+        <input
+          className={inputClass}
+          value={filterQuery}
+          placeholder={props.t("detail.workspaceAiRunsFilterPlaceholder")}
+          onChange={(event) => setFilterQuery(event.target.value)}
+        />
         <div className="text-sm leading-6 text-[color:var(--text)]">
-          {props.t("detail.workspaceAiRunsMeta", {
-            count: props.aiRuns.length,
-          })}
+          {normalizedQuery
+            ? props.t("detail.workspaceAiRunsFilteredMeta", {
+                count: filteredRuns.length,
+                total: props.aiRuns.length,
+              })
+            : props.t("detail.workspaceAiRunsMeta", {
+                count: props.aiRuns.length,
+              })}
         </div>
       </section>
 
       <section className="space-y-2">
-        {props.aiRuns.map((run) => {
+        {filteredRuns.length ? filteredRuns.map((run) => {
           const selected = props.selectedAiRunId === run.id;
           const hasAppliedPatch = Boolean(run.patch_run_id);
           const statusLabel = formatAiRunStatusLabel(run.status, props.t);
@@ -1811,7 +1851,9 @@ function WorkspaceAiRunsView(props: {
               </div>
             </div>
           );
-        })}
+        }) : (
+          <EmptyBox>{props.t("detail.workspaceAiRunsNoMatches")}</EmptyBox>
+        )}
       </section>
 
       <RunInspectorCard
