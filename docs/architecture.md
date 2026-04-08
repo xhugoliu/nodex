@@ -160,6 +160,9 @@ AI request / response 编排层。
 - 也负责提供工作区级 AI run 浏览入口：
   - 不依赖当前节点选择也能查看全局已索引 AI runs
   - 可从某条全局 run 直接回到对应节点与该 run 的 inspector
+- 也负责提供工作区级 Activity 视图：
+  - 把 AI run、patch run 和 snapshot 按时间线混排
+  - 可在同一处打开 run inspector、载入 patch、恢复 snapshot
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里

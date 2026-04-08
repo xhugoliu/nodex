@@ -20,8 +20,10 @@ import type {
   DesktopAiStatus,
   NodeDetail,
   ParentCandidate,
+  PatchRunRecord,
   PatchDraftOrigin,
   PatchExecutionSummary,
+  SnapshotRecord,
   SourceDetail,
   TreeNode,
   WorkspaceOverview,
@@ -149,7 +151,8 @@ export function WorkspaceStartPane(props: {
 
 export function InspectorPane(props: {
   hasWorkspace: boolean;
-  inspectorMode: "selection" | "workspace_runs";
+  workspaceOverview: WorkspaceOverview | null;
+  inspectorMode: "selection" | "workspace_runs" | "activity";
   desktopAiStatus: DesktopAiStatus | null;
   workspaceAiRuns: AiRunRecord[];
   workspaceAiRunsHydrated: boolean;
@@ -177,6 +180,7 @@ export function InspectorPane(props: {
   t: Translator;
   onToggleConsoleDetails: () => void;
   onOpenWorkspaceAiRuns: () => void;
+  onOpenWorkspaceActivity: () => void;
   onReturnToSelection: () => void;
   onSelectNode: (nodeId: string) => void;
   onSelectSource: (sourceId: string) => void;
@@ -188,7 +192,10 @@ export function InspectorPane(props: {
   onClearAiRunCompare: () => void;
   onCompareWorkspaceAiRuns: (leftRunId: string, rightRunId: string) => void;
   onClearWorkspaceAiRunCompare: () => void;
+  onOpenWorkspaceAiRunInspector: (runId: string) => void;
   onOpenNodeForAiRun: (runId: string) => void;
+  onLoadPatchRunPatch: (patchRunId: string) => void;
+  onRestoreSnapshot: (snapshotId: string) => void;
   onOpenAiEvidenceSourceChunk: (sourceId: string, chunkId: string) => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
@@ -212,7 +219,20 @@ export function InspectorPane(props: {
           >
             {props.t("detail.workspaceAiRuns")}
           </button>
+          <button
+            className={ghostButtonClass}
+            onClick={props.onOpenWorkspaceActivity}
+          >
+            {props.t("detail.workspaceActivity")}
+          </button>
           {props.inspectorMode === "workspace_runs" ? (
+            <button
+              className={ghostButtonClass}
+              onClick={props.onReturnToSelection}
+            >
+              {props.t("detail.returnToSelection")}
+            </button>
+          ) : props.inspectorMode === "activity" ? (
             <button
               className={ghostButtonClass}
               onClick={props.onReturnToSelection}
@@ -243,6 +263,18 @@ export function InspectorPane(props: {
               onClearAiRunCompare={props.onClearWorkspaceAiRunCompare}
               onOpenNodeForAiRun={props.onOpenNodeForAiRun}
               onOpenAiEvidenceSourceChunk={props.onOpenAiEvidenceSourceChunk}
+            />
+          ) : props.inspectorMode === "activity" ? (
+            <WorkspaceActivityView
+              workspaceOverview={props.workspaceOverview}
+              aiRuns={props.workspaceAiRuns}
+              runsHydrated={props.workspaceAiRunsHydrated}
+              runsLoading={props.workspaceAiRunsLoading}
+              t={props.t}
+              onOpenWorkspaceAiRunInspector={props.onOpenWorkspaceAiRunInspector}
+              onOpenNodeForAiRun={props.onOpenNodeForAiRun}
+              onLoadPatchRunPatch={props.onLoadPatchRunPatch}
+              onRestoreSnapshot={props.onRestoreSnapshot}
             />
           ) : props.selectedNodeDetail ? (
             <CompactNodeDetail
@@ -1873,6 +1905,291 @@ function WorkspaceAiRunsView(props: {
       />
     </div>
   );
+}
+
+type WorkspaceActivityFilter =
+  | "all"
+  | "ai_run"
+  | "patch"
+  | "snapshot"
+  | "failed"
+  | "dry_run"
+  | "applied";
+
+type WorkspaceActivityItem =
+  | {
+      kind: "ai_run";
+      key: string;
+      timestamp: number;
+      record: AiRunRecord;
+    }
+  | {
+      kind: "patch_run";
+      key: string;
+      timestamp: number;
+      record: PatchRunRecord;
+    }
+  | {
+      kind: "snapshot";
+      key: string;
+      timestamp: number;
+      record: SnapshotRecord;
+    };
+
+function WorkspaceActivityView(props: {
+  workspaceOverview: WorkspaceOverview | null;
+  aiRuns: AiRunRecord[];
+  runsHydrated: boolean;
+  runsLoading: boolean;
+  t: Translator;
+  onOpenWorkspaceAiRunInspector: (runId: string) => void;
+  onOpenNodeForAiRun: (runId: string) => void;
+  onLoadPatchRunPatch: (patchRunId: string) => void;
+  onRestoreSnapshot: (snapshotId: string) => void;
+}) {
+  const [filter, setFilter] = useState<WorkspaceActivityFilter>("all");
+  const patchRuns = props.workspaceOverview?.patch_history ?? [];
+  const snapshots = props.workspaceOverview?.snapshots ?? [];
+  const items: WorkspaceActivityItem[] = [
+    ...props.aiRuns.map((record) => ({
+      kind: "ai_run" as const,
+      key: `ai:${record.id}`,
+      timestamp: record.finished_at || record.started_at,
+      record,
+    })),
+    ...patchRuns.map((record) => ({
+      kind: "patch_run" as const,
+      key: `patch:${record.id}`,
+      timestamp: record.applied_at,
+      record,
+    })),
+    ...snapshots.map((record) => ({
+      kind: "snapshot" as const,
+      key: `snapshot:${record.id}`,
+      timestamp: record.created_at,
+      record,
+    })),
+  ].sort((left, right) => {
+    if (right.timestamp !== left.timestamp) {
+      return right.timestamp - left.timestamp;
+    }
+    return right.key.localeCompare(left.key);
+  });
+
+  const filteredItems = items.filter((item) => matchesActivityFilter(item, filter));
+  const filterOptions: Array<{ key: WorkspaceActivityFilter; label: string }> = [
+    { key: "all", label: props.t("detail.activityFilterAll") },
+    { key: "ai_run", label: props.t("detail.activityFilterAiRun") },
+    { key: "patch", label: props.t("detail.activityFilterPatch") },
+    { key: "snapshot", label: props.t("detail.activityFilterSnapshot") },
+    { key: "failed", label: props.t("detail.activityFilterFailed") },
+    { key: "dry_run", label: props.t("detail.activityFilterDryRun") },
+    { key: "applied", label: props.t("detail.activityFilterApplied") },
+  ];
+
+  if (!props.workspaceOverview) {
+    return (
+      <EmptyState
+        title={props.t("detail.workspaceEmptyMeta")}
+        body={props.t("detail.workspaceEmptyBody")}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-lg bg-[rgba(17,24,39,0.03)] p-3 space-y-3">
+        <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
+          {props.t("detail.workspaceActivity")}
+        </div>
+        <div className="text-sm leading-6 text-[color:var(--text)]">
+          {props.t("detail.workspaceActivityMeta", {
+            count: items.length,
+          })}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {filterOptions.map((option) => (
+            <button
+              key={option.key}
+              className={runInspectorTabButtonClass(filter === option.key)}
+              onClick={() => setFilter(option.key)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {props.runsLoading && !props.runsHydrated ? (
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("detail.workspaceActivityLoading")}
+          </div>
+        ) : null}
+      </section>
+
+      {filteredItems.length ? (
+        <div className="space-y-3">
+          {filteredItems.map((item) => (
+            <WorkspaceActivityCard
+              key={item.key}
+              item={item}
+              t={props.t}
+              onOpenWorkspaceAiRunInspector={props.onOpenWorkspaceAiRunInspector}
+              onOpenNodeForAiRun={props.onOpenNodeForAiRun}
+              onLoadPatchRunPatch={props.onLoadPatchRunPatch}
+              onRestoreSnapshot={props.onRestoreSnapshot}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyBox>{props.t("detail.workspaceActivityNoMatches")}</EmptyBox>
+      )}
+    </div>
+  );
+}
+
+function WorkspaceActivityCard(props: {
+  item: WorkspaceActivityItem;
+  t: Translator;
+  onOpenWorkspaceAiRunInspector: (runId: string) => void;
+  onOpenNodeForAiRun: (runId: string) => void;
+  onLoadPatchRunPatch: (patchRunId: string) => void;
+  onRestoreSnapshot: (snapshotId: string) => void;
+}) {
+  if (props.item.kind === "ai_run") {
+    const run = props.item.record;
+    const statusLabel = formatAiRunStatusLabel(run.status, props.t);
+    return (
+      <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[color:var(--line-soft)] bg-white/85 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                {props.t("detail.activityAiRun")}
+              </span>
+              <span className="rounded-full border border-[color:var(--line-soft)] bg-white/85 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                {statusLabel}
+              </span>
+            </div>
+            <div className="text-sm font-medium leading-6 text-[color:var(--text)]">
+              {run.capability}
+              {run.explore_by ? ` / ${run.explore_by}` : ""}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--muted)]">
+              {formatTimestamp(props.item.timestamp)}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--text)]">
+              {props.t("detail.workspaceAiRunsNode", { nodeId: run.node_id })}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--muted)]">
+              {run.patch_summary || run.last_error_message || props.t("history.noSummary")}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <button
+              className={ghostButtonClass}
+              onClick={() => props.onOpenWorkspaceAiRunInspector(run.id)}
+            >
+              {props.t("detail.openRunInspector")}
+            </button>
+            <button
+              className={ghostButtonClass}
+              onClick={() => props.onOpenNodeForAiRun(run.id)}
+            >
+              {props.t("detail.workspaceAiRunsOpenNode")}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (props.item.kind === "patch_run") {
+    const patchRun = props.item.record;
+    return (
+      <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-[color:var(--line-soft)] bg-white/85 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+                {props.t("detail.activityPatchRun")}
+              </span>
+            </div>
+            <div className="text-sm font-medium leading-6 text-[color:var(--text)]">
+              {patchRun.summary || props.t("history.noSummary")}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--muted)]">
+              {formatTimestamp(props.item.timestamp)}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--muted)]">
+              {props.t("detail.activityOrigin", { value: patchRun.origin })}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            <button
+              className={ghostButtonClass}
+              onClick={() => props.onLoadPatchRunPatch(patchRun.id)}
+            >
+              {props.t("history.load")}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const snapshot = props.item.record;
+  return (
+    <section className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-4 py-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-[color:var(--line-soft)] bg-white/85 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[color:var(--muted)]">
+              {props.t("detail.activitySnapshot")}
+            </span>
+          </div>
+          <div className="text-sm font-medium leading-6 text-[color:var(--text)]">
+            {snapshot.label || snapshot.id}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {formatTimestamp(props.item.timestamp)}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <button
+            className={ghostButtonClass}
+            onClick={() => props.onRestoreSnapshot(snapshot.id)}
+          >
+            {props.t("history.restore")}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function matchesActivityFilter(
+  item: WorkspaceActivityItem,
+  filter: WorkspaceActivityFilter,
+): boolean {
+  switch (filter) {
+    case "all":
+      return true;
+    case "ai_run":
+      return item.kind === "ai_run";
+    case "patch":
+      return item.kind === "patch_run";
+    case "snapshot":
+      return item.kind === "snapshot";
+    case "failed":
+      return item.kind === "ai_run" && item.record.status === "failed";
+    case "dry_run":
+      return item.kind === "ai_run" && item.record.dry_run;
+    case "applied":
+      return (
+        item.kind === "patch_run" ||
+        (item.kind === "ai_run" &&
+          (!item.record.dry_run || item.record.patch_run_id !== null))
+      );
+  }
 }
 
 function RunInspectorCard(props: {

@@ -89,7 +89,7 @@ export default function App() {
   const [workspaceOverview, setWorkspaceOverview] =
     useState<WorkspaceOverview | null>(null);
   const [inspectorMode, setInspectorMode] = useState<
-    "selection" | "workspace_runs"
+    "selection" | "workspace_runs" | "activity"
   >("selection");
   const [workspaceAiRuns, setWorkspaceAiRuns] = useState<AiRunRecord[]>([]);
   const [workspaceAiRunsHydrated, setWorkspaceAiRunsHydrated] = useState(false);
@@ -619,8 +619,27 @@ export default function App() {
     }
   }
 
+  async function openWorkspaceAiRunInspector(runId: string) {
+    setInspectorMode("workspace_runs");
+    setWorkspaceSelectedAiRunId(runId);
+    if (workspaceAiRunsHydrated) {
+      return;
+    }
+    await loadWorkspaceAiRuns(undefined, {
+      preserveSelected: true,
+    });
+  }
+
   async function openWorkspaceAiRuns() {
     setInspectorMode("workspace_runs");
+    if (workspaceAiRunsHydrated) {
+      return;
+    }
+    await loadWorkspaceAiRuns();
+  }
+
+  async function openWorkspaceActivity() {
+    setInspectorMode("activity");
     if (workspaceAiRunsHydrated) {
       return;
     }
@@ -668,7 +687,10 @@ export default function App() {
       }
     }
 
-    if (options.preserveSelection && inspectorMode === "workspace_runs") {
+    if (
+      options.preserveSelection &&
+      (inspectorMode === "workspace_runs" || inspectorMode === "activity")
+    ) {
       const reloaded = await loadWorkspaceAiRuns(overview.root_dir, {
         silentError: true,
         preserveSelected: true,
@@ -1239,6 +1261,29 @@ export default function App() {
     }
   }
 
+  async function restoreSnapshotById(snapshotId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const overview = await invokeCommand<WorkspaceOverview>("restore_snapshot", {
+        start_path: workspacePath,
+        snapshot_id: snapshotId,
+      });
+      await applyOverview(overview, {
+        preserveSelection: true,
+      });
+      setInspectorMode("activity");
+      setConsoleMessage(
+        t("messages.restoredSnapshotFromActivity", { snapshotId }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function getAiRunRecord(runId: string): Promise<AiRunRecord> {
     if (selectedAiRunShow?.record.id === runId) {
       return selectedAiRunShow.record;
@@ -1458,6 +1503,7 @@ export default function App() {
           />
           <InspectorPane
             hasWorkspace
+            workspaceOverview={workspaceOverview}
             inspectorMode={inspectorMode}
             desktopAiStatus={desktopAiStatus}
             workspaceAiRuns={workspaceAiRuns}
@@ -1489,6 +1535,9 @@ export default function App() {
             }}
             onOpenWorkspaceAiRuns={() => {
               void openWorkspaceAiRuns();
+            }}
+            onOpenWorkspaceActivity={() => {
+              void openWorkspaceActivity();
             }}
             onReturnToSelection={() => {
               setInspectorMode("selection");
@@ -1525,8 +1574,17 @@ export default function App() {
             onClearWorkspaceAiRunCompare={() => {
               setWorkspaceSelectedAiRunCompare(null);
             }}
+            onOpenWorkspaceAiRunInspector={(runId) => {
+              void openWorkspaceAiRunInspector(runId);
+            }}
             onOpenNodeForAiRun={(runId) => {
               void openNodeForAiRun(runId);
+            }}
+            onLoadPatchRunPatch={(patchRunId) => {
+              void loadPatchRunPatch(patchRunId);
+            }}
+            onRestoreSnapshot={(snapshotId) => {
+              void restoreSnapshotById(snapshotId);
             }}
             onOpenAiEvidenceSourceChunk={(sourceId, chunkId) => {
               void openAiEvidenceSourceChunk(sourceId, chunkId);
