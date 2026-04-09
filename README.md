@@ -33,8 +33,9 @@ cargo run -- export outline
 - Markdown / TXT source import：基础切片、source / node 双向来源链路
 - evidence 最小语义：显式 citation、`direct` / `inferred`、rationale
 - AI request / response contract：`expand` / `explore` dry-run、external runner bridge、解释层
-- 多 provider 调试工具链：`openai` / `codex` / `gemini` runner，统一 `doctor` / `status` / `providers` / `smoke`
+- 多 provider 调试工具链：`anthropic` / `openai` / `codex` / `gemini` runner，统一 `doctor` / `status` / `providers` / `smoke`
 - LangChain 最小试点：`scripts/langchain_openai_runner.py` 继续复用同一套 external runner contract 和本地审计边界
+- Anthropic-compatible LangChain 主路：`scripts/langchain_anthropic_runner.py` 已成为当前默认推荐试点链路
 - 最小 Tauri 桌面壳：三栏工作台、AI draft 入口、节点详情里的 Run Inspector、工作区级 AI runs / Activity 视图、AI run compare / replay dry-run、原生菜单驱动的低频动作
 
 当前还没落地：
@@ -43,7 +44,6 @@ cargo run -- export outline
 - PDF 导入与来源切片
 - 完整来源追踪与证据视图
 - 完整 Tauri 图形界面
-- LangChain 成为默认 AI 主路径或桌面默认 draft route
 
 ## Docs
 

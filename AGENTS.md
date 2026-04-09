@@ -70,7 +70,8 @@ Nodex 的目标不是做“通用聊天应用”，而是做一个：
 
 - 先把 LangChain 放在 external runner / scripts 层做最小试点
 - 先复用现有 request / response contract、patch validate / apply 和本地审计链
-- 在试点证明价值之前，不要把 Rust 内核、SQLite schema 或 desktop 默认主路直接改成 LangChain 依赖
+- 不要把 Rust 内核或 SQLite schema 直接改成 LangChain 依赖
+- 如果桌面默认 draft route 选择了某条 LangChain 路径，也应继续停留在 external runner / scripts 层，而不是把 provider SDK 直接塞进共享内核
 
 如果任务真的需要触碰这些边界，应先暂停并更新相关文档，而不是直接实现替换。
 

@@ -2,9 +2,9 @@
 
 这份文档描述 Nodex 当前这轮 LangChain 试点的真实边界。
 
-它不是在声明“AI 主路径已经切到 LangChain”，而是在说明：
+它当前表达的是：
 
-> LangChain 已经开始作为一个最小外部 runtime 试点接入，但仍然挂在现有 external runner 边界上。
+> LangChain 已经开始作为一个最小外部 runtime 接入，并且当前默认推荐试点主路优先是 Anthropic-compatible 路径。
 
 ## 试点目标
 
@@ -17,7 +17,6 @@
 当前不验证这些事：
 
 - 不把 Rust 内核改成直接依赖 LangChain
-- 不把桌面默认 AI draft 路线切到 LangChain
 - 不把 LangChain 直接提升成新的 SQLite / patch / history 边界
 - 不在这轮试点里展开多步 agent / intent compiler 重构
 
@@ -53,14 +52,13 @@
 - 通过 LangChain 的 structured output 路径返回 Nodex contract JSON
 - 仍然由 `nodex ai run-external` 驱动
 
-当前还没有把它接进这些默认入口：
+当前已经接进这些默认入口：
 
-- `nodex ai doctor`
+- `nodex ai doctor --provider anthropic`
+- `nodex ai status --provider anthropic`
 - `nodex ai providers`
-- `nodex ai smoke`
+- `nodex ai smoke --provider anthropic`
 - desktop 默认 draft route
-
-这几个入口暂时仍以现有 `openai` / `codex` / `gemini` runner 为主。
 
 ## 安装
 
@@ -101,6 +99,13 @@ cargo run -- init
 ```bash
 cargo run -- ai run-external root "python3 scripts/langchain_openai_runner.py" --dry-run
 cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py" --dry-run
+```
+
+如果你想直接走当前默认推荐试点主路，也可以优先使用：
+
+```bash
+cargo run -- ai doctor --provider anthropic --format json
+cargo run -- ai smoke --provider anthropic --format json
 ```
 
 如果你想看这次运行的审计工件：

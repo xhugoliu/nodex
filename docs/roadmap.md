@@ -123,7 +123,7 @@
 
 - 不是再发明一条新的 provider 接入路径
 - 而是把现有 external runner + 多 provider 调试工具链做成更清晰的真实运行体验
-- 同时把 LangChain 控制在“最小外部试点”范围内，先验证它能否提升真实 runtime 质量，而不是抢先替换默认主路
+- 同时继续把 LangChain 控制在“最小外部试点”范围内；即使当前默认推荐主路已经切到 Anthropic-compatible LangChain，也仍然不新增状态边界
 - 包括配置状态、运行状态、失败反馈和 patch apply 链路的可见性
 
 长期方向补充：

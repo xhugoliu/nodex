@@ -148,6 +148,7 @@ pub enum AiCapability {
 pub enum AiProvider {
     Openai,
     Codex,
+    Anthropic,
     Gemini,
 }
 
@@ -156,6 +157,7 @@ impl AiProvider {
         match self {
             Self::Openai => "openai",
             Self::Codex => "codex",
+            Self::Anthropic => "anthropic",
             Self::Gemini => "gemini",
         }
     }

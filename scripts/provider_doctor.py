@@ -9,7 +9,7 @@ from provider_registry import load_provider_payload, provider_names
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Inspect local provider config/env diagnostics across Codex, OpenAI, and Gemini."
+        description="Inspect local provider config/env diagnostics across Codex, Anthropic-compatible, OpenAI, and Gemini."
     )
     parser.add_argument(
         "--provider",

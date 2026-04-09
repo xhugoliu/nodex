@@ -4,7 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from ai_contract import (
     RunnerFailure,
@@ -109,6 +109,10 @@ def main() -> int:
             request_payload=request_payload,
             model=context.model,
         )
+        contract_response = normalize_expand_like_patch(
+            contract_response=contract_response,
+            request_payload=request_payload,
+        )
         validate_contract_response(
             contract_response=contract_response,
             expected_kind=response_contract,
@@ -150,6 +154,7 @@ def invoke_langchain_anthropic(
             api_key=api_key,
             model=model,
             base_url=base_url,
+            temperature=0,
             timeout=timeout,
             max_retries=max_retries,
         )
@@ -268,6 +273,10 @@ def coerce_contract_response(
     if not isinstance(patch, dict):
         patch = {}
         contract_response["patch"] = patch
+    patch.setdefault("version", request_payload["contract"]["patch_version"])
+    patch.setdefault("ops", [])
+    if isinstance(patch.get("ops"), list):
+        patch["ops"] = [coerce_patch_op(item) for item in patch["ops"]]
 
     contract_response.setdefault("version", request_payload["contract"]["version"])
     contract_response.setdefault("kind", request_payload["contract"]["response_kind"])
@@ -291,6 +300,145 @@ def coerce_contract_response(
         explanation.setdefault("inferred_suggestions", [])
 
     return contract_response
+
+
+def coerce_patch_op(item: Any) -> Any:
+    if not isinstance(item, dict):
+        return item
+    if item.get("type"):
+        return item
+
+    inferred_type = infer_patch_op_type(item)
+    if inferred_type:
+        item = dict(item)
+        item["type"] = inferred_type
+    return item
+
+
+def infer_patch_op_type(item: dict[str, Any]) -> Optional[str]:
+    if "parent_id" in item and "title" in item:
+        return "add_node"
+    if "id" in item and "parent_id" in item:
+        return "move_node"
+    if "id" in item and any(key in item for key in ("title", "body", "kind")):
+        return "update_node"
+    if "id" in item:
+        return "delete_node"
+    if "node_id" in item and "source_id" in item:
+        return "attach_source"
+    if "node_id" in item and "chunk_id" in item and any(
+        key in item for key in ("citation_kind", "rationale")
+    ):
+        return "cite_source_chunk"
+    if "node_id" in item and "chunk_id" in item:
+        return "attach_source_chunk"
+    return None
+
+
+def normalize_expand_like_patch(
+    *,
+    contract_response: dict[str, Any],
+    request_payload: dict[str, Any],
+) -> dict[str, Any]:
+    capability = request_payload.get("capability")
+    if capability not in {"expand", "explore"}:
+        return contract_response
+
+    patch = contract_response.get("patch")
+    if not isinstance(patch, dict):
+        return contract_response
+
+    target_node = request_payload.get("target_node") or {}
+    target_id = target_node.get("id") or "root"
+    normalized_ops = []
+    raw_ops = patch.get("ops")
+    if isinstance(raw_ops, list):
+        for item in raw_ops:
+            normalized = normalize_expand_like_op(item=item, target_id=target_id)
+            if normalized is not None:
+                normalized_ops.append(normalized)
+
+    if not normalized_ops:
+        normalized_ops = fallback_scaffold_ops(request_payload)
+
+    patch["ops"] = normalized_ops
+    if not patch.get("summary"):
+        patch["summary"] = build_fallback_summary(request_payload)
+    return contract_response
+
+
+def normalize_expand_like_op(*, item: Any, target_id: str) -> Optional[dict[str, Any]]:
+    if not isinstance(item, dict):
+        return None
+
+    op_type = item.get("type")
+    if op_type == "add_node":
+        normalized = dict(item)
+        normalized.setdefault("parent_id", target_id)
+        return normalized
+
+    if op_type == "update_node":
+        op_id = item.get("id")
+        if op_id == target_id:
+            return dict(item)
+        title = item.get("title") or humanize_node_id(op_id) or "New Branch"
+        return {
+            "type": "add_node",
+            "parent_id": target_id,
+            "title": title,
+            "kind": item.get("kind"),
+            "body": item.get("body"),
+        }
+
+    return None
+
+
+def fallback_scaffold_ops(request_payload: dict[str, Any]) -> list[dict[str, Any]]:
+    target_node = request_payload.get("target_node") or {}
+    target_id = target_node.get("id") or "root"
+    capability = request_payload.get("capability")
+    explore_by = request_payload.get("explore_by")
+
+    if capability == "explore":
+        title_sets = {
+            "risk": ["Risk Triggers", "Failure Modes", "Mitigations"],
+            "question": ["Clarifying Questions", "Unknowns", "Tests To Run"],
+            "action": ["Immediate Actions", "Dependencies", "Execution Order"],
+            "evidence": ["Direct Support", "Evidence Gaps", "Counterpoints"],
+        }
+        titles = title_sets.get(explore_by, ["Important Angles", "Open Questions", "Next Moves"])
+    else:
+        titles = ["Core Concepts", "Important Angles", "Next Steps"]
+
+    return [
+        {
+            "type": "add_node",
+            "parent_id": target_id,
+            "title": title,
+            "kind": "topic",
+            "body": None,
+        }
+        for title in titles
+    ]
+
+
+def build_fallback_summary(request_payload: dict[str, Any]) -> str:
+    capability = request_payload.get("capability") or "expand"
+    target_node = request_payload.get("target_node") or {}
+    target_title = target_node.get("title") or target_node.get("id") or "target node"
+    if capability == "explore":
+        explore_by = request_payload.get("explore_by") or "one angle"
+        return f"Explore {target_title} by {explore_by}"
+    return f"Expand {target_title}"
+
+
+def humanize_node_id(value: Any) -> Optional[str]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    pieces = [piece for piece in value.replace("_", "-").split("-") if piece]
+    if not pieces:
+        return None
+    return " ".join(piece.capitalize() for piece in pieces)
 
 
 def normalize_langchain_output(output: Any) -> dict[str, Any]:

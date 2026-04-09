@@ -88,7 +88,7 @@ AI request / response 编排层。
 - 生成 AI run 元数据，并把最小运行索引写进 SQLite
 - 当前共享内核不直接内置 provider SDK，但已经支持通过 external runner 间接接入真实模型
 - 当前 LangChain 最小试点也复用这条 contract / external runner 边界，而不是新增另一套 apply 路径
-- 桌面 draft 默认通过统一 `provider_runner.py` 调度 `codex`，仍可用 `NODEX_DESKTOP_AI_COMMAND` 显式覆盖
+- 桌面 draft 默认通过统一 `provider_runner.py` 调度 `anthropic`，仍可用 `NODEX_DESKTOP_AI_COMMAND` 显式覆盖
 
 ### `src/project.rs`
 
@@ -105,7 +105,7 @@ AI request / response 编排层。
 
 职责：
 
-- 承载 `openai` / `codex` / `gemini` 的最小 runner
+- 承载 `anthropic` / `openai` / `codex` / `gemini` 的最小 runner
 - 也承载独立的 LangChain 最小试点 runner：
   - `langchain_openai_runner.py`
   - `langchain_anthropic_runner.py`
@@ -113,7 +113,7 @@ AI request / response 编排层。
 - 也提供 `runner_compare.py`，把多条 external runner 的 dry-run / show / compare 串成一次本地对照流程
 - 收口 provider config 发现、环境变量冲突诊断、共享 contract 校验与 smoke 参数
 - 继续保持 external runner 边界，而不是把 provider SDK 直接塞进 Rust 内核
-- LangChain 当前仍然停留在这个脚本层试点，不直接进入 Rust core，也还没有成为 desktop 默认主路
+- LangChain 当前仍然停留在这个脚本层试点，不直接进入 Rust core，但 Anthropic-compatible 路径已经成为当前默认推荐试点主路
 
 ### `desktop/src-tauri`
 
@@ -138,8 +138,9 @@ AI request / response 编排层。
   - patch 草案回放
   - run 与 run 的差异对比
   - request / response / metadata 工件查看
-- desktop 默认 AI draft route 会走统一 `provider_runner.py --provider codex --use-default-args`
-  - 对当前 codex provider entry 来说，这意味着模型仍跟随本机 Codex 配置，但 reasoning effort 会固定为 `low`
+- desktop 默认 AI draft route 会走统一 `provider_runner.py --provider anthropic --use-default-args`
+  - 对当前 anthropic provider entry 来说，这意味着桌面默认会优先进入 `langchain_anthropic_runner.py`
+  - 模型和认证默认从本地 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` 读取
 - 把菜单动作和工作区状态变化通过事件发回前端
 
 ### `desktop/src`

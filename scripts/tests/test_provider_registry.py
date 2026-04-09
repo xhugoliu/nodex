@@ -16,14 +16,21 @@ from provider_registry import (
 
 class ProviderRegistryTests(unittest.TestCase):
     def test_provider_names_cover_supported_entries(self) -> None:
-        self.assertEqual(provider_names(), ("codex", "openai", "gemini"))
+        self.assertEqual(provider_names(), ("codex", "anthropic", "openai", "gemini"))
 
     def test_runnable_provider_names_cover_all_current_entries(self) -> None:
-        self.assertEqual(runnable_provider_names(), ("codex", "openai", "gemini"))
+        self.assertEqual(
+            runnable_provider_names(),
+            ("codex", "anthropic", "openai", "gemini"),
+        )
 
     def test_gemini_entry_has_runner_script(self) -> None:
         entry = get_provider_entry("gemini")
         self.assertEqual(entry.runner_script, "gemini_runner.py")
+
+    def test_anthropic_entry_uses_langchain_runner(self) -> None:
+        entry = get_provider_entry("anthropic")
+        self.assertEqual(entry.runner_script, "langchain_anthropic_runner.py")
 
     def test_build_diagnostics_summary_uses_common_flags(self) -> None:
         entry = get_provider_entry("openai")

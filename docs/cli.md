@@ -57,10 +57,10 @@ cargo run -- export outline
 ### AI
 
 ```text
-nodex ai doctor [--provider openai|codex|gemini] [--format text|json]
-nodex ai status [--provider openai|codex|gemini] [--format text|json]
+nodex ai doctor [--provider anthropic|openai|codex|gemini] [--format text|json]
+nodex ai status [--provider anthropic|openai|codex|gemini] [--format text|json]
 nodex ai providers [--format text|json]
-nodex ai smoke --provider openai|codex|gemini [--node-id <id>] [--apply] [--keep-workspace] [--format text|json] [-- <extra args...>]
+nodex ai smoke --provider anthropic|openai|codex|gemini [--node-id <id>] [--apply] [--keep-workspace] [--format text|json] [-- <extra args...>]
 nodex ai expand <node-id> --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai explore <node-id> --by risk|question|action|evidence --dry-run [--emit-request path] [--emit-response-template path] [--format text|json]
 nodex ai apply-response <file> [--dry-run] [--format text|json]
@@ -76,7 +76,7 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 说明：
 
 - `ai doctor` 会直接调用统一的 provider 诊断入口，优先用于确认本机 live config、auth 和环境变量冲突
-- `ai doctor --provider codex --format json` / `ai doctor --provider openai --format json` 适合脚本化排查
+- `ai doctor --provider anthropic --format json` / `ai doctor --provider codex --format json` / `ai doctor --provider openai --format json` 适合脚本化排查
 - `ai status` 会基于统一 diagnostics 输出更短的结构化摘要，适合快速看某个 provider 是否 runnable / 是否有 auth / 是否有 env conflict
 - `ai providers` 会列出当前所有 provider 的紧凑摘要视图
 - `ai smoke` 会在临时工作区里串起：
@@ -88,6 +88,7 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `--mode plain`
   - `--reasoning-effort low`
   - `--max-retries 3`
+- 当前默认推荐试点主路是 `anthropic`，它会通过 `langchain_anthropic_runner.py` 进入 Anthropic-compatible LangChain 路径
 - `ai expand` 本身只负责 dry-run request 预览，不直接调用模型
 - `ai explore` 也同样只负责 dry-run request 预览，但会额外要求 `--by`
 - 当前 `ai explore` 支持这些角度：
@@ -167,21 +168,22 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `python3 scripts/langchain_openai_runner.py`
   - `python3 scripts/langchain_anthropic_runner.py`
   - 这条试点继续复用同一套 request / response contract 和 `.meta.json` 审计边界
-  - 它当前仍然是独立试点，不在 `ai doctor` / `ai providers` / `ai smoke` 的 provider 列表里
+  - 其中 `langchain_anthropic_runner.py` 现在也已经接进 `ai doctor` / `ai providers` / `ai smoke` 和 desktop 默认 draft route
 - 如果你的 provider 已经通过本机 `codex login` 和 `~/.codex/config.toml` 跑通，也可以改用：
   - `python3 scripts/codex_runner.py`
 - Gemini 路径现在也有最小 runner：
   - `python3 scripts/gemini_runner.py`
 - 如果你想收敛命令面，也可以通过统一入口转发到具体 provider runner：
+  - `python3 scripts/provider_runner.py --provider anthropic`
   - `python3 scripts/provider_runner.py --provider openai`
   - `python3 scripts/provider_runner.py --provider codex`
   - `python3 scripts/provider_runner.py --provider gemini`
   - `python3 scripts/provider_runner.py --list`
 - desktop 默认 AI draft route 也会走这条统一入口：
-  - `python3 scripts/provider_runner.py --provider codex --use-default-args`
-- 对 `codex` 来说，这条 desktop 默认链路当前会：
-  - 继续沿用 `~/.codex/config.toml` 里的 `model`
-  - 通过 provider 默认参数把 `reasoning-effort` 固定为 `low`
+  - `python3 scripts/provider_runner.py --provider anthropic --use-default-args`
+- 对 `anthropic` 来说，这条 desktop 默认链路当前会：
+  - 进入 `langchain_anthropic_runner.py`
+  - 默认读取本地 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL`
 - `codex_runner.py` 会复用本机 Codex CLI 的登录态和 provider 配置，而不是直接手写 Bearer 请求
 - `codex_runner.py` 默认优先读取：
   - `~/.codex/config.toml` 里的 `model` / `model_reasoning_effort`
@@ -221,9 +223,9 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 
 ```bash
 cp .env.example .env.local
-# 编辑 .env.local，填入 OPENAI_API_KEY
+# 编辑 .env.local，填入 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_BASE_URL / ANTHROPIC_MODEL
 
-cargo run -- ai run-external root "python3 scripts/openai_runner.py" --dry-run
+cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py" --dry-run
 ```
 
 如果你想在同一条 external runner 边界上试 LangChain 最小试点：
@@ -240,6 +242,13 @@ python3 -m pip install -U langchain-anthropic
 cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py" --dry-run
 ```
 
+如果你想直接走当前默认推荐主路，也可以这样调用：
+
+```bash
+cargo run -- ai doctor --provider anthropic --format json
+cargo run -- ai smoke --provider anthropic --format json
+```
+
 如果当前机器上的 `codex exec` 已经能正常调用目标 provider，也可以直接复用它：
 
 ```bash
@@ -253,7 +262,7 @@ cargo run -- ai run-external root "python3 scripts/codex_runner.py --reasoning-e
 python3 scripts/provider_doctor.py --provider codex
 ```
 
-如果你想一次看完当前机器上的 Codex / OpenAI / Gemini 三条 provider 诊断，也可以直接跑统一入口：
+如果你想一次看完当前机器上的 Anthropic / Codex / OpenAI / Gemini 四条 provider 诊断，也可以直接跑统一入口：
 
 ```bash
 python3 scripts/provider_doctor.py --json
@@ -262,6 +271,8 @@ python3 scripts/provider_doctor.py --json
 现在也可以直接通过 CLI 入口调用：
 
 ```bash
+cargo run -- ai doctor --provider anthropic --format json
+cargo run -- ai status --provider anthropic --format json
 cargo run -- ai doctor --provider codex --format json
 cargo run -- ai status --provider codex --format json
 cargo run -- ai providers
@@ -270,6 +281,7 @@ cargo run -- ai providers
 如果你想直接在临时工作区里跑一轮 provider smoke，也可以使用统一 smoke 入口：
 
 ```bash
+python3 scripts/provider_smoke.py --provider anthropic
 python3 scripts/provider_smoke.py --provider codex
 python3 scripts/provider_smoke.py --provider openai
 python3 scripts/provider_smoke.py --provider gemini
@@ -280,6 +292,7 @@ python3 scripts/provider_smoke.py --provider gemini
 现在也可以直接通过 CLI 入口调用：
 
 ```bash
+cargo run -- ai smoke --provider anthropic --format json
 cargo run -- ai smoke --provider codex --format json
 ```
 

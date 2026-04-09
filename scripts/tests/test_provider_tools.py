@@ -116,6 +116,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         result = run_script("scripts/provider_runner.py", "--list")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("codex: runnable", result.stdout)
+        self.assertIn("anthropic: runnable", result.stdout)
         self.assertIn("openai: runnable", result.stdout)
         self.assertIn("gemini: runnable", result.stdout)
 
@@ -123,6 +124,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
         result = run_script("scripts/provider_smoke.py", "--list")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("codex: runner=codex_runner.py", result.stdout)
+        self.assertIn(
+            "anthropic: runner=langchain_anthropic_runner.py", result.stdout
+        )
         self.assertIn("openai: runner=openai_runner.py", result.stdout)
         self.assertIn("gemini: runner=gemini_runner.py", result.stdout)
 

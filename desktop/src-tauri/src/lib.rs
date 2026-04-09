@@ -477,7 +477,7 @@ fn desktop_ai_runner_command() -> Result<String> {
 
 fn desktop_default_ai_runner_command(script_path: &Path) -> String {
     format!(
-        "python3 {} --provider codex --use-default-args",
+        "python3 {} --provider anthropic --use-default-args",
         shell_quote(&display_path(script_path))
     )
 }
@@ -626,6 +626,11 @@ fn detected_provider_from_command(command: &str) -> Option<&'static str> {
         || command.contains("codex_runner.py")
     {
         Some("codex")
+    } else if command.contains("--provider anthropic")
+        || command.contains("--provider=anthropic")
+        || command.contains("langchain_anthropic_runner.py")
+    {
+        Some("anthropic")
     } else if command.contains("--provider openai")
         || command.contains("--provider=openai")
         || command.contains("openai_runner.py")
@@ -644,6 +649,10 @@ fn detected_provider_from_command(command: &str) -> Option<&'static str> {
 fn detected_runner_from_command(command: &str) -> &'static str {
     if command.contains("provider_runner.py") {
         "provider_runner.py"
+    } else if command.contains("langchain_anthropic_runner.py") {
+        "langchain_anthropic_runner.py"
+    } else if command.contains("langchain_openai_runner.py") {
+        "langchain_openai_runner.py"
     } else if command.contains("codex_runner.py") {
         "codex_runner.py"
     } else if command.contains("openai_runner.py") {
@@ -1346,7 +1355,7 @@ mod tests {
         let command = desktop_default_ai_runner_command(Path::new("/tmp/provider_runner.py"));
         assert_eq!(
             command,
-            "python3 '/tmp/provider_runner.py' --provider codex --use-default-args"
+            "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
         );
     }
 
@@ -1354,13 +1363,17 @@ mod tests {
     fn detects_provider_from_supported_runner_commands() {
         assert_eq!(
             detected_provider_from_command(
-                "python3 '/tmp/provider_runner.py' --provider codex --use-default-args"
+                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
             ),
-            Some("codex")
+            Some("anthropic")
         );
         assert_eq!(
             detected_provider_from_command("python3 scripts/openai_runner.py"),
             Some("openai")
+        );
+        assert_eq!(
+            detected_provider_from_command("python3 scripts/langchain_anthropic_runner.py"),
+            Some("anthropic")
         );
         assert_eq!(detected_provider_from_command("bash ./custom.sh"), None);
     }
@@ -1368,25 +1381,25 @@ mod tests {
     #[test]
     fn parses_provider_doctor_summary_from_json_payload() {
         let summary = parse_provider_doctor_summary(
-            "codex",
+            "anthropic",
             r#"{
-              "codex": {
+              "anthropic": {
                 "summary": {
-                  "provider": "codex",
+                  "provider": "anthropic",
                   "runnable": true,
                   "has_auth": true,
                   "has_process_env_conflict": false,
                   "has_shell_env_conflict": true
                 },
-                "model": "gpt-5.4",
-                "reasoning_effort": "low"
+                "model": "glm-5.1",
+                "reasoning_effort": null
               }
             }"#,
         )
         .expect("summary should parse");
 
-        assert_eq!(summary.model.as_deref(), Some("gpt-5.4"));
-        assert_eq!(summary.reasoning_effort.as_deref(), Some("low"));
+        assert_eq!(summary.model.as_deref(), Some("glm-5.1"));
+        assert_eq!(summary.reasoning_effort, None);
         assert!(summary.has_auth);
         assert!(!summary.has_process_env_conflict);
         assert!(summary.has_shell_env_conflict);
@@ -1405,16 +1418,16 @@ mod tests {
     }
 
     #[test]
-    fn effective_reasoning_prefers_provider_defaults_for_desktop_codex_route() {
+    fn effective_reasoning_ignores_provider_defaults_for_desktop_anthropic_route() {
         assert_eq!(
             effective_reasoning_for_command(
-                "python3 '/tmp/provider_runner.py' --provider codex --use-default-args",
-                Some("codex"),
+                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args",
+                Some("anthropic"),
                 true,
-                Some("xhigh".to_string())
+                Some("medium".to_string())
             )
             .as_deref(),
-            Some("low")
+            Some("medium")
         );
     }
 

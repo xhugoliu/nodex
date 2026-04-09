@@ -27,7 +27,7 @@
 
 当前最值得压实的产品路径是：
 
-> 选中一个节点 -> 用真实 provider 起草 AI draft -> 同一条 contract 下可切最小 runner 或 LangChain 试点 -> 用户能看懂理由和证据 -> 预览 patch -> 再决定是否应用
+> 选中一个节点 -> 用 Anthropic-compatible LangChain 默认主路起草 AI draft -> 用户能看懂理由和证据 -> 预览 patch -> 再决定是否应用
 
 短期内，判断优先级时优先看这条路径是否更顺，而不是入口是否更多、界面是否更大。
 
@@ -58,7 +58,7 @@
 
 - 避免 README、CLI、架构、数据模型和短期清单之间出现实现漂移
 - 把 desktop 当前已经落地的审计链路准确写清楚
-- 把 LangChain 最小试点的角色准确写成“同 contract 的外部试点”，而不是默认主路径
+- 把 LangChain 当前默认主路的角色准确写成“同 contract 的外部试点”，而不是新的状态核心
 - 删除已经失效的短期优先级描述，避免后续协作继续按旧方向推进
 
 下一轮最小切口：
@@ -79,21 +79,21 @@
   - 已经被实现替代的旧表述
   - 与当前行为冲突的短期计划
 
-### 2. 把真实 provider 路径和 LangChain 试点做成可比较验证
+### 2. 把默认 LangChain 主路和对照路径做成可比较验证
 
 状态：文档收口后立即进入
 
 目标：
 
-- 把现有 `codex` 默认链路整理成可重复执行的 smoke / e2e 路径
+- 把现有 Anthropic-compatible LangChain 默认链路整理成可重复执行的 smoke / e2e 路径
 - 让 `run-id -> artifact -> compare -> replay -> apply` 这条链路能做回归，而不是只靠手动演示
 - 继续保持 external runner 边界，不把 provider SDK 直接塞进 Rust 内核
 - 让 LangChain 试点先作为同 contract 的平行对照组存在，而不是直接升级为默认入口
 
 当前最小切口：
 
-- 以 `codex` 作为真实验证主路
-- 以 `openai_runner.py` 和 `langchain_openai_runner.py` 作为同 provider 的平行对照
+- 以 `langchain_anthropic_runner.py` 作为当前默认试点主路
+- 再用 `openai_runner.py` 和 `langchain_openai_runner.py` 作为平行对照
 - 也允许通过 `scripts/runner_compare.py --preset langchain-pilot` 把这条对照流程收成统一入口
 - 优先覆盖这些动作的最小闭环：
   - `draft`
@@ -102,8 +102,8 @@
   - `compare`
   - `replay`
   - 可选的最终 apply
-- 如果同一机器上还保留 `OPENAI_*` 环境变量，优先先跑：
-  - `nodex ai doctor --provider codex --format json`
+- 如果当前默认 Anthropic-compatible 路径需要先确认配置，优先先跑：
+  - `nodex ai doctor --provider anthropic --format json`
 
 ### 3. 桌面壳只做必要修补
 
@@ -144,7 +144,6 @@
 - 过早扩很多 AI 入口，但每条都不够可解释
 - 把 evidence 语义一次性做成很重的文献系统
 - 为未来能力提前铺太多空壳结构
-- 在真实 provider 主路径还没顺之前，就把 LangChain 试点直接升级成默认主链
 - 在真实 provider 主路径还没顺之前，就发起一轮通用 Intent Layer 重构
 
 ## 更新要求

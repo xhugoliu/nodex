@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
+from anthropic_context import load_anthropic_context
 from codex_context import load_codex_context
 from gemini_context import load_gemini_context
 from openai_context import load_openai_context
@@ -22,6 +23,10 @@ class ProviderEntry:
 
 def _load_codex(script_path: Path) -> dict:
     return load_codex_context().to_json_payload()
+
+
+def _load_anthropic(script_path: Path) -> dict:
+    return load_anthropic_context(script_path=script_path).to_json_payload()
 
 
 def _load_openai(script_path: Path) -> dict:
@@ -45,6 +50,11 @@ PROVIDER_ENTRIES: tuple[ProviderEntry, ...] = (
             "--max-retries",
             "3",
         ),
+    ),
+    ProviderEntry(
+        name="anthropic",
+        diagnostics_loader=_load_anthropic,
+        runner_script="langchain_anthropic_runner.py",
     ),
     ProviderEntry(
         name="openai",
