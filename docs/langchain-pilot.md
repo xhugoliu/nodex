@@ -131,11 +131,25 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py" --dry-run
 ```
 
+如果你想把默认 Anthropic 主路推进到“真实来源节点”而不是空树 smoke，可以直接跑：
+
+```bash
+python3 scripts/provider_smoke.py --provider anthropic --scenario source-context --json
+```
+
+这条场景会：
+
+- 在临时 workspace 里导入固定 Markdown fixture
+- 选中一个已经挂了 source / chunk 的导入节点
+- 为这个节点补一条显式 evidence citation
+- 再在这个真实来源节点上执行 Anthropic-compatible LangChain draft
+
 如果你想把这条对照流程直接收成一次统一执行，也可以使用：
 
 ```bash
 python3 scripts/runner_compare.py --preset langchain-pilot
 python3 scripts/runner_compare.py --preset langchain-pilot --json
+python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-context --json
 ```
 
 这条脚本会：

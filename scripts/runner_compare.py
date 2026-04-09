@@ -8,6 +8,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Optional
+
+from source_context_scenario import DEFAULT_FIXTURE_PATH, prepare_source_context_scenario
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -109,6 +112,20 @@ def main() -> int:
         help="Node id to target for all runs.",
     )
     parser.add_argument(
+        "--scenario",
+        choices=("minimal", "source-context"),
+        default="minimal",
+        help="Which workspace setup scenario to run before invoking the runners.",
+    )
+    parser.add_argument(
+        "--fixture",
+        default=None,
+        help=(
+            "Optional Markdown fixture path for --scenario source-context. "
+            f"Defaults to {DEFAULT_FIXTURE_PATH}."
+        ),
+    )
+    parser.add_argument(
         "--workspace-dir",
         default=None,
         help="Optional workspace directory to reuse instead of creating a temp directory.",
@@ -143,6 +160,8 @@ def main() -> int:
             workspace_dir=workspace_dir,
             runner_specs=runner_specs,
             node_id=args.node_id,
+            scenario=args.scenario,
+            fixture_path=Path(args.fixture).resolve() if args.fixture else None,
         )
     elif args.keep_workspace:
         workspace_dir = Path(tempfile.mkdtemp(prefix="nodex-compare-"))
@@ -150,6 +169,8 @@ def main() -> int:
             workspace_dir=workspace_dir,
             runner_specs=runner_specs,
             node_id=args.node_id,
+            scenario=args.scenario,
+            fixture_path=Path(args.fixture).resolve() if args.fixture else None,
         )
         result["workspace_dir"] = str(workspace_dir)
     else:
@@ -159,6 +180,8 @@ def main() -> int:
                 workspace_dir=workspace_dir,
                 runner_specs=runner_specs,
                 node_id=args.node_id,
+                scenario=args.scenario,
+                fixture_path=Path(args.fixture).resolve() if args.fixture else None,
             )
             result["workspace_dir"] = str(workspace_dir)
 
@@ -178,10 +201,26 @@ def print_preset_list() -> None:
             print(f"  - {label}: {command}")
 
 
-def compare_runners(*, workspace_dir: Path, runner_specs: list[dict], node_id: str) -> dict:
+def compare_runners(
+    *,
+    workspace_dir: Path,
+    runner_specs: list[dict],
+    node_id: str,
+    scenario: str,
+    fixture_path: Optional[Path],
+) -> dict:
     ensure_workspace_initialized(workspace_dir)
+    scenario_payload = None
+    effective_node_id = node_id
+    if scenario == "source-context":
+        scenario_payload = prepare_source_context_scenario(
+            manifest_path=MANIFEST_PATH,
+            workspace_dir=workspace_dir,
+            fixture_path=fixture_path,
+        )
+        effective_node_id = scenario_payload["target_node"]["id"]
     runs = [
-        run_one_runner(workspace_dir=workspace_dir, node_id=node_id, spec=spec)
+        run_one_runner(workspace_dir=workspace_dir, node_id=effective_node_id, spec=spec)
         for spec in runner_specs
     ]
     successful = [item for item in runs if item["status"] == "ok"]
@@ -194,16 +233,20 @@ def compare_runners(*, workspace_dir: Path, runner_specs: list[dict], node_id: s
         for left, right in itertools.combinations(successful, 2)
     ]
     ok = len(successful) >= 2 and all(item["status"] == "ok" for item in comparisons)
-    return {
+    result = {
         "ok": ok,
         "workspace_dir": str(workspace_dir),
-        "node_id": node_id,
+        "scenario": scenario,
+        "node_id": effective_node_id,
         "runner_count": len(runner_specs),
         "successful_runs": len(successful),
         "failed_runs": len(runner_specs) - len(successful),
         "runs": runs,
         "comparisons": comparisons,
     }
+    if scenario_payload is not None:
+        result["scenario_context"] = scenario_payload
+    return result
 
 
 def ensure_workspace_initialized(workspace_dir: Path) -> None:
@@ -326,10 +369,17 @@ def run_nodex_command(
 
 def print_text_report(result: dict) -> None:
     print(f"Workspace: {result['workspace_dir']}")
+    print(f"Scenario: {result['scenario']}")
     print(f"Node: {result['node_id']}")
     print(
         f"Runs: {result['successful_runs']} succeeded / {result['failed_runs']} failed / {result['runner_count']} total"
     )
+    scenario_context = result.get("scenario_context")
+    if isinstance(scenario_context, dict):
+        target_node = scenario_context.get("target_node") or {}
+        evidence = scenario_context.get("evidence") or {}
+        print(f"Target node title: {target_node.get('title', '(unknown)')}")
+        print(f"Evidence chunk: {evidence.get('chunk_label', '(unknown)')}")
     print()
     print("[runs]")
     for item in result["runs"]:

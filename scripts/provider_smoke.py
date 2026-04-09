@@ -15,6 +15,10 @@ from provider_registry import (
     provider_names,
     runnable_provider_names,
 )
+from source_context_scenario import (
+    DEFAULT_FIXTURE_PATH,
+    prepare_source_context_scenario,
+)
 
 
 def main() -> int:
@@ -51,6 +55,20 @@ def main() -> int:
         "--node-id",
         default="root",
         help="Node id to target for the smoke request.",
+    )
+    parser.add_argument(
+        "--scenario",
+        choices=("minimal", "source-context"),
+        default="minimal",
+        help="Which workspace setup scenario to run before the AI draft.",
+    )
+    parser.add_argument(
+        "--fixture",
+        default=None,
+        help=(
+            "Optional Markdown fixture path for --scenario source-context. "
+            f"Defaults to {DEFAULT_FIXTURE_PATH}."
+        ),
     )
     args, passthrough = parser.parse_known_args()
 
@@ -92,6 +110,8 @@ def main() -> int:
             manifest_path=manifest_path,
             workspace_dir=tmp_dir,
             node_id=args.node_id,
+            scenario=args.scenario,
+            fixture_path=Path(args.fixture).resolve() if args.fixture else None,
             runner_command_text=runner_command_text,
             apply=args.apply,
             json_mode=args.json,
@@ -111,6 +131,8 @@ def main() -> int:
             manifest_path=manifest_path,
             workspace_dir=Path(tmp_dir),
             node_id=args.node_id,
+            scenario=args.scenario,
+            fixture_path=Path(args.fixture).resolve() if args.fixture else None,
             runner_command_text=runner_command_text,
             apply=args.apply,
             json_mode=args.json,
@@ -129,6 +151,8 @@ def run_smoke(
     manifest_path: Path,
     workspace_dir: Path,
     node_id: str,
+    scenario: str,
+    fixture_path: Optional[Path],
     runner_command_text: str,
     apply: bool,
     json_mode: bool,
@@ -138,6 +162,15 @@ def run_smoke(
         cwd=workspace_dir,
         capture=json_mode,
     )
+    scenario_payload = None
+    effective_node_id = node_id
+    if scenario == "source-context":
+        scenario_payload = prepare_source_context_scenario(
+            manifest_path=manifest_path,
+            workspace_dir=workspace_dir,
+            fixture_path=fixture_path,
+        )
+        effective_node_id = scenario_payload["target_node"]["id"]
     args = [
         "cargo",
         "run",
@@ -146,16 +179,19 @@ def run_smoke(
         "--",
         "ai",
         "run-external",
-        node_id,
+        effective_node_id,
         runner_command_text,
     ]
     if not apply:
         args.append("--dry-run")
     run_output = run_command(args, cwd=workspace_dir, capture=json_mode)
     result = {
+        "scenario": scenario,
         "mode": "apply" if apply else "dry_run",
-        "node_id": node_id,
+        "node_id": effective_node_id,
     }
+    if scenario_payload is not None:
+        result["scenario_context"] = scenario_payload
     if json_mode:
         result["steps"] = {
             "init": init_output,

@@ -89,6 +89,10 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `--reasoning-effort low`
   - `--max-retries 3`
 - 当前默认推荐试点主路是 `anthropic`，它会通过 `langchain_anthropic_runner.py` 进入 Anthropic-compatible LangChain 路径
+- 如果你直接使用脚本级 smoke，`provider_smoke.py` 现在也支持：
+  - `--scenario minimal`
+  - `--scenario source-context`
+  - 其中 `source-context` 会导入固定 Markdown fixture、补一条 evidence citation，再在真实来源节点上跑 draft
 - `ai expand` 本身只负责 dry-run request 预览，不直接调用模型
 - `ai explore` 也同样只负责 dry-run request 预览，但会额外要求 `--by`
 - 当前 `ai explore` 支持这些角度：
@@ -285,6 +289,12 @@ python3 scripts/provider_smoke.py --provider anthropic
 python3 scripts/provider_smoke.py --provider codex
 python3 scripts/provider_smoke.py --provider openai
 python3 scripts/provider_smoke.py --provider gemini
+```
+
+如果你想让 Anthropic 主路直接走真实来源节点场景，也可以这样跑：
+
+```bash
+python3 scripts/provider_smoke.py --provider anthropic --scenario source-context --json
 ```
 
 `provider_smoke.py` 会先做一层 provider preflight；如果当前 provider 没有可用 auth，会直接提示先跑对应的 `provider_doctor.py`。

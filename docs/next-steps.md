@@ -95,6 +95,7 @@
 - 以 `langchain_anthropic_runner.py` 作为当前默认试点主路
 - 再用 `openai_runner.py` 和 `langchain_openai_runner.py` 作为平行对照
 - 也允许通过 `scripts/runner_compare.py --preset langchain-pilot` 把这条对照流程收成统一入口
+- Anthropic 主路的 smoke 也应优先补到 `--scenario source-context` 这种真实来源节点，而不只停在 root 空树
 - 优先覆盖这些动作的最小闭环：
   - `draft`
   - `show`
