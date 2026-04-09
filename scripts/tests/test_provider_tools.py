@@ -11,8 +11,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 
-from provider_smoke import run_smoke
+from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
+from source_context_scenario import fixture_set_cases
 
 
 def run_script(*args: str) -> subprocess.CompletedProcess[str]:
@@ -178,6 +179,73 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Provider Authentication Flow",
         )
 
+    def test_runner_compare_fixture_set_runs_multiple_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': request['target_node']['title'],",
+                        "    'explanation': {",
+                        "        'rationale_summary': request['target_node']['title'],",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': request['target_node']['id'],",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': request['target_node']['title'],",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Fixture Set Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated from fixture-set context',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            command = shlex.join([sys.executable, str(fake_runner)])
+            result = run_script(
+                "scripts/runner_compare.py",
+                "--json",
+                "--fixture-set",
+                "anthropic-default",
+                "--runner",
+                f"left={command}",
+                "--runner",
+                f"right={command}",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["fixture_set"], "anthropic-default")
+        self.assertEqual(len(payload["cases"]), 3)
+        self.assertEqual(payload["aggregate"]["total_cases"], 3)
+
     def test_langchain_anthropic_runner_help(self) -> None:
         result = run_script("scripts/langchain_anthropic_runner.py", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -273,6 +341,68 @@ class ProviderToolScriptsTests(unittest.TestCase):
             result["scenario_context"]["target_node"]["title"],
             "Provider Authentication Flow",
         )
+
+    def test_provider_smoke_fixture_set_runs_multiple_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': request['target_node']['title'],",
+                        "    'explanation': {",
+                        "        'rationale_summary': request['target_node']['title'],",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': request['target_node']['id'],",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': request['target_node']['title'],",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Fixture Set Smoke Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated from fixture-set smoke',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            result = run_fixture_set_smoke(
+                manifest_path=REPO_ROOT / "Cargo.toml",
+                workspace_root_dir=Path(tmp_dir),
+                fixture_set_name="anthropic-default",
+                fixture_cases=fixture_set_cases("anthropic-default"),
+                runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
+                apply=False,
+                json_mode=True,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["fixture_set"], "anthropic-default")
+        self.assertEqual(result["metrics"]["total_cases"], 3)
 
     def test_provider_doctor_json_includes_summary(self) -> None:
         result = run_script("scripts/provider_doctor.py", "--provider", "openai", "--json")

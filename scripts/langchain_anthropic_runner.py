@@ -296,10 +296,88 @@ def coerce_contract_response(
 
     explanation = contract_response.get("explanation")
     if isinstance(explanation, dict):
-        explanation.setdefault("direct_evidence", [])
+        explanation["direct_evidence"] = coerce_direct_evidence(
+            explanation.get("direct_evidence"),
+            request_payload,
+        )
         explanation.setdefault("inferred_suggestions", [])
 
     return contract_response
+
+
+def coerce_direct_evidence(
+    value: Any,
+    request_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+
+    lookup = build_evidence_lookup(request_payload)
+    coerced = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        source_id = item.get("source_id")
+        chunk_id = item.get("chunk_id")
+        fallback = lookup.get((source_id, chunk_id)) or lookup.get(chunk_id) or {}
+        source_id = source_id or fallback.get("source_id") or "unknown-source"
+        source_name = item.get("source_name") or fallback.get("source_name") or source_id
+        label = item.get("label", fallback.get("label"))
+        start_line = coerce_line_number(item.get("start_line"), fallback.get("start_line"))
+        end_line = coerce_line_number(item.get("end_line"), fallback.get("end_line"), start_line)
+        why_it_matters = (
+            item.get("why_it_matters")
+            or "This cited chunk supports the proposed patch."
+        )
+        chunk_id = chunk_id or fallback.get("chunk_id") or "unknown-chunk"
+        coerced.append(
+            {
+                "source_id": source_id,
+                "source_name": source_name,
+                "chunk_id": chunk_id,
+                "label": label,
+                "start_line": start_line,
+                "end_line": end_line,
+                "why_it_matters": why_it_matters,
+            }
+        )
+    return coerced
+
+
+def build_evidence_lookup(request_payload: dict[str, Any]) -> dict[Any, dict[str, Any]]:
+    lookup: dict[Any, dict[str, Any]] = {}
+    for source in request_payload.get("cited_evidence") or []:
+        if not isinstance(source, dict):
+            continue
+        source_id = source.get("source_id")
+        source_name = source.get("original_name")
+        for chunk in source.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            payload = {
+                "source_id": source_id,
+                "source_name": source_name,
+                "chunk_id": chunk.get("chunk_id"),
+                "label": chunk.get("label"),
+                "start_line": chunk.get("start_line"),
+                "end_line": chunk.get("end_line"),
+            }
+            lookup[(source_id, chunk.get("chunk_id"))] = payload
+            if chunk.get("chunk_id"):
+                lookup[chunk.get("chunk_id")] = payload
+    return lookup
+
+
+def coerce_line_number(
+    value: Any,
+    fallback: Any,
+    secondary_fallback: int = 0,
+) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(fallback, int):
+        return fallback
+    return secondary_fallback
 
 
 def coerce_patch_op(item: Any) -> Any:

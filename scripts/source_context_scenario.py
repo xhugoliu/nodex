@@ -13,6 +13,36 @@ DEFAULT_CITATION_KIND = "direct"
 DEFAULT_CITATION_RATIONALE = (
     "This imported section defines the Anthropic-compatible runner setup."
 )
+DEFAULT_FIXTURE_SET = "anthropic-default"
+
+FIXTURE_SET_CASES = {
+    "anthropic-default": [
+        {
+            "id": "config",
+            "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md",
+            "target_label": "Provider Authentication Flow",
+            "citation_rationale": (
+                "This imported section defines the Anthropic-compatible runner setup."
+            ),
+        },
+        {
+            "id": "research",
+            "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "research-context-smoke.md",
+            "target_label": "Key Findings",
+            "citation_rationale": (
+                "This imported section captures the primary findings that the draft should build on."
+            ),
+        },
+        {
+            "id": "plan",
+            "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "plan-context-smoke.md",
+            "target_label": "Immediate Milestones",
+            "citation_rationale": (
+                "This imported section defines the near-term delivery plan that the draft should extend."
+            ),
+        },
+    ]
+}
 
 
 class ScenarioFailure(Exception):
@@ -27,6 +57,7 @@ def prepare_source_context_scenario(
     workspace_dir: Path,
     fixture_path: Optional[Path] = None,
     target_label: str = DEFAULT_TARGET_LABEL,
+    citation_rationale: str = DEFAULT_CITATION_RATIONALE,
 ) -> dict[str, Any]:
     fixture_path = (fixture_path or DEFAULT_FIXTURE_PATH).resolve()
     if not fixture_path.exists():
@@ -69,7 +100,7 @@ def prepare_source_context_scenario(
             "--citation-kind",
             DEFAULT_CITATION_KIND,
             "--rationale",
-            DEFAULT_CITATION_RATIONALE,
+            citation_rationale,
         ],
         expect_json=False,
     )
@@ -97,7 +128,7 @@ def prepare_source_context_scenario(
             "chunk_id": chunk_id,
             "chunk_label": target_context["chunk_label"],
             "citation_kind": DEFAULT_CITATION_KIND,
-            "rationale": DEFAULT_CITATION_RATIONALE,
+            "rationale": citation_rationale,
         },
         "steps": {
             "source_import": import_step,
@@ -136,6 +167,25 @@ def select_target_context(source_detail: dict[str, Any], target_label: str) -> d
     raise ScenarioFailure(
         f"source context chunk `{target_label}` was not found; available labels: {available_labels}"
     )
+
+
+def fixture_set_names() -> tuple[str, ...]:
+    return tuple(FIXTURE_SET_CASES.keys())
+
+
+def fixture_set_cases(name: str) -> list[dict[str, Any]]:
+    cases = FIXTURE_SET_CASES.get(name)
+    if cases is None:
+        raise ScenarioFailure(f"unsupported fixture set `{name}`")
+    return [
+        {
+            "id": item["id"],
+            "fixture_path": Path(item["fixture_path"]).resolve(),
+            "target_label": item["target_label"],
+            "citation_rationale": item["citation_rationale"],
+        }
+        for item in cases
+    ]
 
 
 def run_nodex_command(

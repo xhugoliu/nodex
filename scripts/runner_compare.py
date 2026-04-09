@@ -10,7 +10,15 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-from source_context_scenario import DEFAULT_FIXTURE_PATH, prepare_source_context_scenario
+from source_context_scenario import (
+    DEFAULT_CITATION_RATIONALE,
+    DEFAULT_FIXTURE_PATH,
+    DEFAULT_FIXTURE_SET,
+    DEFAULT_TARGET_LABEL,
+    fixture_set_cases,
+    fixture_set_names,
+    prepare_source_context_scenario,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -126,6 +134,15 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--fixture-set",
+        choices=fixture_set_names(),
+        default=None,
+        help=(
+            "Run a fixed set of source-context cases instead of a single scenario. "
+            f"The default set is {DEFAULT_FIXTURE_SET}."
+        ),
+    )
+    parser.add_argument(
         "--workspace-dir",
         default=None,
         help="Optional workspace directory to reuse instead of creating a temp directory.",
@@ -152,6 +169,17 @@ def main() -> int:
     )
     if len(runner_specs) < 2:
         parser.error("at least two runners are required")
+
+    if args.fixture_set:
+        result = run_fixture_set_compare(
+            runner_specs=runner_specs,
+            fixture_set_name=args.fixture_set,
+        )
+        if args.json:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print_fixture_set_report(result)
+        return 0 if result["ok"] else 1
 
     if args.workspace_dir:
         workspace_dir = Path(args.workspace_dir).resolve()
@@ -199,6 +227,9 @@ def print_preset_list() -> None:
         print(f"- {preset_name}:")
         for label, command in entries:
             print(f"  - {label}: {command}")
+    print("Fixture sets:")
+    for fixture_set_name in fixture_set_names():
+        print(f"- {fixture_set_name}")
 
 
 def compare_runners(
@@ -217,6 +248,8 @@ def compare_runners(
             manifest_path=MANIFEST_PATH,
             workspace_dir=workspace_dir,
             fixture_path=fixture_path,
+            target_label=DEFAULT_TARGET_LABEL,
+            citation_rationale=DEFAULT_CITATION_RATIONALE,
         )
         effective_node_id = scenario_payload["target_node"]["id"]
     runs = [
@@ -246,7 +279,68 @@ def compare_runners(
     }
     if scenario_payload is not None:
         result["scenario_context"] = scenario_payload
+    result["runner_metrics"] = aggregate_runner_metrics(runs)
     return result
+
+
+def run_fixture_set_compare(
+    *,
+    runner_specs: list[dict],
+    fixture_set_name: str,
+) -> dict:
+    cases = fixture_set_cases(fixture_set_name)
+    case_results = []
+    with tempfile.TemporaryDirectory(prefix="nodex-compare-set-") as tmp_dir:
+        root_dir = Path(tmp_dir)
+        for case in cases:
+            workspace_dir = root_dir / case["id"]
+            workspace_dir.mkdir(parents=True, exist_ok=True)
+            ensure_workspace_initialized(workspace_dir)
+            scenario_payload = prepare_source_context_scenario(
+                manifest_path=MANIFEST_PATH,
+                workspace_dir=workspace_dir,
+                fixture_path=case["fixture_path"],
+                target_label=case["target_label"],
+                citation_rationale=case["citation_rationale"],
+            )
+            effective_node_id = scenario_payload["target_node"]["id"]
+            runs = [
+                run_one_runner(
+                    workspace_dir=workspace_dir,
+                    node_id=effective_node_id,
+                    spec=spec,
+                )
+                for spec in runner_specs
+            ]
+            successful = [item for item in runs if item["status"] == "ok"]
+            comparisons = [
+                compare_pair(
+                    workspace_dir=workspace_dir,
+                    left=left,
+                    right=right,
+                )
+                for left, right in itertools.combinations(successful, 2)
+            ]
+            case_results.append(
+                {
+                    "case_id": case["id"],
+                    "workspace_dir": str(workspace_dir),
+                    "scenario": "source-context",
+                    "node_id": effective_node_id,
+                    "scenario_context": scenario_payload,
+                    "runs": runs,
+                    "comparisons": comparisons,
+                    "runner_metrics": aggregate_runner_metrics(runs),
+                }
+            )
+
+    aggregate = aggregate_fixture_set_metrics(case_results)
+    return {
+        "ok": aggregate["failed_cases"] == 0,
+        "fixture_set": fixture_set_name,
+        "cases": case_results,
+        "aggregate": aggregate,
+    }
 
 
 def ensure_workspace_initialized(workspace_dir: Path) -> None:
@@ -288,6 +382,7 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "metadata": metadata,
             "report": run_payload,
             "show": show_payload,
+            "quality": build_run_quality_summary(run_payload),
         }
     except CommandFailure as exc:
         return {
@@ -415,6 +510,111 @@ def print_text_report(result: dict) -> None:
         print(f"  same patch summary: {summary['same_patch_summary']}")
         print(f"  same patch preview: {summary['same_patch_preview']}")
         print(f"  same response notes: {summary['same_response_notes']}")
+
+
+def print_fixture_set_report(result: dict) -> None:
+    print(f"Fixture set: {result['fixture_set']}")
+    aggregate = result["aggregate"]
+    print(
+        f"Cases: {aggregate['successful_cases']} succeeded / {aggregate['failed_cases']} failed / {aggregate['total_cases']} total"
+    )
+    print(
+        f"Patch legal rate: {aggregate['patch_legal_rate']:.2f}, direct evidence cases: {aggregate['direct_evidence_cases']}, explainability complete cases: {aggregate['explainability_complete_cases']}"
+    )
+    print()
+    print("[cases]")
+    for case in result["cases"]:
+        title = case["scenario_context"]["target_node"]["title"]
+        print(f"- {case['case_id']}: {title}")
+        for item in case["runs"]:
+            print(f"  - {item['label']}: {item['status']}")
+            if item["status"] != "ok":
+                print(f"    error: {item['error']}")
+                continue
+            quality = item["quality"]
+            print(
+                f"    patch_legal={quality['patch_legal']} direct_evidence={quality['direct_evidence_count']} explainability_complete={quality['explainability_complete']}"
+            )
+
+
+def build_run_quality_summary(run_payload: dict) -> dict:
+    explanation = run_payload.get("explanation") or {}
+    report = run_payload.get("report") or {}
+    direct_evidence = explanation.get("direct_evidence") or []
+    inferred = explanation.get("inferred_suggestions") or []
+    rationale = explanation.get("rationale_summary") or ""
+    preview = report.get("preview") or []
+    return {
+        "patch_legal": run_payload.get("metadata", {}).get("status") == "dry_run_succeeded",
+        "patch_op_count": len(preview) if isinstance(preview, list) else 0,
+        "direct_evidence_count": len(direct_evidence) if isinstance(direct_evidence, list) else 0,
+        "has_direct_evidence": bool(direct_evidence),
+        "inferred_suggestions_count": len(inferred) if isinstance(inferred, list) else 0,
+        "rationale_present": isinstance(rationale, str) and bool(rationale.strip()),
+        "explainability_complete": (
+            isinstance(rationale, str)
+            and bool(rationale.strip())
+            and isinstance(inferred, list)
+            and isinstance(direct_evidence, list)
+        ),
+    }
+
+
+def aggregate_runner_metrics(runs: list[dict]) -> dict:
+    return {
+        item["label"]: item.get("quality")
+        for item in runs
+        if item.get("status") == "ok"
+    }
+
+
+def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
+    total_cases = len(case_results)
+    successful_cases = 0
+    direct_evidence_cases = 0
+    explainability_complete_cases = 0
+    failed_cases = 0
+    compare_difference_cases = 0
+
+    for case in case_results:
+        runs = case.get("runs") or []
+        if all(item.get("status") == "ok" for item in runs):
+            successful_cases += 1
+        else:
+            failed_cases += 1
+
+        if any(
+            item.get("quality", {}).get("has_direct_evidence") is True for item in runs
+        ):
+            direct_evidence_cases += 1
+
+        if any(
+            item.get("quality", {}).get("explainability_complete") is True
+            for item in runs
+        ):
+            explainability_complete_cases += 1
+
+        comparisons = case.get("comparisons") or []
+        if any(
+            item.get("status") == "ok"
+            and (
+                not item["comparison"]["same_rationale_summary"]
+                or not item["comparison"]["same_patch_preview"]
+                or not item["comparison"]["same_response_notes"]
+            )
+            for item in comparisons
+        ):
+            compare_difference_cases += 1
+
+    return {
+        "total_cases": total_cases,
+        "successful_cases": successful_cases,
+        "failed_cases": failed_cases,
+        "patch_legal_rate": successful_cases / total_cases if total_cases else 0,
+        "direct_evidence_cases": direct_evidence_cases,
+        "explainability_complete_cases": explainability_complete_cases,
+        "compare_difference_cases": compare_difference_cases,
+    }
 
 
 if __name__ == "__main__":
