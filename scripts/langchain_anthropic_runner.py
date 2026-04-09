@@ -202,6 +202,7 @@ def build_anthropic_response_schema() -> dict[str, Any]:
 
 
 def build_langchain_messages(request_payload: dict[str, Any]) -> list[tuple[str, str]]:
+    quality_instructions = build_anthropic_quality_instructions(request_payload)
     return [
         (
             "system",
@@ -209,6 +210,7 @@ def build_langchain_messages(request_payload: dict[str, Any]) -> list[tuple[str,
                 [
                     request_payload["system_prompt"],
                     request_payload["output_instructions"],
+                    quality_instructions,
                 ]
             ),
         ),
@@ -261,6 +263,51 @@ def strip_code_fence(text: str) -> str:
         if len(lines) >= 3:
             return "\n".join(lines[1:-1]).strip()
     return stripped
+
+
+def build_anthropic_quality_instructions(request_payload: dict[str, Any]) -> str:
+    target_node = request_payload.get("target_node") or {}
+    title = target_node.get("title") or "target node"
+    kind = target_node.get("kind") or "topic"
+    body = (target_node.get("body") or "").lower()
+    title_lower = str(title).lower()
+
+    kind_hint = "Prefer kind=topic unless the branch is clearly a question, action, or evidence item."
+    if (
+        "milestone" in body
+        or "plan" in body
+        or "roadmap" in body
+        or "step" in body
+        or "deliver" in body
+        or "plan" in title_lower
+        or "milestone" in title_lower
+    ):
+        kind_hint = "Prefer kind=action for concrete milestones, tasks, or execution branches."
+    elif (
+        "finding" in body
+        or "research" in body
+        or "study" in body
+        or "evidence" in body
+        or "finding" in title_lower
+        or "research" in title_lower
+    ):
+        kind_hint = "Prefer kind=evidence or kind=question when the branch is about findings, support, gaps, or follow-up questions."
+    elif "question" in body or "unknown" in body or kind == "question":
+        kind_hint = "Prefer kind=question for branches that are primarily open questions, uncertainties, or checks."
+
+    return "\n".join(
+        [
+            "Anthropic runner quality constraints:",
+            "- Return 3 to 4 add_node operations unless the request clearly needs more.",
+            "- Keep each title concise and scan-friendly; prefer 2 to 6 words or one short phrase.",
+            "- Preserve source terminology when it is already specific and useful.",
+            "- Avoid long explanatory titles that read like full sentences.",
+            "- Keep each body to one short sentence or phrase.",
+            "- Prefer concrete branch names over abstract buckets.",
+            f"- The current target is \"{title}\".",
+            f"- {kind_hint}",
+        ]
+    )
 
 
 def coerce_contract_response(
@@ -439,9 +486,15 @@ def normalize_expand_like_patch(
     if not normalized_ops:
         normalized_ops = fallback_scaffold_ops(request_payload)
 
-    patch["ops"] = normalized_ops
-    if not patch.get("summary"):
-        patch["summary"] = build_fallback_summary(request_payload)
+    patch["ops"] = normalize_patch_ops_for_quality(
+        normalized_ops,
+        request_payload=request_payload,
+    )
+    patch["summary"] = normalize_patch_summary(
+        patch.get("summary"),
+        request_payload=request_payload,
+        patch_ops=patch["ops"],
+    )
     return contract_response
 
 
@@ -493,7 +546,7 @@ def fallback_scaffold_ops(request_payload: dict[str, Any]) -> list[dict[str, Any
             "type": "add_node",
             "parent_id": target_id,
             "title": title,
-            "kind": "topic",
+            "kind": fallback_kind_for_request(request_payload),
             "body": None,
         }
         for title in titles
@@ -517,6 +570,179 @@ def humanize_node_id(value: Any) -> Optional[str]:
     if not pieces:
         return None
     return " ".join(piece.capitalize() for piece in pieces)
+
+
+def normalize_patch_ops_for_quality(
+    ops: list[dict[str, Any]],
+    *,
+    request_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    target_node = request_payload.get("target_node") or {}
+    target_title = target_node.get("title") or "target node"
+    normalized = []
+    for index, item in enumerate(ops[:4]):
+        if not isinstance(item, dict):
+            continue
+        op_type = item.get("type")
+        if op_type != "add_node":
+            normalized.append(item)
+            continue
+        title = normalize_branch_title(item.get("title"), target_title)
+        body = normalize_branch_body(item.get("body"), title, target_title)
+        kind = normalize_branch_kind(item, request_payload=request_payload)
+        normalized_item = dict(item)
+        normalized_item["title"] = title
+        normalized_item["body"] = body
+        normalized_item["kind"] = kind
+        if normalized_item.get("position") is None:
+            normalized_item["position"] = index
+        normalized.append(normalized_item)
+    return normalized or fallback_scaffold_ops(request_payload)
+
+
+def normalize_branch_title(value: Any, target_title: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        return "New Branch"
+    title = value.strip().replace("\n", " ")
+    title = title.split(":", 1)[0].strip() if title.count(":") == 1 and len(title) > 42 else title
+    title = title.rstrip(".")
+    words = title.split()
+    if len(words) > 8:
+        title = " ".join(words[:6])
+    if len(title) > 64:
+        title = title[:64].rstrip(" -,:;")
+    if title.lower() == target_title.lower():
+        title = f"{title} Detail"
+    return title or "New Branch"
+
+
+def normalize_branch_body(
+    value: Any,
+    title: str,
+    target_title: str,
+) -> Optional[str]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    body = " ".join(value.strip().split())
+    body = body.rstrip(".")
+    for separator in (". ", "; ", " - "):
+        if separator in body:
+            body = body.split(separator, 1)[0]
+            break
+    if len(body) > 140:
+        body = body[:140].rstrip(" ,;:-")
+    if body.lower() == title.lower() or body.lower() == target_title.lower():
+        return None
+    return body or None
+
+
+def normalize_branch_kind(
+    item: dict[str, Any],
+    *,
+    request_payload: dict[str, Any],
+) -> str:
+    title = str(item.get("title") or "").lower()
+    body = str(item.get("body") or "").lower()
+    explore_by = request_payload.get("explore_by")
+    target_node = request_payload.get("target_node") or {}
+    target_title = str(target_node.get("title") or "").lower()
+    target_body = str(target_node.get("body") or "").lower()
+    branch_text = " ".join([title, body]).lower()
+    combined = " ".join([title, body, target_title, target_body]).lower()
+    target_context = " ".join([target_title, target_body])
+    plan_context = any(
+        token in target_context
+        for token in ("milestone", "step", "plan", "deliver", "task", "execution")
+    )
+    research_context = any(
+        token in target_context
+        for token in (
+            "finding",
+            "research",
+            "study",
+            "evidence",
+            "confidence",
+            "synthesis",
+            "claim",
+        )
+    )
+    target_is_question = target_node.get("kind") == "question" or any(
+        token in target_title for token in ("question", "unknown", "uncertaint")
+    )
+
+    if explore_by == "question" or target_is_question or any(
+        token in branch_text for token in ("question", "unknown", "uncertaint", "check", "clarify")
+    ):
+        return "question"
+    if research_context and not any(
+        token in combined for token in ("question", "unknown", "uncertaint")
+    ):
+        return "evidence"
+    if explore_by == "action" or plan_context or any(
+        token in combined for token in ("action", "step", "milestone", "task", "deliver", "plan", "execution")
+    ):
+        return "action"
+    if explore_by == "evidence" or any(
+        token in combined for token in ("evidence", "support", "finding", "claim", "proof", "citation")
+    ):
+        return "evidence"
+    if explore_by == "risk" or any(
+        token in combined for token in ("risk", "failure", "mitigation", "dependency", "blocker")
+    ):
+        return "topic"
+    raw_kind = item.get("kind")
+    if isinstance(raw_kind, str) and raw_kind.strip():
+        return raw_kind
+    return fallback_kind_for_request(request_payload)
+
+
+def fallback_kind_for_request(request_payload: dict[str, Any]) -> str:
+    explore_by = request_payload.get("explore_by")
+    if explore_by == "question":
+        return "question"
+    if explore_by == "action":
+        return "action"
+    if explore_by == "evidence":
+        return "evidence"
+
+    target_node = request_payload.get("target_node") or {}
+    combined = " ".join(
+        [
+            str(target_node.get("title") or "").lower(),
+            str(target_node.get("body") or "").lower(),
+        ]
+    )
+    if any(token in combined for token in ("milestone", "step", "plan", "deliver", "task")):
+        return "action"
+    if any(token in combined for token in ("finding", "research", "evidence", "study")):
+        return "evidence"
+    if any(token in combined for token in ("question", "unknown", "uncertaint")):
+        return "question"
+    return "topic"
+
+
+def normalize_patch_summary(
+    value: Any,
+    *,
+    request_payload: dict[str, Any],
+    patch_ops: list[dict[str, Any]],
+) -> str:
+    target_node = request_payload.get("target_node") or {}
+    target_title = target_node.get("title") or target_node.get("id") or "target node"
+    capability = request_payload.get("capability") or "expand"
+    count = len(patch_ops)
+
+    if isinstance(value, str) and value.strip():
+        summary = " ".join(value.strip().split())
+        if len(summary) > 96:
+            summary = summary[:96].rstrip(" ,;:-")
+    else:
+        summary = build_fallback_summary(request_payload)
+
+    if capability == "explore":
+        explore_by = request_payload.get("explore_by") or "one angle"
+        return f"Explore {target_title} by {explore_by} with {count} branches"
+    return f"Expand {target_title} with {count} branches"
 
 
 def normalize_langchain_output(output: Any) -> dict[str, Any]:

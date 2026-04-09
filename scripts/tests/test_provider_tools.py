@@ -11,6 +11,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 
+from langchain_anthropic_runner import (
+    coerce_direct_evidence,
+    normalize_expand_like_patch,
+)
 from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
 from source_context_scenario import fixture_set_cases
@@ -27,6 +31,115 @@ def run_script(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_anthropic_runner_coerces_incomplete_direct_evidence(self) -> None:
+        request_payload = {
+            "cited_evidence": [
+                {
+                    "source_id": "source-1",
+                    "original_name": "fixture.md",
+                    "chunks": [
+                        {
+                            "chunk_id": "chunk-1",
+                            "label": "Provider Authentication Flow",
+                            "start_line": 7,
+                            "end_line": 9,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        result = coerce_direct_evidence(
+            [
+                {
+                    "source_id": "source-1",
+                    "chunk_id": "chunk-1",
+                }
+            ],
+            request_payload,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["source_name"], "fixture.md")
+        self.assertEqual(result[0]["label"], "Provider Authentication Flow")
+        self.assertEqual(result[0]["start_line"], 7)
+        self.assertEqual(result[0]["end_line"], 9)
+        self.assertTrue(result[0]["why_it_matters"])
+
+    def test_anthropic_runner_normalizes_plan_patch_quality(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-1",
+                "title": "Immediate Milestones",
+                "body": "First stabilize the runner, then verify real source nodes, then expand regressions.",
+            },
+        }
+        contract_response = {
+            "patch": {
+                "summary": "A very long patch summary that should be normalized away in favor of a concise stable summary",
+                "ops": [
+                    {
+                        "type": "add_node",
+                        "parent_id": "node-1",
+                        "title": "Stabilize Anthropic-compatible LangChain runner for the default route and verify all supporting behavior",
+                        "kind": "topic",
+                        "body": "Harden the runner so it reliably completes against the Anthropic-compatible API without errors or hangs. Includes fixing streaming, parsing, and retries.",
+                    },
+                    {
+                        "type": "add_node",
+                        "parent_id": "node-1",
+                        "title": "Verify runner on real imported source nodes",
+                        "kind": "topic",
+                        "body": "Run the stabilized runner against actual imported source nodes and confirm end-to-end correctness.",
+                    },
+                ],
+            }
+        }
+
+        normalized = normalize_expand_like_patch(
+            contract_response=contract_response,
+            request_payload=request_payload,
+        )
+
+        ops = normalized["patch"]["ops"]
+        self.assertEqual(normalized["patch"]["summary"], "Expand Immediate Milestones with 2 branches")
+        self.assertEqual(ops[0]["kind"], "action")
+        self.assertLessEqual(len(ops[0]["title"]), 64)
+        self.assertIsNotNone(ops[0]["body"])
+        self.assertLessEqual(len(ops[0]["body"]), 140)
+
+    def test_anthropic_runner_prefers_evidence_kind_for_research_context(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-2",
+                "title": "Key Findings",
+                "body": "Research synthesis with evidence, confidence gaps, and follow-up questions.",
+            },
+        }
+        contract_response = {
+            "patch": {
+                "summary": "Expand Key Findings",
+                "ops": [
+                    {
+                        "type": "add_node",
+                        "parent_id": "node-2",
+                        "title": "Consistency across pilot runs",
+                        "kind": "topic",
+                        "body": "Cross-run consistency supports confidence in the finding.",
+                    }
+                ],
+            }
+        }
+
+        normalized = normalize_expand_like_patch(
+            contract_response=contract_response,
+            request_payload=request_payload,
+        )
+
+        self.assertEqual(normalized["patch"]["ops"][0]["kind"], "evidence")
+
     def test_runner_compare_lists_presets(self) -> None:
         result = run_script("scripts/runner_compare.py", "--list-presets")
         self.assertEqual(result.returncode, 0, result.stderr)
