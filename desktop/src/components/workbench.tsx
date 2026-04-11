@@ -9,6 +9,7 @@ import type {
   NodeWorkspaceContext,
   SourceChunkDetail,
   SourceDetail,
+  TreeNode,
 } from "../types";
 import {
   cardClass,
@@ -22,8 +23,11 @@ import {
   secondaryButtonClass,
   textareaClass,
 } from "./common";
+import { NodeCanvas } from "./node-canvas";
 
 export function WorkbenchMainPane(props: {
+  tree: TreeNode | null;
+  selectedNodeId: string | null;
   nodeContext: NodeWorkspaceContext | null;
   applyResult: ApplyPatchReport | null;
   updateNodeTitle: string;
@@ -84,6 +88,23 @@ export function WorkbenchMainPane(props: {
             </div>
           </section>
         ) : null}
+
+        <section className="space-y-3 rounded-[1.5rem] border border-[color:var(--line-soft)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(249,250,251,0.88))] px-5 py-5">
+          <div className="overflow-hidden rounded-[1.25rem] border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.96))]">
+            <NodeCanvas
+              tree={props.tree}
+              selectedNodeId={props.selectedNodeId}
+              addChildTitle={props.addChildTitle}
+              addChildPlaceholder={props.t("nodeEditing.addChildTitlePlaceholder")}
+              draftAddChildLabel={props.t("nodeEditing.draftAddChild")}
+              draftAiExpandLabel={props.t("nodeEditing.draftAiExpand")}
+              onSelectNode={props.onSelectNode}
+              onAddChildTitleChange={props.onAddChildTitleChange}
+              onDraftAddChild={props.onDraftAddChild}
+              onDraftAiExpand={props.onDraftAiExpand}
+            />
+          </div>
+        </section>
 
         <section className="space-y-3 rounded-[1.5rem] border border-[color:var(--line-soft)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(249,250,251,0.88))] px-5 py-5">
           <h2

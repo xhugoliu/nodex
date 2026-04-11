@@ -1,3 +1,4 @@
+import "@xyflow/react/dist/style.css";
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 
 import { listen } from "@tauri-apps/api/event";
@@ -622,6 +623,8 @@ export default function App() {
             />
 
             <WorkbenchMainPane
+              tree={workspaceOverview.tree}
+              selectedNodeId={selectedNodeId}
               nodeContext={selectedNodeContext}
               applyResult={applyResult}
               updateNodeTitle={updateNodeTitle}
