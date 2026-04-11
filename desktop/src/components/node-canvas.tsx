@@ -4,6 +4,7 @@ import {
   Controls,
   Handle,
   MarkerType,
+  Panel,
   Position,
   ReactFlow,
   ReactFlowProvider,
@@ -11,6 +12,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type Viewport,
 } from "@xyflow/react";
 import { memo, useEffect, useMemo } from "react";
 
@@ -31,10 +33,15 @@ type CanvasNodeData = Record<string, unknown> & {
   addChildPlaceholder: string;
   draftAddChildLabel: string;
   draftAiExpandLabel: string;
+  draftAiExploreQuestionLabel: string;
+  draftAiExploreRiskLabel: string;
+  draftAiExploreActionLabel: string;
+  draftAiExploreEvidenceLabel: string;
   canDraftAddChild: boolean;
   onAddChildTitleChange: (value: string) => void;
   onDraftAddChild: () => void;
   onDraftAiExpand: () => void;
+  onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
 };
 
 type CanvasFlowNode = Node<CanvasNodeData, "mindmap">;
@@ -94,6 +101,36 @@ const nodeTypes = {
                 {data.draftAddChildLabel}
               </button>
             </div>
+            <div className="nodex-flow__node-action-grid">
+              <button
+                className="nodex-flow__node-action nodex-flow__node-action--subtle"
+                onClick={() => data.onDraftAiExplore("question")}
+                type="button"
+              >
+                {data.draftAiExploreQuestionLabel}
+              </button>
+              <button
+                className="nodex-flow__node-action nodex-flow__node-action--subtle"
+                onClick={() => data.onDraftAiExplore("risk")}
+                type="button"
+              >
+                {data.draftAiExploreRiskLabel}
+              </button>
+              <button
+                className="nodex-flow__node-action nodex-flow__node-action--subtle"
+                onClick={() => data.onDraftAiExplore("action")}
+                type="button"
+              >
+                {data.draftAiExploreActionLabel}
+              </button>
+              <button
+                className="nodex-flow__node-action nodex-flow__node-action--subtle"
+                onClick={() => data.onDraftAiExplore("evidence")}
+                type="button"
+              >
+                {data.draftAiExploreEvidenceLabel}
+              </button>
+            </div>
           </div>
         ) : null}
         <Handle
@@ -110,14 +147,25 @@ const nodeTypes = {
 export function NodeCanvas(props: {
   tree: TreeNode | null;
   selectedNodeId: string | null;
+  viewport: Viewport;
+  followSelection: boolean;
   addChildTitle: string;
   addChildPlaceholder: string;
   draftAddChildLabel: string;
   draftAiExpandLabel: string;
+  draftAiExploreQuestionLabel: string;
+  draftAiExploreRiskLabel: string;
+  draftAiExploreActionLabel: string;
+  draftAiExploreEvidenceLabel: string;
+  followSelectionLabel: string;
+  resetViewLabel: string;
   onSelectNode: (nodeId: string) => void;
   onAddChildTitleChange: (value: string) => void;
+  onViewportChange: (viewport: Viewport) => void;
+  onFollowSelectionChange: (followSelection: boolean) => void;
   onDraftAddChild: () => void;
   onDraftAiExpand: () => void;
+  onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
 }) {
   const projected = useMemo(
     () =>
@@ -129,9 +177,14 @@ export function NodeCanvas(props: {
             addChildPlaceholder: props.addChildPlaceholder,
             draftAddChildLabel: props.draftAddChildLabel,
             draftAiExpandLabel: props.draftAiExpandLabel,
+            draftAiExploreQuestionLabel: props.draftAiExploreQuestionLabel,
+            draftAiExploreRiskLabel: props.draftAiExploreRiskLabel,
+            draftAiExploreActionLabel: props.draftAiExploreActionLabel,
+            draftAiExploreEvidenceLabel: props.draftAiExploreEvidenceLabel,
             onAddChildTitleChange: props.onAddChildTitleChange,
             onDraftAddChild: props.onDraftAddChild,
             onDraftAiExpand: props.onDraftAiExpand,
+            onDraftAiExplore: props.onDraftAiExplore,
           })
         : null,
     [
@@ -139,9 +192,14 @@ export function NodeCanvas(props: {
       props.addChildTitle,
       props.draftAddChildLabel,
       props.draftAiExpandLabel,
+      props.draftAiExploreActionLabel,
+      props.draftAiExploreEvidenceLabel,
+      props.draftAiExploreQuestionLabel,
+      props.draftAiExploreRiskLabel,
       props.onAddChildTitleChange,
       props.onDraftAddChild,
       props.onDraftAiExpand,
+      props.onDraftAiExplore,
       props.selectedNodeId,
       props.tree,
     ],
@@ -161,8 +219,14 @@ export function NodeCanvas(props: {
         <NodeCanvasSurface
           edges={projected.edges}
           nodes={projected.nodes}
+          viewport={props.viewport}
+          followSelection={props.followSelection}
+          followSelectionLabel={props.followSelectionLabel}
+          resetViewLabel={props.resetViewLabel}
           selectedNodeId={props.selectedNodeId}
           onSelectNode={props.onSelectNode}
+          onViewportChange={props.onViewportChange}
+          onFollowSelectionChange={props.onFollowSelectionChange}
         />
       </ReactFlowProvider>
     </div>
@@ -172,8 +236,14 @@ export function NodeCanvas(props: {
 function NodeCanvasSurface(props: {
   nodes: CanvasFlowNode[];
   edges: Edge[];
+  viewport: Viewport;
+  followSelection: boolean;
+  followSelectionLabel: string;
+  resetViewLabel: string;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
+  onViewportChange: (viewport: Viewport) => void;
+  onFollowSelectionChange: (followSelection: boolean) => void;
 }) {
   const typedNodeTypes = nodeTypes;
 
@@ -202,8 +272,10 @@ function NodeCanvasSurface(props: {
       nodesDraggable={false}
       nodeTypes={typedNodeTypes}
       onNodeClick={(_event, node) => props.onSelectNode(node.id)}
+      onViewportChange={props.onViewportChange}
       proOptions={{ hideAttribution: true }}
       selectionOnDrag={false}
+      viewport={props.viewport}
       zoomOnDoubleClick={false}
     >
       <Background
@@ -213,8 +285,19 @@ function NodeCanvasSurface(props: {
         variant={BackgroundVariant.Dots}
       />
       <Controls position="bottom-right" showInteractive={false} />
-      <CanvasViewportController
+      <CanvasViewportPanel
+        followSelection={props.followSelection}
+        followSelectionLabel={props.followSelectionLabel}
         nodes={props.nodes}
+        onFollowSelectionChange={props.onFollowSelectionChange}
+        onViewportChange={props.onViewportChange}
+        resetViewLabel={props.resetViewLabel}
+        selectedNodeId={props.selectedNodeId}
+      />
+      <CanvasViewportController
+        followSelection={props.followSelection}
+        nodes={props.nodes}
+        onViewportChange={props.onViewportChange}
         selectedNodeId={props.selectedNodeId}
       />
     </ReactFlow>
@@ -222,13 +305,15 @@ function NodeCanvasSurface(props: {
 }
 
 function CanvasViewportController(props: {
+  followSelection: boolean;
   nodes: CanvasFlowNode[];
+  onViewportChange: (viewport: Viewport) => void;
   selectedNodeId: string | null;
 }) {
   const reactFlow = useReactFlow<CanvasFlowNode, Edge>();
 
   useEffect(() => {
-    if (!props.nodes.length) {
+    if (!props.followSelection || !props.nodes.length) {
       return;
     }
 
@@ -237,21 +322,95 @@ function CanvasViewportController(props: {
       : null;
 
     if (!targetNode) {
-      void reactFlow.fitView({
-        duration: 360,
-        maxZoom: 0.96,
-        padding: 0.24,
-      });
+      void reactFlow
+        .fitView({
+          duration: 360,
+          maxZoom: 0.96,
+          padding: 0.24,
+        })
+        .then(() => {
+          props.onViewportChange(reactFlow.getViewport());
+        });
       return;
     }
 
-    void reactFlow.setCenter(targetNode.position.x, targetNode.position.y, {
-      duration: 360,
-      zoom: targetNode.data.isRoot ? 0.82 : 1.02,
-    });
-  }, [props.nodes, props.selectedNodeId, reactFlow]);
+    void reactFlow
+      .setCenter(targetNode.position.x, targetNode.position.y, {
+        duration: 360,
+        zoom: targetNode.data.isRoot ? 0.82 : 1.02,
+      })
+      .then(() => {
+        props.onViewportChange(reactFlow.getViewport());
+      });
+  }, [
+    props.followSelection,
+    props.nodes,
+    props.onViewportChange,
+    props.selectedNodeId,
+    reactFlow,
+  ]);
 
   return null;
+}
+
+function CanvasViewportPanel(props: {
+  followSelection: boolean;
+  followSelectionLabel: string;
+  nodes: CanvasFlowNode[];
+  onFollowSelectionChange: (followSelection: boolean) => void;
+  onViewportChange: (viewport: Viewport) => void;
+  resetViewLabel: string;
+  selectedNodeId: string | null;
+}) {
+  const reactFlow = useReactFlow<CanvasFlowNode, Edge>();
+
+  return (
+    <Panel position="top-right">
+      <div className="nodex-flow__panel">
+        <label className="nodex-flow__panel-toggle">
+          <input
+            checked={props.followSelection}
+            onChange={(event) => props.onFollowSelectionChange(event.target.checked)}
+            type="checkbox"
+          />
+          <span>{props.followSelectionLabel}</span>
+        </label>
+        <button
+          className="nodex-flow__panel-button"
+          onClick={() => {
+            const targetNode = props.selectedNodeId
+              ? props.nodes.find((node) => node.id === props.selectedNodeId)
+              : null;
+
+            props.onFollowSelectionChange(true);
+
+            if (!targetNode) {
+              void reactFlow.fitView({
+                duration: 260,
+                maxZoom: 0.96,
+                padding: 0.24,
+              }).then(() => {
+                props.onViewportChange(reactFlow.getViewport());
+              });
+              return;
+            }
+
+            void reactFlow
+              .setCenter(targetNode.position.x, targetNode.position.y, {
+                duration: 260,
+                zoom: targetNode.data.isRoot ? 0.82 : 1.02,
+              })
+              .then(() => {
+                props.onViewportChange(reactFlow.getViewport());
+              });
+          }}
+          type="button"
+        >
+          {props.resetViewLabel}
+        </button>
+      </div>
+    </Panel>
+  );
 }
 
 function buildCanvasProjection(input: {
@@ -261,9 +420,14 @@ function buildCanvasProjection(input: {
   addChildPlaceholder: string;
   draftAddChildLabel: string;
   draftAiExpandLabel: string;
+  draftAiExploreQuestionLabel: string;
+  draftAiExploreRiskLabel: string;
+  draftAiExploreActionLabel: string;
+  draftAiExploreEvidenceLabel: string;
   onAddChildTitleChange: (value: string) => void;
   onDraftAddChild: () => void;
   onDraftAiExpand: () => void;
+  onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
 }): {
   nodes: CanvasFlowNode[];
   edges: Edge[];
@@ -299,6 +463,10 @@ function buildCanvasProjection(input: {
           input.addChildTitle.trim().length > 0,
         draftAddChildLabel: input.draftAddChildLabel,
         draftAiExpandLabel: input.draftAiExpandLabel,
+        draftAiExploreQuestionLabel: input.draftAiExploreQuestionLabel,
+        draftAiExploreRiskLabel: input.draftAiExploreRiskLabel,
+        draftAiExploreActionLabel: input.draftAiExploreActionLabel,
+        draftAiExploreEvidenceLabel: input.draftAiExploreEvidenceLabel,
         title: treeNode.node.title,
         kind: treeNode.node.kind,
         childCount: treeNode.children.length,
@@ -306,6 +474,7 @@ function buildCanvasProjection(input: {
         onAddChildTitleChange: input.onAddChildTitleChange,
         onDraftAddChild: input.onDraftAddChild,
         onDraftAiExpand: input.onDraftAiExpand,
+        onDraftAiExplore: input.onDraftAiExplore,
       },
       position: {
         x: depth * NODE_X_GAP,

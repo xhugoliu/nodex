@@ -89,6 +89,12 @@ const translations: Record<Locale, TranslationTree> = {
       secondaryChangesBody:
         "Move or delete only when the branch shape is clearly wrong.",
       usedAsEvidence: "used as evidence",
+      canvasFollowSelection: "Follow selection",
+      canvasResetView: "Reset view",
+      childrenStat: "{count} children",
+      sourcesStat: "{count} sources",
+      editNodeOpen: "Edit text",
+      editNodeClose: "Hide editor",
     },
     sidebar: {
       workspace: "Workspace",
@@ -584,6 +590,12 @@ const translations: Record<Locale, TranslationTree> = {
       secondaryChanges: "低频结构调整",
       secondaryChangesBody: "只有当分支形状明显不对时，才在这里移动或删除节点。",
       usedAsEvidence: "已作为证据",
+      canvasFollowSelection: "跟随当前节点",
+      canvasResetView: "重置视图",
+      childrenStat: "{count} 个子节点",
+      sourcesStat: "{count} 个来源",
+      editNodeOpen: "编辑文本",
+      editNodeClose: "收起编辑",
     },
     sidebar: {
       workspace: "工作区",

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import {
   describePatchOperation,
   type PatchDraftState,
@@ -28,26 +30,27 @@ import { NodeCanvas } from "./node-canvas";
 export function WorkbenchMainPane(props: {
   tree: TreeNode | null;
   selectedNodeId: string | null;
-  nodeContext: NodeWorkspaceContext | null;
-  applyResult: ApplyPatchReport | null;
-  updateNodeTitle: string;
-  updateNodeBody: string;
+  canvasViewport: {
+    x: number;
+    y: number;
+    zoom: number;
+  };
+  canvasFollowSelection: boolean;
   addChildTitle: string;
-  addChildBody: string;
   t: Translator;
-  onTitleChange: (value: string) => void;
-  onBodyChange: (value: string) => void;
   onAddChildTitleChange: (value: string) => void;
-  onAddChildBodyChange: (value: string) => void;
+  onCanvasViewportChange: (viewport: {
+    x: number;
+    y: number;
+    zoom: number;
+  }) => void;
+  onCanvasFollowSelectionChange: (followSelection: boolean) => void;
   onSelectNode: (nodeId: string) => void;
-  onOpenCreatedNode: (nodeId: string) => void;
-  onOpenSource: (sourceId: string) => void;
   onDraftAiExpand: () => void;
   onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
   onDraftAddChild: () => void;
-  onDraftUpdate: () => void;
 }) {
-  if (!props.nodeContext) {
+  if (!props.tree) {
     return (
       <section className={`${panelClass} flex min-h-0 flex-col`}>
         <EmptyState
@@ -58,196 +61,32 @@ export function WorkbenchMainPane(props: {
     );
   }
 
-  const detail = props.nodeContext.node_detail;
-
   return (
-    <section className={`${panelClass} scroll-panel min-h-0 overflow-auto`}>
-      <div className="space-y-5">
-        {props.applyResult ? (
-          <section className="rounded-[1.5rem] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-5 py-4">
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-[color:var(--text)]">
-                {props.t("workbench.applyResultTitle")}
-              </div>
-              <div className="text-sm leading-6 text-[color:var(--text)]">
-                {props.applyResult.summary || props.t("reports.patchApplied")}
-              </div>
-              {props.applyResult.created_nodes.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {props.applyResult.created_nodes.map((node) => (
-                    <button
-                      key={node.id}
-                      className={ghostButtonClass}
-                      onClick={() => props.onOpenCreatedNode(node.id)}
-                    >
-                      {node.title}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="space-y-3 rounded-[1.5rem] border border-[color:var(--line-soft)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(249,250,251,0.88))] px-5 py-5">
-          <div className="overflow-hidden rounded-[1.25rem] border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.96))]">
-            <NodeCanvas
-              tree={props.tree}
-              selectedNodeId={props.selectedNodeId}
-              addChildTitle={props.addChildTitle}
-              addChildPlaceholder={props.t("nodeEditing.addChildTitlePlaceholder")}
-              draftAddChildLabel={props.t("nodeEditing.draftAddChild")}
-              draftAiExpandLabel={props.t("nodeEditing.draftAiExpand")}
-              onSelectNode={props.onSelectNode}
-              onAddChildTitleChange={props.onAddChildTitleChange}
-              onDraftAddChild={props.onDraftAddChild}
-              onDraftAiExpand={props.onDraftAiExpand}
-            />
-          </div>
-        </section>
-
-        <section className="space-y-3 rounded-[1.5rem] border border-[color:var(--line-soft)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(249,250,251,0.88))] px-5 py-5">
-          <h2
-            className="text-3xl font-semibold text-[color:var(--text)]"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            {detail.node.title}
-          </h2>
-          <p className="whitespace-pre-wrap text-sm leading-7 text-[color:var(--text)]">
-            {detail.node.body || props.t("detail.noBody")}
-          </p>
-        </section>
-
-        <section className={`${cardClass} space-y-3`}>
-          <div className="flex flex-wrap gap-2">
-            <button className={primaryButtonClass} onClick={props.onDraftAiExpand}>
-              {props.t("nodeEditing.draftAiExpand")}
-            </button>
-            <button
-              className={secondaryButtonClass}
-              onClick={() => props.onDraftAiExplore("question")}
-            >
-              {props.t("nodeEditing.draftAiExploreQuestion")}
-            </button>
-            <button
-              className={secondaryButtonClass}
-              onClick={() => props.onDraftAiExplore("risk")}
-            >
-              {props.t("nodeEditing.draftAiExploreRisk")}
-            </button>
-            <button
-              className={secondaryButtonClass}
-              onClick={() => props.onDraftAiExplore("action")}
-            >
-              {props.t("nodeEditing.draftAiExploreAction")}
-            </button>
-            <button
-              className={secondaryButtonClass}
-              onClick={() => props.onDraftAiExplore("evidence")}
-            >
-              {props.t("nodeEditing.draftAiExploreEvidence")}
-            </button>
-          </div>
-        </section>
-
-        {detail.children.length ? (
-          <section className={`${cardClass} space-y-3`}>
-            <div className="text-sm font-medium text-[color:var(--text)]">
-              {props.t("workbench.childrenTitle")}
-            </div>
-            <div className="grid gap-2">
-              {detail.children.slice(0, 6).map((child) => (
-                <button
-                  key={child.id}
-                  className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-3 py-3 text-left transition hover:border-[rgba(17,24,39,0.18)]"
-                  onClick={() => props.onSelectNode(child.id)}
-                >
-                  <div className="text-sm font-medium text-[color:var(--text)]">
-                    {child.title}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="grid gap-4 xl:grid-cols-2">
-          <div className={`${cardClass} space-y-4`}>
-            <div className="text-sm font-medium text-[color:var(--text)]">
-              {props.t("workbench.addChildTitle")}
-            </div>
-            <LabeledField label={props.t("fields.title")}>
-              <input
-                className={inputClass}
-                value={props.addChildTitle}
-                placeholder={props.t("nodeEditing.addChildTitlePlaceholder")}
-                onChange={(event) => props.onAddChildTitleChange(event.target.value)}
-              />
-            </LabeledField>
-            <LabeledField label={props.t("fields.body")}>
-              <textarea
-                className={textareaClass}
-                value={props.addChildBody}
-                onChange={(event) => props.onAddChildBodyChange(event.target.value)}
-              />
-            </LabeledField>
-            <button className={primaryButtonClass} onClick={props.onDraftAddChild}>
-              {props.t("nodeEditing.draftAddChild")}
-            </button>
-          </div>
-
-          <div className={`${cardClass} space-y-4`}>
-            <div className="text-sm font-medium text-[color:var(--text)]">
-              {props.t("workbench.editNodeTitle")}
-            </div>
-            <LabeledField label={props.t("fields.title")}>
-              <input
-                className={inputClass}
-                value={props.updateNodeTitle}
-                onChange={(event) => props.onTitleChange(event.target.value)}
-              />
-            </LabeledField>
-            <LabeledField label={props.t("fields.body")}>
-              <textarea
-                className={textareaClass}
-                value={props.updateNodeBody}
-                onChange={(event) => props.onBodyChange(event.target.value)}
-              />
-            </LabeledField>
-            <button className={secondaryButtonClass} onClick={props.onDraftUpdate}>
-              {props.t("nodeEditing.draftUpdate")}
-            </button>
-          </div>
-        </section>
-
-        <section className={`${cardClass} space-y-3`}>
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("workbench.sourcesTitle")}
-          </div>
-          {detail.sources.length || detail.evidence.length ? (
-            <div className="grid gap-3 lg:grid-cols-2">
-              {detail.sources.map((source) => (
-                <SourceCard
-                  key={`source-${source.source.id}`}
-                  title={source.source.original_name}
-                  summary={summarizeChunkLabels(source.chunks, props.t)}
-                  onClick={() => props.onOpenSource(source.source.id)}
-                />
-              ))}
-              {detail.evidence.map((source) => (
-                <SourceCard
-                  key={`evidence-${source.source.id}`}
-                  title={source.source.original_name}
-                  summary={summarizeChunkLabels(source.chunks, props.t)}
-                  tone="evidence"
-                  onClick={() => props.onOpenSource(source.source.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyBox>{props.t("detail.noSourceLinks")}</EmptyBox>
-          )}
-        </section>
+    <section className={`${panelClass} min-h-0 overflow-hidden p-3`}>
+      <div className="h-full overflow-hidden rounded-[1.25rem] border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.96))]">
+        <NodeCanvas
+          tree={props.tree}
+          selectedNodeId={props.selectedNodeId}
+          viewport={props.canvasViewport}
+          followSelection={props.canvasFollowSelection}
+          addChildTitle={props.addChildTitle}
+          addChildPlaceholder={props.t("nodeEditing.addChildTitlePlaceholder")}
+          draftAddChildLabel={props.t("nodeEditing.draftAddChild")}
+          draftAiExpandLabel={props.t("nodeEditing.draftAiExpand")}
+          draftAiExploreQuestionLabel={props.t("nodeEditing.draftAiExploreQuestion")}
+          draftAiExploreRiskLabel={props.t("nodeEditing.draftAiExploreRisk")}
+          draftAiExploreActionLabel={props.t("nodeEditing.draftAiExploreAction")}
+          draftAiExploreEvidenceLabel={props.t("nodeEditing.draftAiExploreEvidence")}
+          followSelectionLabel={props.t("workbench.canvasFollowSelection")}
+          resetViewLabel={props.t("workbench.canvasResetView")}
+          onSelectNode={props.onSelectNode}
+          onAddChildTitleChange={props.onAddChildTitleChange}
+          onViewportChange={props.onCanvasViewportChange}
+          onFollowSelectionChange={props.onCanvasFollowSelectionChange}
+          onDraftAddChild={props.onDraftAddChild}
+          onDraftAiExpand={props.onDraftAiExpand}
+          onDraftAiExplore={props.onDraftAiExplore}
+        />
       </div>
     </section>
   );
@@ -256,14 +95,21 @@ export function WorkbenchMainPane(props: {
 export function WorkbenchSidePane(props: {
   selectionTab: "context" | "review";
   nodeContext: NodeWorkspaceContext | null;
+  applyResult: ApplyPatchReport | null;
+  updateNodeTitle: string;
+  updateNodeBody: string;
   selectedSourceDetail: SourceDetail | null;
   selectedSourceChunkId: string | null;
   reviewDraft: DraftReviewPayload | null;
   patchDraftState: PatchDraftState;
   t: Translator;
   onSelectSelectionTab: (tab: "context" | "review") => void;
+  onTitleChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
   onOpenSource: (sourceId: string) => void;
+  onOpenCreatedNode: (nodeId: string) => void;
   onBackToNodeContext: () => void;
+  onDraftUpdate: () => void;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
 }) {
@@ -303,9 +149,16 @@ export function WorkbenchSidePane(props: {
             />
           ) : (
             <NodeContextSurface
+              applyResult={props.applyResult}
               nodeContext={props.nodeContext}
+              updateNodeTitle={props.updateNodeTitle}
+              updateNodeBody={props.updateNodeBody}
               t={props.t}
+              onTitleChange={props.onTitleChange}
+              onBodyChange={props.onBodyChange}
               onOpenSource={props.onOpenSource}
+              onOpenCreatedNode={props.onOpenCreatedNode}
+              onDraftUpdate={props.onDraftUpdate}
             />
           )}
         </div>
@@ -315,10 +168,23 @@ export function WorkbenchSidePane(props: {
 }
 
 function NodeContextSurface(props: {
+  applyResult: ApplyPatchReport | null;
   nodeContext: NodeWorkspaceContext | null;
+  updateNodeTitle: string;
+  updateNodeBody: string;
   t: Translator;
+  onTitleChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
   onOpenSource: (sourceId: string) => void;
+  onOpenCreatedNode: (nodeId: string) => void;
+  onDraftUpdate: () => void;
 }) {
+  const [isEditOpen, setIsEditOpen] = useState(false);
+
+  useEffect(() => {
+    setIsEditOpen(false);
+  }, [props.nodeContext?.node_detail.node.id]);
+
   if (!props.nodeContext) {
     return (
       <EmptyState
@@ -332,6 +198,98 @@ function NodeContextSurface(props: {
 
   return (
     <div className="space-y-4">
+      {props.applyResult ? (
+        <section className="rounded-[1.5rem] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-4 py-4">
+          <div className="space-y-3">
+            <div className="text-sm font-medium text-[color:var(--text)]">
+              {props.t("workbench.applyResultTitle")}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--text)]">
+              {props.applyResult.summary || props.t("reports.patchApplied")}
+            </div>
+            {props.applyResult.created_nodes.length ? (
+              <div className="flex flex-wrap gap-2">
+                {props.applyResult.created_nodes.map((node) => (
+                  <button
+                    key={node.id}
+                    className={ghostButtonClass}
+                    onClick={() => props.onOpenCreatedNode(node.id)}
+                  >
+                    {node.title}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      <section className={`${cardClass} space-y-3`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-2">
+            <div
+              className="text-xl font-semibold text-[color:var(--text)]"
+              style={{ fontFamily: "var(--font-serif)" }}
+            >
+              {detail.node.title}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {detail.node.kind}
+              </span>
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {props.t("workbench.childrenStat", {
+                  count: detail.children.length,
+                })}
+              </span>
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {props.t("workbench.sourcesStat", {
+                  count: detail.sources.length + detail.evidence.length,
+                })}
+              </span>
+            </div>
+          </div>
+          <button
+            className={ghostButtonClass}
+            onClick={() => setIsEditOpen((current) => !current)}
+          >
+            {isEditOpen
+              ? props.t("workbench.editNodeClose")
+              : props.t("workbench.editNodeOpen")}
+          </button>
+        </div>
+        <p className="text-sm leading-7 text-[color:var(--text)]">
+          {detail.node.body
+            ? clipText(detail.node.body, 220)
+            : props.t("detail.noBody")}
+        </p>
+      </section>
+
+      {isEditOpen ? (
+        <section className={`${cardClass} space-y-4`}>
+          <div className="text-sm font-medium text-[color:var(--text)]">
+            {props.t("workbench.editNodeTitle")}
+          </div>
+          <LabeledField label={props.t("fields.title")}>
+            <input
+              className={inputClass}
+              value={props.updateNodeTitle}
+              onChange={(event) => props.onTitleChange(event.target.value)}
+            />
+          </LabeledField>
+          <LabeledField label={props.t("fields.body")}>
+            <textarea
+              className={textareaClass}
+              value={props.updateNodeBody}
+              onChange={(event) => props.onBodyChange(event.target.value)}
+            />
+          </LabeledField>
+          <button className={secondaryButtonClass} onClick={props.onDraftUpdate}>
+            {props.t("nodeEditing.draftUpdate")}
+          </button>
+        </section>
+      ) : null}
+
       {detail.sources.length ? (
         <section className={`${cardClass} space-y-3`}>
           <div className="text-sm font-medium text-[color:var(--text)]">

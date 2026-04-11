@@ -10,7 +10,6 @@ import {
   findNodeById,
   formatError,
   inspectPatchDraft,
-  optionalText,
   renderPatchReport,
   type ConsoleTone,
 } from "./app-helpers";
@@ -39,6 +38,71 @@ import type {
 interface ConsoleEntry {
   message: string;
   tone: ConsoleTone;
+}
+
+interface CanvasViewport {
+  x: number;
+  y: number;
+  zoom: number;
+}
+
+interface CanvasViewState {
+  viewport: CanvasViewport;
+  followSelection: boolean;
+}
+
+const CANVAS_VIEW_STORAGE_KEY = "nodex.desktop.canvas-view";
+const DEFAULT_CANVAS_VIEW_STATE: CanvasViewState = {
+  viewport: {
+    x: 0,
+    y: 0,
+    zoom: 0.82,
+  },
+  followSelection: true,
+};
+
+function canvasViewStorageKey(workspacePath: string) {
+  return `${CANVAS_VIEW_STORAGE_KEY}:${workspacePath}`;
+}
+
+function loadCanvasViewState(workspacePath: string): CanvasViewState {
+  if (!workspacePath || typeof window === "undefined") {
+    return DEFAULT_CANVAS_VIEW_STATE;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(canvasViewStorageKey(workspacePath));
+    if (!raw) {
+      return DEFAULT_CANVAS_VIEW_STATE;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<CanvasViewState> & {
+      viewport?: Partial<CanvasViewport>;
+    };
+
+    return {
+      followSelection:
+        typeof parsed.followSelection === "boolean"
+          ? parsed.followSelection
+          : DEFAULT_CANVAS_VIEW_STATE.followSelection,
+      viewport: {
+        x:
+          typeof parsed.viewport?.x === "number"
+            ? parsed.viewport.x
+            : DEFAULT_CANVAS_VIEW_STATE.viewport.x,
+        y:
+          typeof parsed.viewport?.y === "number"
+            ? parsed.viewport.y
+            : DEFAULT_CANVAS_VIEW_STATE.viewport.y,
+        zoom:
+          typeof parsed.viewport?.zoom === "number"
+            ? parsed.viewport.zoom
+            : DEFAULT_CANVAS_VIEW_STATE.viewport.zoom,
+      },
+    };
+  } catch {
+    return DEFAULT_CANVAS_VIEW_STATE;
+  }
 }
 
 interface WorkspaceLoadedEvent {
@@ -86,9 +150,10 @@ export default function App() {
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeBody, setUpdateNodeBody] = useState("");
   const [addChildTitle, setAddChildTitle] = useState("");
-  const [addChildBody, setAddChildBody] = useState("");
   const [treeQuery, setTreeQuery] = useState("");
   const [consoleEntry, setConsoleEntry] = useState<ConsoleEntry | null>(null);
+  const [canvasViewState, setCanvasViewState] =
+    useState<CanvasViewState>(DEFAULT_CANVAS_VIEW_STATE);
 
   const locale =
     languagePreference === "auto" ? systemLocale : languagePreference;
@@ -100,6 +165,17 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(LANGUAGE_STORAGE_KEY, languagePreference);
   }, [languagePreference]);
+
+  useEffect(() => {
+    if (!workspacePath) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      canvasViewStorageKey(workspacePath),
+      JSON.stringify(canvasViewState),
+    );
+  }, [canvasViewState, workspacePath]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -132,14 +208,12 @@ export default function App() {
       setUpdateNodeTitle("");
       setUpdateNodeBody("");
       setAddChildTitle("");
-      setAddChildBody("");
       return;
     }
 
     setUpdateNodeTitle(selectedNodeContext.node_detail.node.title ?? "");
     setUpdateNodeBody(selectedNodeContext.node_detail.node.body ?? "");
     setAddChildTitle("");
-    setAddChildBody("");
   }, [selectedNodeContext]);
 
   useEffect(() => {
@@ -246,10 +320,15 @@ export default function App() {
     overview: WorkspaceOverview,
     options: { preserveSelection?: boolean; skipAutoSelect?: boolean } = {},
   ) {
+    const workspaceChanged = overview.root_dir !== workspacePath;
+
     startTransition(() => {
       setWorkspaceOverview(overview);
       setWorkspacePath(overview.root_dir);
       setTreeQuery("");
+      if (workspaceChanged) {
+        setCanvasViewState(loadCanvasViewState(overview.root_dir));
+      }
     });
 
     if (
@@ -498,7 +577,7 @@ export default function App() {
         title,
         parent_id: selectedNodeId,
         kind: "topic",
-        body: optionalText(addChildBody),
+        body: null,
         position: null,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
@@ -607,7 +686,7 @@ export default function App() {
     <div className="flex h-screen w-full flex-col gap-3 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.96),rgba(243,244,246,0.98),rgba(229,231,235,0.92))] px-3 py-3">
       {workspaceOverview ? (
         <main className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[264px_minmax(0,1.42fr)_320px] 2xl:grid-cols-[272px_minmax(0,1.5fr)_336px]">
             <TreePane
               workspaceOverview={workspaceOverview}
               treeSummary={treeSummary}
@@ -625,25 +704,25 @@ export default function App() {
             <WorkbenchMainPane
               tree={workspaceOverview.tree}
               selectedNodeId={selectedNodeId}
-              nodeContext={selectedNodeContext}
-              applyResult={applyResult}
-              updateNodeTitle={updateNodeTitle}
-              updateNodeBody={updateNodeBody}
+              canvasViewport={canvasViewState.viewport}
+              canvasFollowSelection={canvasViewState.followSelection}
               addChildTitle={addChildTitle}
-              addChildBody={addChildBody}
               t={t}
-              onTitleChange={setUpdateNodeTitle}
-              onBodyChange={setUpdateNodeBody}
               onAddChildTitleChange={setAddChildTitle}
-              onAddChildBodyChange={setAddChildBody}
+              onCanvasViewportChange={(viewport) => {
+                setCanvasViewState((current) => ({
+                  ...current,
+                  viewport,
+                }));
+              }}
+              onCanvasFollowSelectionChange={(followSelection) => {
+                setCanvasViewState((current) => ({
+                  ...current,
+                  followSelection,
+                }));
+              }}
               onSelectNode={(nodeId) => {
                 void fetchNodeContext(nodeId);
-              }}
-              onOpenCreatedNode={(nodeId) => {
-                void fetchNodeContext(nodeId);
-              }}
-              onOpenSource={(sourceId) => {
-                void fetchSourceDetail(sourceId);
               }}
               onDraftAiExpand={() => {
                 void draftAiExpandPatch();
@@ -654,26 +733,34 @@ export default function App() {
               onDraftAddChild={() => {
                 void draftAddChildPatch();
               }}
-              onDraftUpdate={() => {
-                void draftUpdateNodePatch();
-              }}
             />
 
             <WorkbenchSidePane
               selectionTab={selectionPanelTab}
               nodeContext={selectedNodeContext}
+              applyResult={applyResult}
+              updateNodeTitle={updateNodeTitle}
+              updateNodeBody={updateNodeBody}
               selectedSourceDetail={selectedSourceDetail}
               selectedSourceChunkId={null}
               reviewDraft={reviewDraft}
               patchDraftState={patchDraftState}
               t={t}
               onSelectSelectionTab={setSelectionPanelTab}
+              onTitleChange={setUpdateNodeTitle}
+              onBodyChange={setUpdateNodeBody}
               onOpenSource={(sourceId) => {
                 void fetchSourceDetail(sourceId);
+              }}
+              onOpenCreatedNode={(nodeId) => {
+                void fetchNodeContext(nodeId);
               }}
               onBackToNodeContext={() => {
                 setSelectedSourceId(null);
                 setSelectedSourceDetail(null);
+              }}
+              onDraftUpdate={() => {
+                void draftUpdateNodePatch();
               }}
               onPreviewPatch={() => {
                 void previewPatch();
