@@ -180,7 +180,7 @@
 当前基础：
 
 - 已有复用共享 Rust 内核的过渡性 Tauri 桌面壳
-- 已形成树、详情和编辑器组成的基础工作台，并保留 patch preview / apply 边界
+- 已形成“可折叠导航轨 + 中栏纯画布 + 右栏上下文 / review”的基础工作台，并保留 patch preview / apply 边界
 - 已接通 source import、snapshot、history、evidence draft 和 AI draft 的最小入口
 - 已验证桌面端可以复用现有 patch、source 和 AI 审计链路
 - 桌面 v2 的画布层方向当前已收敛到 `React Flow`，但它仍只承担交互与呈现，不替代 patch / store / ai 边界

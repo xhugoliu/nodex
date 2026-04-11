@@ -152,15 +152,18 @@ AI request / response 编排层。
 
 - 维持一层单屏、薄壳的桌面工作台
 - 提供三块核心区域：
-  - 左栏：树视图
-  - 中栏：节点工作区
+  - 左栏：可折叠导航轨 / 树视图
+  - 中栏：纯画布工作区
   - 右栏：`Context / Review`
 - 负责把节点编辑动作起草为 patch
 - 负责把 AI expand / explore 结果送入 review 层
 - 负责在 review 层展示理由摘要、direct evidence 和 patch 预览
+- 负责把 `Expand` / `Explore` / `Add Child` 这类高频入口尽量收回画布节点卡片，而不是长期散落在画布外
+- 负责把节点摘要、来源上下文、apply 完成态和按需编辑收口到右栏 `Context`
 - 负责在 apply 后把用户继续带到最合适的节点：
   - 优先聚焦本次 patch 新增的节点
   - 如果没有新增节点，则回到当前节点
+- 负责记住纯视图层状态，例如 viewport、follow-selection、导航轨折叠态
 - 负责把来源上下文收成默认可见的信息，而不是把 request / response / artifact 暴露到主界面
 - 监听原生菜单事件并更新页面状态
 - 当前这层前端已经证明共享内核、patch 编辑链路和 AI draft review 都能接进桌面环境
