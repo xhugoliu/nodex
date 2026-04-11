@@ -184,6 +184,7 @@
 - 已接通 source import、snapshot、history、evidence draft 和 AI draft 的最小入口
 - 已验证桌面端可以复用现有 patch、source 和 AI 审计链路
 - 桌面 v2 的画布层方向当前已收敛到 `React Flow`，但它仍只承担交互与呈现，不替代 patch / store / ai 边界
+- 当前画布层也已开始承接纯 view-state，例如节点展开 / 折叠、局部聚焦、viewport 和记忆化导航状态
 - 但当前前端仍暴露较多底层概念，更接近调试 / 审计壳，不应被视为已经达到“人类可用桌面产品”目标
 
 长期方向补充：

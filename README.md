@@ -36,7 +36,7 @@ cargo run -- export outline
 - 多 provider 调试工具链：`anthropic` / `openai` / `codex` / `gemini` runner，统一 `doctor` / `status` / `providers` / `smoke`
 - LangChain 最小试点：`scripts/langchain_openai_runner.py` 继续复用同一套 external runner contract 和本地审计边界
 - Anthropic-compatible LangChain 主路：`scripts/langchain_anthropic_runner.py` 已成为当前默认推荐试点链路
-- 过渡性 Tauri 桌面壳：可折叠导航轨、中栏纯 `React Flow` 画布、右栏 `Context / Review`、画布内节点动作、apply 后继续聚焦新增节点、原生菜单驱动的低频动作
+- 过渡性 Tauri 桌面壳：可折叠导航轨、中栏纯 `React Flow` 画布、右栏 `Context / Review`、画布内节点动作、节点展开 / 折叠、局部聚焦模式、apply 后继续聚焦新增节点、原生菜单驱动的低频动作
   这层桌面壳已经证明共享内核可以被桌面端复用，但当前仍是一版最小节点工作流验证，不代表最终人类可用产品形态
 
 当前还没落地：

@@ -29,6 +29,7 @@ type CanvasNodeData = Record<string, unknown> & {
   kind: string;
   childCount: number;
   isRoot: boolean;
+  isCollapsed: boolean;
   addChildTitle: string;
   addChildPlaceholder: string;
   draftAddChildLabel: string;
@@ -37,8 +38,11 @@ type CanvasNodeData = Record<string, unknown> & {
   draftAiExploreRiskLabel: string;
   draftAiExploreActionLabel: string;
   draftAiExploreEvidenceLabel: string;
+  collapseNodeLabel: string;
+  expandNodeLabel: string;
   canDraftAddChild: boolean;
   onAddChildTitleChange: (value: string) => void;
+  onToggleCollapse: () => void;
   onDraftAddChild: () => void;
   onDraftAiExpand: () => void;
   onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
@@ -68,9 +72,25 @@ const nodeTypes = {
             <div className="nodex-flow__node-title">{data.title}</div>
             <div className="nodex-flow__node-kind">{data.kind}</div>
           </div>
-          {data.childCount ? (
-            <div className="nodex-flow__node-pill">{data.childCount}</div>
-          ) : null}
+          <div className="flex items-center gap-2">
+            {data.childCount ? (
+              <button
+                className="nodex-flow__node-icon-button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  data.onToggleCollapse();
+                }}
+                aria-label={data.isCollapsed ? data.expandNodeLabel : data.collapseNodeLabel}
+                title={data.isCollapsed ? data.expandNodeLabel : data.collapseNodeLabel}
+                type="button"
+              >
+                {data.isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+              </button>
+            ) : null}
+            {data.childCount ? (
+              <div className="nodex-flow__node-pill">{data.childCount}</div>
+            ) : null}
+          </div>
         </div>
         {selected ? (
           <div
@@ -149,6 +169,8 @@ export function NodeCanvas(props: {
   selectedNodeId: string | null;
   viewport: Viewport;
   followSelection: boolean;
+  focusMode: "all" | "selection";
+  collapsedNodeIds: string[];
   addChildTitle: string;
   addChildPlaceholder: string;
   draftAddChildLabel: string;
@@ -157,12 +179,18 @@ export function NodeCanvas(props: {
   draftAiExploreRiskLabel: string;
   draftAiExploreActionLabel: string;
   draftAiExploreEvidenceLabel: string;
+  collapseNodeLabel: string;
+  expandNodeLabel: string;
+  focusAllLabel: string;
+  focusSelectionLabel: string;
   followSelectionLabel: string;
   resetViewLabel: string;
   onSelectNode: (nodeId: string) => void;
   onAddChildTitleChange: (value: string) => void;
   onViewportChange: (viewport: Viewport) => void;
   onFollowSelectionChange: (followSelection: boolean) => void;
+  onFocusModeChange: (focusMode: "all" | "selection") => void;
+  onToggleCollapse: (nodeId: string) => void;
   onDraftAddChild: () => void;
   onDraftAiExpand: () => void;
   onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
@@ -173,6 +201,8 @@ export function NodeCanvas(props: {
         ? buildCanvasProjection({
             tree: props.tree,
             selectedNodeId: props.selectedNodeId,
+            focusMode: props.focusMode,
+            collapsedNodeIds: props.collapsedNodeIds,
             addChildTitle: props.addChildTitle,
             addChildPlaceholder: props.addChildPlaceholder,
             draftAddChildLabel: props.draftAddChildLabel,
@@ -181,7 +211,10 @@ export function NodeCanvas(props: {
             draftAiExploreRiskLabel: props.draftAiExploreRiskLabel,
             draftAiExploreActionLabel: props.draftAiExploreActionLabel,
             draftAiExploreEvidenceLabel: props.draftAiExploreEvidenceLabel,
+            collapseNodeLabel: props.collapseNodeLabel,
+            expandNodeLabel: props.expandNodeLabel,
             onAddChildTitleChange: props.onAddChildTitleChange,
+            onToggleCollapse: props.onToggleCollapse,
             onDraftAddChild: props.onDraftAddChild,
             onDraftAiExpand: props.onDraftAiExpand,
             onDraftAiExplore: props.onDraftAiExplore,
@@ -190,16 +223,21 @@ export function NodeCanvas(props: {
     [
       props.addChildPlaceholder,
       props.addChildTitle,
+      props.collapsedNodeIds,
       props.draftAddChildLabel,
       props.draftAiExpandLabel,
       props.draftAiExploreActionLabel,
       props.draftAiExploreEvidenceLabel,
       props.draftAiExploreQuestionLabel,
       props.draftAiExploreRiskLabel,
+      props.collapseNodeLabel,
+      props.expandNodeLabel,
+      props.focusMode,
       props.onAddChildTitleChange,
       props.onDraftAddChild,
       props.onDraftAiExpand,
       props.onDraftAiExplore,
+      props.onToggleCollapse,
       props.selectedNodeId,
       props.tree,
     ],
@@ -221,12 +259,16 @@ export function NodeCanvas(props: {
           nodes={projected.nodes}
           viewport={props.viewport}
           followSelection={props.followSelection}
+          focusMode={props.focusMode}
+          focusAllLabel={props.focusAllLabel}
+          focusSelectionLabel={props.focusSelectionLabel}
           followSelectionLabel={props.followSelectionLabel}
           resetViewLabel={props.resetViewLabel}
           selectedNodeId={props.selectedNodeId}
           onSelectNode={props.onSelectNode}
           onViewportChange={props.onViewportChange}
           onFollowSelectionChange={props.onFollowSelectionChange}
+          onFocusModeChange={props.onFocusModeChange}
         />
       </ReactFlowProvider>
     </div>
@@ -238,12 +280,16 @@ function NodeCanvasSurface(props: {
   edges: Edge[];
   viewport: Viewport;
   followSelection: boolean;
+  focusMode: "all" | "selection";
+  focusAllLabel: string;
+  focusSelectionLabel: string;
   followSelectionLabel: string;
   resetViewLabel: string;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string) => void;
   onViewportChange: (viewport: Viewport) => void;
   onFollowSelectionChange: (followSelection: boolean) => void;
+  onFocusModeChange: (focusMode: "all" | "selection") => void;
 }) {
   const typedNodeTypes = nodeTypes;
 
@@ -287,9 +333,13 @@ function NodeCanvasSurface(props: {
       <Controls position="bottom-right" showInteractive={false} />
       <CanvasViewportPanel
         followSelection={props.followSelection}
+        focusMode={props.focusMode}
+        focusAllLabel={props.focusAllLabel}
+        focusSelectionLabel={props.focusSelectionLabel}
         followSelectionLabel={props.followSelectionLabel}
         nodes={props.nodes}
         onFollowSelectionChange={props.onFollowSelectionChange}
+        onFocusModeChange={props.onFocusModeChange}
         onViewportChange={props.onViewportChange}
         resetViewLabel={props.resetViewLabel}
         selectedNodeId={props.selectedNodeId}
@@ -355,9 +405,13 @@ function CanvasViewportController(props: {
 
 function CanvasViewportPanel(props: {
   followSelection: boolean;
+  focusMode: "all" | "selection";
+  focusAllLabel: string;
+  focusSelectionLabel: string;
   followSelectionLabel: string;
   nodes: CanvasFlowNode[];
   onFollowSelectionChange: (followSelection: boolean) => void;
+  onFocusModeChange: (focusMode: "all" | "selection") => void;
   onViewportChange: (viewport: Viewport) => void;
   resetViewLabel: string;
   selectedNodeId: string | null;
@@ -367,6 +421,25 @@ function CanvasViewportPanel(props: {
   return (
     <Panel position="top-right">
       <div className="nodex-flow__panel">
+        <div className="nodex-flow__panel-segment">
+          <button
+            className="nodex-flow__panel-segment-button"
+            data-active={props.focusMode === "all" ? "true" : "false"}
+            onClick={() => props.onFocusModeChange("all")}
+            type="button"
+          >
+            {props.focusAllLabel}
+          </button>
+          <button
+            className="nodex-flow__panel-segment-button"
+            data-active={props.focusMode === "selection" ? "true" : "false"}
+            disabled={!props.selectedNodeId}
+            onClick={() => props.onFocusModeChange("selection")}
+            type="button"
+          >
+            {props.focusSelectionLabel}
+          </button>
+        </div>
         <label className="nodex-flow__panel-toggle">
           <input
             checked={props.followSelection}
@@ -416,6 +489,8 @@ function CanvasViewportPanel(props: {
 function buildCanvasProjection(input: {
   tree: TreeNode;
   selectedNodeId: string | null;
+  focusMode: "all" | "selection";
+  collapsedNodeIds: string[];
   addChildTitle: string;
   addChildPlaceholder: string;
   draftAddChildLabel: string;
@@ -424,7 +499,10 @@ function buildCanvasProjection(input: {
   draftAiExploreRiskLabel: string;
   draftAiExploreActionLabel: string;
   draftAiExploreEvidenceLabel: string;
+  collapseNodeLabel: string;
+  expandNodeLabel: string;
   onAddChildTitleChange: (value: string) => void;
+  onToggleCollapse: (nodeId: string) => void;
   onDraftAddChild: () => void;
   onDraftAiExpand: () => void;
   onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
@@ -432,12 +510,27 @@ function buildCanvasProjection(input: {
   nodes: CanvasFlowNode[];
   edges: Edge[];
 } {
+  const tree =
+    input.focusMode === "selection" && input.selectedNodeId
+      ? buildFocusedTree(input.tree, input.selectedNodeId) ?? input.tree
+      : input.tree;
+  const selectedPath = input.selectedNodeId
+    ? findPathToNode(tree, input.selectedNodeId)
+    : null;
+  const selectedAncestorIds = new Set(
+    selectedPath?.slice(0, -1).map((node) => node.node.id) ?? [],
+  );
+  const collapsedNodeIds = new Set(input.collapsedNodeIds);
   const nodes = new Array<CanvasFlowNode>();
   const edges = new Array<Edge>();
   let leafIndex = 0;
 
   const visit = (treeNode: TreeNode, depth: number): number => {
-    const childYs = treeNode.children.map((child) => {
+    const isCollapsed =
+      collapsedNodeIds.has(treeNode.node.id) &&
+      !selectedAncestorIds.has(treeNode.node.id);
+    const visibleChildren = isCollapsed ? [] : treeNode.children;
+    const childYs = visibleChildren.map((child) => {
       const childY = visit(child, depth + 1);
       edges.push({
         id: `${treeNode.node.id}->${child.node.id}`,
@@ -467,11 +560,15 @@ function buildCanvasProjection(input: {
         draftAiExploreRiskLabel: input.draftAiExploreRiskLabel,
         draftAiExploreActionLabel: input.draftAiExploreActionLabel,
         draftAiExploreEvidenceLabel: input.draftAiExploreEvidenceLabel,
+        collapseNodeLabel: input.collapseNodeLabel,
+        expandNodeLabel: input.expandNodeLabel,
         title: treeNode.node.title,
         kind: treeNode.node.kind,
         childCount: treeNode.children.length,
+        isCollapsed,
         isRoot: treeNode.node.parent_id === null,
         onAddChildTitleChange: input.onAddChildTitleChange,
+        onToggleCollapse: () => input.onToggleCollapse(treeNode.node.id),
         onDraftAddChild: input.onDraftAddChild,
         onDraftAiExpand: input.onDraftAiExpand,
         onDraftAiExplore: input.onDraftAiExplore,
@@ -493,10 +590,112 @@ function buildCanvasProjection(input: {
     return y;
   };
 
-  visit(input.tree, 0);
+  visit(tree, 0);
 
   return {
     nodes,
     edges,
   };
+}
+
+const FOCUS_DESCENDANT_DEPTH = 2;
+
+function findPathToNode(tree: TreeNode, targetId: string): TreeNode[] | null {
+  if (tree.node.id === targetId) {
+    return [tree];
+  }
+
+  for (const child of tree.children) {
+    const path = findPathToNode(child, targetId);
+    if (path) {
+      return [tree, ...path];
+    }
+  }
+
+  return null;
+}
+
+function buildFocusedTree(tree: TreeNode, selectedNodeId: string): TreeNode | null {
+  const path = findPathToNode(tree, selectedNodeId);
+  if (!path) {
+    return null;
+  }
+
+  return buildFocusedSubtree(path[0], path, 0);
+}
+
+function buildFocusedSubtree(
+  treeNode: TreeNode,
+  path: TreeNode[],
+  pathIndex: number,
+): TreeNode {
+  const isSelected = pathIndex === path.length - 1;
+
+  if (isSelected) {
+    return cloneSubtreeWithDepth(treeNode, FOCUS_DESCENDANT_DEPTH);
+  }
+
+  const nextPathNode = path[pathIndex + 1];
+  const nextChild = treeNode.children.find(
+    (child) => child.node.id === nextPathNode.node.id,
+  );
+
+  return {
+    ...treeNode,
+    children: nextChild ? [buildFocusedSubtree(nextChild, path, pathIndex + 1)] : [],
+  };
+}
+
+function cloneSubtreeWithDepth(treeNode: TreeNode, depth: number): TreeNode {
+  if (depth <= 0) {
+    return {
+      ...treeNode,
+      children: [],
+    };
+  }
+
+  return {
+    ...treeNode,
+    children: treeNode.children.map((child) => cloneSubtreeWithDepth(child, depth - 1)),
+  };
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="14"
+      viewBox="0 0 16 16"
+      width="14"
+    >
+      <path
+        d="m3.5 6.25 4.5 4.5 4.5-4.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="14"
+      viewBox="0 0 16 16"
+      width="14"
+    >
+      <path
+        d="m6.25 3.5 4.5 4.5-4.5 4.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
 }

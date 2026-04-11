@@ -36,6 +36,8 @@ export function WorkbenchMainPane(props: {
     zoom: number;
   };
   canvasFollowSelection: boolean;
+  canvasFocusMode: "all" | "selection";
+  collapsedNodeIds: string[];
   addChildTitle: string;
   t: Translator;
   onAddChildTitleChange: (value: string) => void;
@@ -45,6 +47,8 @@ export function WorkbenchMainPane(props: {
     zoom: number;
   }) => void;
   onCanvasFollowSelectionChange: (followSelection: boolean) => void;
+  onCanvasFocusModeChange: (focusMode: "all" | "selection") => void;
+  onCanvasToggleCollapse: (nodeId: string) => void;
   onSelectNode: (nodeId: string) => void;
   onDraftAiExpand: () => void;
   onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
@@ -69,6 +73,8 @@ export function WorkbenchMainPane(props: {
           selectedNodeId={props.selectedNodeId}
           viewport={props.canvasViewport}
           followSelection={props.canvasFollowSelection}
+          focusMode={props.canvasFocusMode}
+          collapsedNodeIds={props.collapsedNodeIds}
           addChildTitle={props.addChildTitle}
           addChildPlaceholder={props.t("nodeEditing.addChildTitlePlaceholder")}
           draftAddChildLabel={props.t("nodeEditing.draftAddChild")}
@@ -77,12 +83,18 @@ export function WorkbenchMainPane(props: {
           draftAiExploreRiskLabel={props.t("nodeEditing.draftAiExploreRisk")}
           draftAiExploreActionLabel={props.t("nodeEditing.draftAiExploreAction")}
           draftAiExploreEvidenceLabel={props.t("nodeEditing.draftAiExploreEvidence")}
+          collapseNodeLabel={props.t("workbench.collapseNode")}
+          expandNodeLabel={props.t("workbench.expandNode")}
+          focusAllLabel={props.t("workbench.canvasFocusAll")}
+          focusSelectionLabel={props.t("workbench.canvasFocusSelection")}
           followSelectionLabel={props.t("workbench.canvasFollowSelection")}
           resetViewLabel={props.t("workbench.canvasResetView")}
           onSelectNode={props.onSelectNode}
           onAddChildTitleChange={props.onAddChildTitleChange}
           onViewportChange={props.onCanvasViewportChange}
           onFollowSelectionChange={props.onCanvasFollowSelectionChange}
+          onFocusModeChange={props.onCanvasFocusModeChange}
+          onToggleCollapse={props.onCanvasToggleCollapse}
           onDraftAddChild={props.onDraftAddChild}
           onDraftAiExpand={props.onDraftAiExpand}
           onDraftAiExplore={props.onDraftAiExplore}

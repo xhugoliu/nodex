@@ -39,6 +39,8 @@
   - viewport 记忆
   - follow-selection
   - reset view
+  - 节点展开 / 折叠
+  - 局部聚焦模式
 - `Review` 会直接显示：
   - 理由摘要
   - direct evidence
@@ -159,6 +161,7 @@ v2 第一版建议收敛为 3 个层级：
   - 当前节点的子节点关系与结构走向
   - apply 后新增节点的聚焦与定位
   - 尽量把高频节点动作直接放在节点卡片内
+  - 纯 view-state，例如展开 / 折叠和 focus，不应越界成另一套状态内核
 - 右栏：上下文面板
   - 默认显示节点摘要、来源 / evidence、apply 完成态和按需编辑
   - 起草后切到 review

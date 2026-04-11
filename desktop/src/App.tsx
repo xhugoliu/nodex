@@ -49,6 +49,8 @@ interface CanvasViewport {
 interface CanvasViewState {
   viewport: CanvasViewport;
   followSelection: boolean;
+  focusMode: "all" | "selection";
+  collapsedNodeIds: string[];
 }
 
 const CANVAS_VIEW_STORAGE_KEY = "nodex.desktop.canvas-view";
@@ -60,6 +62,8 @@ const DEFAULT_CANVAS_VIEW_STATE: CanvasViewState = {
     zoom: 0.82,
   },
   followSelection: true,
+  focusMode: "all",
+  collapsedNodeIds: [],
 };
 
 function canvasViewStorageKey(workspacePath: string) {
@@ -82,6 +86,15 @@ function loadCanvasViewState(workspacePath: string): CanvasViewState {
     };
 
     return {
+      collapsedNodeIds: Array.isArray(parsed.collapsedNodeIds)
+        ? parsed.collapsedNodeIds.filter(
+            (value): value is string => typeof value === "string",
+          )
+        : DEFAULT_CANVAS_VIEW_STATE.collapsedNodeIds,
+      focusMode:
+        parsed.focusMode === "selection"
+          ? "selection"
+          : DEFAULT_CANVAS_VIEW_STATE.focusMode,
       followSelection:
         typeof parsed.followSelection === "boolean"
           ? parsed.followSelection
@@ -735,6 +748,8 @@ export default function App() {
               selectedNodeId={selectedNodeId}
               canvasViewport={canvasViewState.viewport}
               canvasFollowSelection={canvasViewState.followSelection}
+              canvasFocusMode={canvasViewState.focusMode}
+              collapsedNodeIds={canvasViewState.collapsedNodeIds}
               addChildTitle={addChildTitle}
               t={t}
               onAddChildTitleChange={setAddChildTitle}
@@ -749,6 +764,24 @@ export default function App() {
                   ...current,
                   followSelection,
                 }));
+              }}
+              onCanvasFocusModeChange={(focusMode) => {
+                setCanvasViewState((current) => ({
+                  ...current,
+                  focusMode,
+                }));
+              }}
+              onCanvasToggleCollapse={(nodeId) => {
+                setCanvasViewState((current) => {
+                  const collapsedNodeIds = current.collapsedNodeIds.includes(nodeId)
+                    ? current.collapsedNodeIds.filter((id) => id !== nodeId)
+                    : [...current.collapsedNodeIds, nodeId];
+
+                  return {
+                    ...current,
+                    collapsedNodeIds,
+                  };
+                });
               }}
               onSelectNode={(nodeId) => {
                 void fetchNodeContext(nodeId);

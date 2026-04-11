@@ -160,6 +160,35 @@ select {
   background: rgba(255, 255, 255, 0.14);
 }
 
+.nodex-flow__node-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  width: 1.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+
+.nodex-flow__node-icon-button:hover {
+  background: white;
+}
+
+.nodex-flow__node-card[data-root="true"] .nodex-flow__node-icon-button {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.nodex-flow__node-card[data-root="true"] .nodex-flow__node-icon-button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
 .nodex-flow__node-actions {
   margin-top: 0.8rem;
   display: flex;
@@ -313,6 +342,41 @@ select {
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
   padding: 0.45rem 0.55rem;
+}
+
+.nodex-flow__panel-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0.8rem;
+  background: rgba(243, 244, 246, 0.92);
+  padding: 0.2rem;
+}
+
+.nodex-flow__panel-segment-button {
+  border: none;
+  border-radius: 0.65rem;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.32rem 0.58rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.nodex-flow__panel-segment-button[data-active="true"] {
+  background: white;
+  color: var(--text);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.nodex-flow__panel-segment-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.nodex-flow__panel-segment-button:not(:disabled):hover {
+  color: var(--text);
 }
 
 .nodex-flow__panel-toggle {
