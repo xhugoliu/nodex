@@ -3,13 +3,13 @@ import type { TreeNode, WorkspaceOverview } from "../types";
 import {
   EmptyBox,
   EmptyState,
-  ghostButtonClass,
   inputClass,
   panelClass,
   primaryButtonClass,
 } from "./common";
 
 export function TreePane(props: {
+  isCollapsed: boolean;
   workspaceOverview: WorkspaceOverview | null;
   treeSummary: string;
   treeQuery: string;
@@ -17,16 +17,62 @@ export function TreePane(props: {
   filteredTree: TreeNode | null;
   selectedNodeId: string | null;
   t: Translator;
+  onToggleCollapse: () => void;
   onQueryChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;
 }) {
+  if (props.isCollapsed) {
+    return (
+      <section className={`${panelClass} flex min-h-0 flex-col items-center gap-3 overflow-hidden px-2 py-3`}>
+        <SidebarToggleButton
+          direction="expand"
+          label={props.t("sidebar.expand")}
+          onClick={props.onToggleCollapse}
+        />
+
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
+          <div className="rounded-2xl border border-[color:var(--line)] bg-white/70 p-3 text-[color:var(--text)] shadow-[0_8px_18px_rgba(15,23,42,0.04)]">
+            <TreeGlyph />
+          </div>
+          {props.workspaceOverview ? (
+            <div className="space-y-2">
+              <div className="text-xs text-[color:var(--muted)]">
+                {props.treeSummary}
+              </div>
+              {props.selectedNodeId ? (
+                <div className="mx-auto max-w-[3.5rem] rounded-xl bg-[color:var(--bg-warm)] px-2 py-2 text-[11px] leading-4 text-[color:var(--text)]">
+                  {findSelectedNodeTitle(
+                    props.workspaceOverview?.tree ?? null,
+                    props.selectedNodeId,
+                  ) ?? props.selectedNodeId}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <EmptyState
+              title={props.t("sidebar.treeEmptyTitle")}
+              body={props.t("sidebar.treeEmptyBody")}
+            />
+          )}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className={`${panelClass} flex min-h-0 flex-col overflow-hidden`}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="text-sm font-semibold text-[color:var(--text)]">
           {props.t("sidebar.tree")}
         </div>
-        <div className="text-xs text-[color:var(--muted)]">{props.treeSummary}</div>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-[color:var(--muted)]">{props.treeSummary}</div>
+          <SidebarToggleButton
+            direction="collapse"
+            label={props.t("sidebar.collapse")}
+            onClick={props.onToggleCollapse}
+          />
+        </div>
       </div>
 
       {props.workspaceOverview ? (
@@ -58,6 +104,109 @@ export function TreePane(props: {
         />
       )}
     </section>
+  );
+}
+
+function findSelectedNodeTitle(tree: TreeNode | null, nodeId: string): string | null {
+  if (!tree) {
+    return null;
+  }
+
+  if (tree.node.id === nodeId) {
+    return tree.node.title;
+  }
+
+  for (const child of tree.children) {
+    const title = findSelectedNodeTitle(child, nodeId);
+    if (title) {
+      return title;
+    }
+  }
+
+  return null;
+}
+
+function SidebarToggleButton(props: {
+  direction: "expand" | "collapse";
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-label={props.label}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[color:var(--line)] bg-white/80 text-[color:var(--text)] shadow-[0_8px_18px_rgba(15,23,42,0.04)] transition hover:bg-white hover:shadow-[0_10px_22px_rgba(15,23,42,0.08)]"
+      onClick={props.onClick}
+      title={props.label}
+      type="button"
+    >
+      {props.direction === "collapse" ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+    </button>
+  );
+}
+
+function TreeGlyph() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="18"
+      viewBox="0 0 24 24"
+      width="18"
+    >
+      <path
+        d="M6 5h12M6 12h7m-7 7h12M6 5v14"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <circle cx="6" cy="5" fill="currentColor" r="1.4" />
+      <circle cx="6" cy="12" fill="currentColor" r="1.4" />
+      <circle cx="6" cy="19" fill="currentColor" r="1.4" />
+      <circle cx="18" cy="5" fill="currentColor" r="1.4" />
+      <circle cx="13" cy="12" fill="currentColor" r="1.4" />
+      <circle cx="18" cy="19" fill="currentColor" r="1.4" />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      viewBox="0 0 16 16"
+      width="16"
+    >
+      <path
+        d="M9.75 3.5 5.25 8l4.5 4.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      fill="none"
+      height="16"
+      viewBox="0 0 16 16"
+      width="16"
+    >
+      <path
+        d="m6.25 3.5 4.5 4.5-4.5 4.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
   );
 }
 

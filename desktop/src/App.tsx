@@ -52,6 +52,7 @@ interface CanvasViewState {
 }
 
 const CANVAS_VIEW_STORAGE_KEY = "nodex.desktop.canvas-view";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "nodex.desktop.sidebar-collapsed";
 const DEFAULT_CANVAS_VIEW_STATE: CanvasViewState = {
   viewport: {
     x: 0,
@@ -105,6 +106,14 @@ function loadCanvasViewState(workspacePath: string): CanvasViewState {
   }
 }
 
+function loadSidebarCollapsedState(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+}
+
 interface WorkspaceLoadedEvent {
   overview: WorkspaceOverview;
   message: string;
@@ -154,6 +163,8 @@ export default function App() {
   const [consoleEntry, setConsoleEntry] = useState<ConsoleEntry | null>(null);
   const [canvasViewState, setCanvasViewState] =
     useState<CanvasViewState>(DEFAULT_CANVAS_VIEW_STATE);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] =
+    useState<boolean>(loadSidebarCollapsedState);
 
   const locale =
     languagePreference === "auto" ? systemLocale : languagePreference;
@@ -176,6 +187,13 @@ export default function App() {
       JSON.stringify(canvasViewState),
     );
   }, [canvasViewState, workspacePath]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SIDEBAR_COLLAPSED_STORAGE_KEY,
+      isSidebarCollapsed ? "true" : "false",
+    );
+  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -686,8 +704,16 @@ export default function App() {
     <div className="flex h-screen w-full flex-col gap-3 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.96),rgba(243,244,246,0.98),rgba(229,231,235,0.92))] px-3 py-3">
       {workspaceOverview ? (
         <main className="flex min-h-0 flex-1 flex-col gap-3">
-          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[264px_minmax(0,1.42fr)_320px] 2xl:grid-cols-[272px_minmax(0,1.5fr)_336px]">
+          <div
+            className={[
+              "grid min-h-0 flex-1 gap-3",
+              isSidebarCollapsed
+                ? "xl:grid-cols-[76px_minmax(0,1.58fr)_320px] 2xl:grid-cols-[80px_minmax(0,1.66fr)_336px]"
+                : "xl:grid-cols-[264px_minmax(0,1.42fr)_320px] 2xl:grid-cols-[272px_minmax(0,1.5fr)_336px]",
+            ].join(" ")}
+          >
             <TreePane
+              isCollapsed={isSidebarCollapsed}
               workspaceOverview={workspaceOverview}
               treeSummary={treeSummary}
               treeQuery={treeQuery}
@@ -695,6 +721,9 @@ export default function App() {
               filteredTree={filteredTree}
               selectedNodeId={selectedNodeId}
               t={t}
+              onToggleCollapse={() => {
+                setIsSidebarCollapsed((current) => !current);
+              }}
               onQueryChange={setTreeQuery}
               onSelectNode={(nodeId) => {
                 void fetchNodeContext(nodeId);
