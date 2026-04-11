@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use nodex::{
-    ai::{AiRunCompareOutput, AiRunShowOutput, ExternalRunnerReport},
+    ai::{AiPatchExplanation, AiRunCompareOutput, AiRunShowOutput, ExternalRunnerReport},
     model::{
         AiRunArtifact, AiRunRecord, AiRunReplayReport, ApplyPatchReport, NodeDetail,
         PatchRunRecord, SnapshotRecord, SourceDetail, SourceImportPreview, SourceImportReport,
@@ -30,6 +30,28 @@ struct WorkspaceOverview {
     sources: Vec<SourceRecord>,
     snapshots: Vec<SnapshotRecord>,
     patch_history: Vec<PatchRunRecord>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct NodeWorkspaceContext {
+    node_detail: NodeDetail,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct DraftReviewPayload {
+    run: AiRunRecord,
+    explanation: AiPatchExplanation,
+    response_notes: Vec<String>,
+    patch: PatchDocument,
+    patch_preview: Vec<String>,
+    report: ApplyPatchReport,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct ApplyReviewedPatchOutput {
+    report: ApplyPatchReport,
+    overview: WorkspaceOverview,
+    focus_node_context: Option<NodeWorkspaceContext>,
 }
 
 #[derive(Default)]
@@ -154,6 +176,12 @@ fn workspace_overview(workspace: &Workspace) -> Result<WorkspaceOverview> {
         sources: normalize_source_records(workspace.list_sources()?),
         snapshots: workspace.list_snapshots()?,
         patch_history: workspace.patch_history()?,
+    })
+}
+
+fn node_workspace_context(workspace: &Workspace, node_id: &str) -> Result<NodeWorkspaceContext> {
+    Ok(NodeWorkspaceContext {
+        node_detail: normalize_node_detail(workspace.node_detail(node_id)?),
     })
 }
 
@@ -297,6 +325,11 @@ fn normalize_ai_run_replay_report(mut replay: AiRunReplayReport) -> AiRunReplayR
     replay
 }
 
+fn normalize_node_workspace_context(mut context: NodeWorkspaceContext) -> NodeWorkspaceContext {
+    context.node_detail = normalize_node_detail(context.node_detail);
+    context
+}
+
 fn normalize_external_runner_report(mut report: ExternalRunnerReport) -> ExternalRunnerReport {
     report.request_path = display_path_text(&report.request_path);
     report.response_path = display_path_text(&report.response_path);
@@ -304,6 +337,44 @@ fn normalize_external_runner_report(mut report: ExternalRunnerReport) -> Externa
     report.metadata.request_path = display_path_text(&report.metadata.request_path);
     report.metadata.response_path = display_path_text(&report.metadata.response_path);
     report
+}
+
+fn ai_run_record_from_runner_report(report: &ExternalRunnerReport) -> AiRunRecord {
+    AiRunRecord {
+        id: report.metadata.run_id.clone(),
+        capability: report.metadata.capability.clone(),
+        explore_by: report.metadata.explore_by.clone(),
+        node_id: report.metadata.node_id.clone(),
+        command: report.metadata.command.clone(),
+        dry_run: report.metadata.dry_run,
+        status: report.metadata.status.clone(),
+        started_at: report.metadata.started_at,
+        finished_at: report.metadata.finished_at,
+        request_path: report.metadata.request_path.clone(),
+        response_path: report.metadata.response_path.clone(),
+        exit_code: report.metadata.exit_code,
+        provider: report.metadata.provider.clone(),
+        model: report.metadata.model.clone(),
+        provider_run_id: report.metadata.provider_run_id.clone(),
+        retry_count: report.metadata.retry_count,
+        last_error_category: report.metadata.last_error_category.clone(),
+        last_error_message: report.metadata.last_error_message.clone(),
+        last_status_code: report.metadata.last_status_code,
+        patch_run_id: report.metadata.patch_run_id.clone(),
+        patch_summary: report.metadata.patch_summary.clone(),
+    }
+}
+
+fn draft_review_payload_from_report(report: ExternalRunnerReport) -> DraftReviewPayload {
+    let run = normalize_ai_run_record(ai_run_record_from_runner_report(&report));
+    DraftReviewPayload {
+        run,
+        explanation: report.explanation,
+        response_notes: report.notes,
+        patch_preview: report.patch.preview_lines(),
+        patch: report.patch,
+        report: report.report,
+    }
 }
 
 fn display_path(path: &Path) -> String {
@@ -596,10 +667,7 @@ fn provider_default_reasoning_effort(provider: Option<&str>) -> Option<&'static 
     }
 }
 
-fn effective_model_for_command(
-    command: &str,
-    doctor_model: Option<String>,
-) -> Option<String> {
+fn effective_model_for_command(command: &str, doctor_model: Option<String>) -> Option<String> {
     extract_command_flag_value(command, "--model").or(doctor_model)
 }
 
@@ -1053,12 +1121,39 @@ fn get_node_detail(start_path: String, node_id: String) -> Result<NodeDetail, St
 }
 
 #[command]
+fn get_node_workspace_context(
+    start_path: String,
+    node_id: String,
+) -> Result<NodeWorkspaceContext, String> {
+    let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    node_workspace_context(&workspace, &node_id)
+        .map(normalize_node_workspace_context)
+        .map_err(|err| err.to_string())
+}
+
+#[command]
 fn get_source_detail(start_path: String, source_id: String) -> Result<SourceDetail, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     workspace
         .source_detail(&source_id)
         .map(normalize_source_detail)
         .map_err(|err| err.to_string())
+}
+
+#[command]
+fn draft_node_expand(start_path: String, node_id: String) -> Result<DraftReviewPayload, String> {
+    let report = draft_ai_patch(start_path, node_id, "expand", None)?;
+    Ok(draft_review_payload_from_report(report))
+}
+
+#[command]
+fn draft_node_explore(
+    start_path: String,
+    node_id: String,
+    by: String,
+) -> Result<DraftReviewPayload, String> {
+    let report = draft_ai_patch(start_path, node_id, "explore", Some(by))?;
+    Ok(draft_review_payload_from_report(report))
 }
 
 #[command]
@@ -1203,6 +1298,33 @@ fn apply_patch(
 }
 
 #[command]
+fn apply_reviewed_patch(
+    app: AppHandle,
+    state: State<DesktopState>,
+    start_path: String,
+    patch_json: String,
+    ai_run_id: Option<String>,
+    focus_node_id: Option<String>,
+) -> Result<ApplyReviewedPatchOutput, String> {
+    let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
+    let patch = parse_patch_document(&patch_json).map_err(|err| err.to_string())?;
+    let report = workspace
+        .apply_patch_document_with_ai_run(patch, "desktop", false, ai_run_id.as_deref())
+        .map_err(|err| err.to_string())?;
+    let overview = workspace_overview(&workspace).map_err(|err| err.to_string())?;
+    let focus_node_context = focus_node_id
+        .as_deref()
+        .and_then(|node_id| node_workspace_context(&workspace, node_id).ok())
+        .map(normalize_node_workspace_context);
+    set_current_workspace(&app, state.inner(), overview.root_dir.clone());
+    Ok(ApplyReviewedPatchOutput {
+        report,
+        overview,
+        focus_node_context,
+    })
+}
+
+#[command]
 fn get_patch_document(start_path: String, run_id: String) -> Result<PatchDocument, String> {
     let workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     workspace
@@ -1305,15 +1427,19 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             apply_patch,
+            apply_reviewed_patch,
             draft_add_node_patch,
             draft_ai_expand_patch,
             draft_ai_explore_patch,
+            draft_node_expand,
+            draft_node_explore,
             draft_cite_source_chunk_patch,
             draft_delete_node_patch,
             draft_move_node_patch,
             draft_uncite_source_chunk_patch,
             draft_update_node_patch,
             get_node_detail,
+            get_node_workspace_context,
             get_ai_run_history,
             get_ai_run_record,
             get_ai_run_show,
@@ -1344,7 +1470,8 @@ mod tests {
 
     use super::{
         desktop_default_ai_runner_command, detected_provider_from_command,
-        effective_model_for_command, effective_reasoning_for_command, parse_provider_doctor_summary,
+        effective_model_for_command, effective_reasoning_for_command,
+        parse_provider_doctor_summary,
     };
 
     #[cfg(windows)]

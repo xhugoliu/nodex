@@ -292,3 +292,22 @@ export interface WorkspaceOverview {
   snapshots: SnapshotRecord[];
   patch_history: PatchRunRecord[];
 }
+
+export interface NodeWorkspaceContext {
+  node_detail: NodeDetail;
+}
+
+export interface DraftReviewPayload {
+  run: AiRunRecord;
+  explanation: AiPatchExplanation;
+  response_notes: string[];
+  patch: PatchDocument;
+  patch_preview: string[];
+  report: ApplyPatchReport;
+}
+
+export interface ApplyReviewedPatchOutput {
+  report: ApplyPatchReport;
+  overview: WorkspaceOverview;
+  focus_node_context: NodeWorkspaceContext | null;
+}

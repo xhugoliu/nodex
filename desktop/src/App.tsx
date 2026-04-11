@@ -9,13 +9,7 @@ import {
   findNodeById,
   formatError,
   inspectPatchDraft,
-  listParentCandidates,
   optionalText,
-  renderAiDraftFailure,
-  renderAiRunArtifact,
-  renderAiRunReplayReport,
-  renderAiRunTrace,
-  renderExternalRunnerReport,
   renderPatchReport,
   type ConsoleTone,
 } from "./app-helpers";
@@ -25,29 +19,18 @@ import {
   resolveSystemLocale,
   translate,
 } from "./i18n";
-import {
-  EditorPane,
-  InspectorPane,
-  TreePane,
-  WorkspaceStartPane,
-} from "./components/panes";
+import { TreePane, WorkspaceStartPane } from "./components/panes";
+import { WorkbenchMainPane, WorkbenchSidePane } from "./components/workbench";
 import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
-  AiRunArtifact,
-  AiRunCompareOutput,
-  AiRunInspectorArtifacts,
-  AiRunRecord,
-  AiRunReplayReport,
-  AiRunShowOutput,
   ApplyPatchReport,
-  DesktopAiStatus,
-  ExternalRunnerReport,
+  ApplyReviewedPatchOutput,
+  DraftReviewPayload,
   LanguagePreference,
   Locale,
-  NodeDetail,
+  NodeWorkspaceContext,
   PatchDocument,
   PatchDraftOrigin,
-  PatchExecutionSummary,
   SourceDetail,
   WorkspaceOverview,
 } from "./types";
@@ -72,7 +55,6 @@ interface PatchEditorEventPayload {
   patch_json: string;
   message: string;
   tone: ConsoleTone;
-  reveal_advanced: boolean;
 }
 
 interface LanguageMenuEvent {
@@ -82,67 +64,29 @@ interface LanguageMenuEvent {
 export default function App() {
   const [languagePreference, setLanguagePreference] =
     useState<LanguagePreference>(loadLanguagePreference);
-  const [systemLocale, setSystemLocale] = useState<Locale>(
-    resolveSystemLocale,
-  );
+  const [systemLocale, setSystemLocale] = useState<Locale>(resolveSystemLocale);
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceOverview, setWorkspaceOverview] =
     useState<WorkspaceOverview | null>(null);
-  const [inspectorMode, setInspectorMode] = useState<
-    "selection" | "workspace_runs" | "activity"
-  >("selection");
-  const [workspaceAiRuns, setWorkspaceAiRuns] = useState<AiRunRecord[]>([]);
-  const [workspaceAiRunsHydrated, setWorkspaceAiRunsHydrated] = useState(false);
-  const [workspaceAiRunsLoading, setWorkspaceAiRunsLoading] = useState(false);
-  const [workspaceSelectedAiRunId, setWorkspaceSelectedAiRunId] =
-    useState<string | null>(null);
-  const [workspaceSelectedAiRunShow, setWorkspaceSelectedAiRunShow] =
-    useState<AiRunShowOutput | null>(null);
-  const [workspaceSelectedAiRunArtifacts, setWorkspaceSelectedAiRunArtifacts] =
-    useState<AiRunInspectorArtifacts | null>(null);
-  const [workspaceSelectedAiRunCompare, setWorkspaceSelectedAiRunCompare] =
-    useState<AiRunCompareOutput | null>(null);
-  const [workspaceSelectedAiRunLoading, setWorkspaceSelectedAiRunLoading] =
-    useState(false);
+  const [selectionPanelTab, setSelectionPanelTab] = useState<"context" | "review">(
+    "context",
+  );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeContext, setSelectedNodeContext] =
+    useState<NodeWorkspaceContext | null>(null);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
-  const [selectedNodeDetail, setSelectedNodeDetail] =
-    useState<NodeDetail | null>(null);
-  const [selectedNodeAiRuns, setSelectedNodeAiRuns] = useState<AiRunRecord[]>([]);
-  const [selectedAiRunId, setSelectedAiRunId] = useState<string | null>(null);
-  const [selectedAiRunShow, setSelectedAiRunShow] =
-    useState<AiRunShowOutput | null>(null);
-  const [selectedAiRunArtifacts, setSelectedAiRunArtifacts] =
-    useState<AiRunInspectorArtifacts | null>(null);
-  const [selectedAiRunCompare, setSelectedAiRunCompare] =
-    useState<AiRunCompareOutput | null>(null);
-  const [selectedAiRunLoading, setSelectedAiRunLoading] = useState(false);
   const [selectedSourceDetail, setSelectedSourceDetail] =
     useState<SourceDetail | null>(null);
-  const [selectedSourceChunkId, setSelectedSourceChunkId] =
-    useState<string | null>(null);
-  const [desktopAiStatus, setDesktopAiStatus] = useState<DesktopAiStatus | null>(null);
-  const [contextNodeId, setContextNodeId] = useState<string | null>(null);
-  const [contextSourceId, setContextSourceId] = useState<string | null>(null);
   const [patchEditor, setPatchEditor] = useState("");
   const [patchDraftOrigin, setPatchDraftOrigin] =
     useState<PatchDraftOrigin | null>(null);
-  const [currentDraftRun, setCurrentDraftRun] = useState<AiRunRecord | null>(null);
-  const [currentDraftAppliedPatch, setCurrentDraftAppliedPatch] =
-    useState<PatchDocument | null>(null);
-  const [lastPatchResult, setLastPatchResult] =
-    useState<PatchExecutionSummary | null>(null);
-  const [showAdvancedPatchEditor, setShowAdvancedPatchEditor] = useState(false);
+  const [reviewDraft, setReviewDraft] = useState<DraftReviewPayload | null>(null);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
-  const [updateNodeKind, setUpdateNodeKind] = useState("");
   const [updateNodeBody, setUpdateNodeBody] = useState("");
   const [addChildTitle, setAddChildTitle] = useState("");
-  const [addChildKind, setAddChildKind] = useState("topic");
   const [addChildBody, setAddChildBody] = useState("");
-  const [moveNodeParent, setMoveNodeParent] = useState("");
   const [treeQuery, setTreeQuery] = useState("");
   const [consoleEntry, setConsoleEntry] = useState<ConsoleEntry | null>(null);
-  const [showConsoleDetails, setShowConsoleDetails] = useState(false);
 
   const locale =
     languagePreference === "auto" ? systemLocale : languagePreference;
@@ -166,7 +110,7 @@ export default function App() {
     }
 
     void invokeCommand("set_menu_locale", { locale }).catch(() => {
-      // Menu syncing is best-effort; the page should remain usable without it.
+      // Best-effort only.
     });
   }, [locale]);
 
@@ -182,208 +126,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!hasTauriRuntime()) {
-      setConsoleEntry({
-        message: t("messages.tauriUnavailable"),
-        tone: "error",
-      });
-      return;
-    }
-
-    void invokeCommand<DesktopAiStatus>("get_desktop_ai_status", {})
-      .then((status) => {
-        setDesktopAiStatus(status);
-      })
-      .catch((error) => {
-        setConsoleMessage(formatError(error), "error");
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!selectedNodeDetail) {
+    if (!selectedNodeContext) {
       setUpdateNodeTitle("");
-      setUpdateNodeKind("");
       setUpdateNodeBody("");
-      setMoveNodeParent("");
-      setSelectedNodeAiRuns([]);
-      setSelectedAiRunId(null);
-      setSelectedAiRunShow(null);
-      setSelectedAiRunArtifacts(null);
-      setSelectedAiRunCompare(null);
-      setSelectedAiRunLoading(false);
+      setAddChildTitle("");
+      setAddChildBody("");
       return;
     }
 
-    setUpdateNodeTitle(selectedNodeDetail.node.title ?? "");
-    setUpdateNodeKind(selectedNodeDetail.node.kind ?? "");
-    setUpdateNodeBody(selectedNodeDetail.node.body ?? "");
-    setMoveNodeParent(selectedNodeDetail.parent?.id ?? "");
-  }, [selectedNodeDetail]);
-
-  useEffect(() => {
+    setUpdateNodeTitle(selectedNodeContext.node_detail.node.title ?? "");
+    setUpdateNodeBody(selectedNodeContext.node_detail.node.body ?? "");
     setAddChildTitle("");
-    setAddChildKind("topic");
     setAddChildBody("");
-  }, [selectedNodeDetail?.node.id]);
-
-  useEffect(() => {
-    if (!selectedNodeDetail) {
-      return;
-    }
-
-    if (!selectedNodeAiRuns.length) {
-      setSelectedAiRunId(null);
-      setSelectedAiRunShow(null);
-      setSelectedAiRunArtifacts(null);
-      setSelectedAiRunCompare(null);
-      setSelectedAiRunLoading(false);
-      return;
-    }
-
-    if (
-      selectedAiRunId &&
-      selectedNodeAiRuns.some((run) => run.id === selectedAiRunId)
-    ) {
-      return;
-    }
-
-    setSelectedAiRunId(selectedNodeAiRuns[0].id);
-  }, [selectedAiRunId, selectedNodeAiRuns, selectedNodeDetail]);
-
-  useEffect(() => {
-    if (!selectedAiRunId || !workspacePath || !hasTauriRuntime()) {
-      setSelectedAiRunShow(null);
-      setSelectedAiRunArtifacts(null);
-      setSelectedAiRunCompare(null);
-      setSelectedAiRunLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const runId = selectedAiRunId;
-    setSelectedAiRunLoading(true);
-    setSelectedAiRunCompare(null);
-
-    void fetchAiRunInspectorBundle(runId)
-      .then(({ show, artifacts }) => {
-        if (cancelled || runId !== selectedAiRunId) {
-          return;
-        }
-        setSelectedAiRunShow(show);
-        setSelectedAiRunArtifacts(artifacts);
-        setSelectedAiRunLoading(false);
-      })
-      .catch((error) => {
-        if (cancelled || runId !== selectedAiRunId) {
-          return;
-        }
-        setSelectedAiRunShow(null);
-        setSelectedAiRunArtifacts(null);
-        setSelectedAiRunLoading(false);
-        setConsoleMessage(formatError(error), "error");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedAiRunId, selectedNodeAiRuns, workspacePath]);
-
-  useEffect(() => {
-    if (!workspaceSelectedAiRunId || !workspacePath || !hasTauriRuntime()) {
-      setWorkspaceSelectedAiRunShow(null);
-      setWorkspaceSelectedAiRunArtifacts(null);
-      setWorkspaceSelectedAiRunCompare(null);
-      setWorkspaceSelectedAiRunLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    const runId = workspaceSelectedAiRunId;
-    setWorkspaceSelectedAiRunLoading(true);
-    setWorkspaceSelectedAiRunCompare(null);
-
-    void fetchAiRunInspectorBundle(runId)
-      .then(({ show, artifacts }) => {
-        if (cancelled || runId !== workspaceSelectedAiRunId) {
-          return;
-        }
-        setWorkspaceSelectedAiRunShow(show);
-        setWorkspaceSelectedAiRunArtifacts(artifacts);
-        setWorkspaceSelectedAiRunLoading(false);
-      })
-      .catch((error) => {
-        if (cancelled || runId !== workspaceSelectedAiRunId) {
-          return;
-        }
-        setWorkspaceSelectedAiRunShow(null);
-        setWorkspaceSelectedAiRunArtifacts(null);
-        setWorkspaceSelectedAiRunLoading(false);
-        setConsoleMessage(formatError(error), "error");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspaceSelectedAiRunId, workspacePath]);
-
-  useEffect(() => {
-    if (!patchDraftOrigin || !workspacePath || !hasTauriRuntime()) {
-      setCurrentDraftRun(null);
-      return;
-    }
-
-    const draftRun = selectedNodeAiRuns.find(
-      (run) => run.id === patchDraftOrigin.run_id,
-    );
-    if (draftRun) {
-      setCurrentDraftRun(draftRun);
-      return;
-    }
-
-    let cancelled = false;
-    void getAiRunRecord(patchDraftOrigin.run_id)
-      .then((run) => {
-        if (!cancelled) {
-          setCurrentDraftRun(run);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCurrentDraftRun(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [patchDraftOrigin, selectedNodeAiRuns, workspacePath]);
-
-  useEffect(() => {
-    if (!currentDraftRun?.patch_run_id || !workspacePath || !hasTauriRuntime()) {
-      setCurrentDraftAppliedPatch(null);
-      return;
-    }
-
-    let cancelled = false;
-    void invokeCommand<PatchDocument>("get_patch_document", {
-      start_path: workspacePath,
-      run_id: currentDraftRun.patch_run_id,
-    })
-      .then((patch) => {
-        if (!cancelled) {
-          setCurrentDraftAppliedPatch(patch);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCurrentDraftAppliedPatch(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentDraftRun?.patch_run_id, workspacePath]);
+  }, [selectedNodeContext]);
 
   useEffect(() => {
     if (!hasTauriRuntime()) {
@@ -397,27 +152,7 @@ export default function App() {
         await listen<WorkspaceLoadedEvent>(
           "desktop://workspace-loaded",
           (event) => {
-            startTransition(() => {
-              setWorkspaceOverview(event.payload.overview);
-              setWorkspacePath(event.payload.overview.root_dir);
-              setInspectorMode("selection");
-              setTreeQuery("");
-              setSelectedNodeId(null);
-              setSelectedSourceId(null);
-              setSelectedNodeDetail(null);
-              setSelectedNodeAiRuns([]);
-              setSelectedAiRunId(null);
-              setSelectedAiRunShow(null);
-              setSelectedAiRunArtifacts(null);
-              setSelectedAiRunCompare(null);
-              setSelectedAiRunLoading(false);
-              setSelectedSourceDetail(null);
-              setSelectedSourceChunkId(null);
-              setContextNodeId(null);
-              setContextSourceId(null);
-              setPatchDraftOrigin(null);
-              resetWorkspaceAiRunsState();
-            });
+            void applyOverview(event.payload.overview);
             setConsoleMessage(event.payload.message, event.payload.tone);
           },
         ),
@@ -431,9 +166,10 @@ export default function App() {
 
       unlisteners.push(
         await listen<PatchEditorEventPayload>("desktop://patch-editor", (event) => {
-          setShowAdvancedPatchEditor(event.payload.reveal_advanced);
           setPatchEditor(event.payload.patch_json);
           setPatchDraftOrigin(null);
+          setReviewDraft(null);
+          setSelectionPanelTab("review");
           setConsoleMessage(event.payload.message, event.payload.tone);
         }),
       );
@@ -456,9 +192,7 @@ export default function App() {
 
   const consoleMessage = consoleEntry?.message ?? t("console.empty");
   const consoleTone = consoleEntry?.tone ?? null;
-  const workspaceNodeCount = workspaceOverview
-    ? countNodes(workspaceOverview.tree)
-    : 0;
+  const workspaceNodeCount = workspaceOverview ? countNodes(workspaceOverview.tree) : 0;
   const filteredTree = workspaceOverview
     ? filterTree(workspaceOverview.tree, deferredTreeQuery)
     : null;
@@ -471,39 +205,9 @@ export default function App() {
     ? t("navigator.searchResults", { count: treeResultCount })
     : t("navigator.totalNodes", { count: workspaceNodeCount });
   const patchDraftState = inspectPatchDraft(deferredPatchEditor);
-  const currentDraftComparison = compareCurrentDraftWithAppliedPatch(
-    patchDraftState,
-    patchEditor,
-    currentDraftAppliedPatch,
-  );
-  const lastPatchResultCurrent = comparePatchTexts(
-    lastPatchResult?.patch_text ?? null,
-    patchEditor,
-  );
-  const isRootNodeSelected = selectedNodeDetail?.node.parent_id === null;
-  const moveParentOptions =
-    workspaceOverview && selectedNodeDetail
-      ? listParentCandidates(workspaceOverview.tree, selectedNodeDetail.node.id)
-      : [];
-  const canRunStructureActions =
-    Boolean(selectedNodeDetail) &&
-    !isRootNodeSelected &&
-    moveParentOptions.length > 0;
-
-  function resetWorkspaceAiRunsState() {
-    setWorkspaceAiRuns([]);
-    setWorkspaceAiRunsHydrated(false);
-    setWorkspaceAiRunsLoading(false);
-    setWorkspaceSelectedAiRunId(null);
-    setWorkspaceSelectedAiRunShow(null);
-    setWorkspaceSelectedAiRunArtifacts(null);
-    setWorkspaceSelectedAiRunCompare(null);
-    setWorkspaceSelectedAiRunLoading(false);
-  }
 
   function setConsoleMessage(message: string, tone: ConsoleTone) {
     setConsoleEntry({ message, tone });
-    setShowConsoleDetails(tone === "error");
   }
 
   function ensureTauri(): boolean {
@@ -536,116 +240,6 @@ export default function App() {
     return false;
   }
 
-  async function fetchAiRunInspectorBundle(runId: string) {
-    const results = await Promise.allSettled([
-      invokeCommand<AiRunShowOutput>("get_ai_run_show", {
-        start_path: workspacePath,
-        run_id: runId,
-      }),
-      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind: "request",
-      }),
-      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind: "response",
-      }),
-      invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind: "metadata",
-      }),
-    ]);
-
-    const [showResult, requestResult, responseResult, metadataResult] = results;
-    if (showResult.status !== "fulfilled") {
-      throw showResult.reason;
-    }
-
-    return {
-      show: showResult.value,
-      artifacts: {
-        request: toAiRunArtifactState(requestResult),
-        response: toAiRunArtifactState(responseResult),
-        metadata: toAiRunArtifactState(metadataResult),
-      },
-    };
-  }
-
-  async function loadWorkspaceAiRuns(
-    path = workspacePath,
-    options: {
-      silentError?: boolean;
-      preserveSelected?: boolean;
-    } = {},
-  ) {
-    if (!ensureWorkspace(path)) {
-      return false;
-    }
-
-    setWorkspaceAiRunsLoading(true);
-    try {
-      const runs = await invokeCommand<AiRunRecord[]>("get_ai_run_history", {
-        start_path: path,
-      });
-      setWorkspaceAiRuns(runs);
-      setWorkspaceAiRunsHydrated(true);
-      setWorkspaceSelectedAiRunCompare(null);
-      setWorkspaceSelectedAiRunId((current) => {
-        if (
-          options.preserveSelected &&
-          current &&
-          runs.some((run) => run.id === current)
-        ) {
-          return current;
-        }
-        return runs[0]?.id ?? null;
-      });
-      if (!runs.length) {
-        setWorkspaceSelectedAiRunShow(null);
-        setWorkspaceSelectedAiRunArtifacts(null);
-        setWorkspaceSelectedAiRunLoading(false);
-      }
-      setWorkspaceAiRunsLoading(false);
-      return true;
-    } catch (error) {
-      setWorkspaceAiRunsLoading(false);
-      if (!options.silentError) {
-        setConsoleMessage(formatError(error), "error");
-      }
-      return false;
-    }
-  }
-
-  async function openWorkspaceAiRunInspector(runId: string) {
-    setInspectorMode("workspace_runs");
-    setWorkspaceSelectedAiRunId(runId);
-    if (workspaceAiRunsHydrated) {
-      return;
-    }
-    await loadWorkspaceAiRuns(undefined, {
-      preserveSelected: true,
-    });
-  }
-
-  async function openWorkspaceAiRuns() {
-    setInspectorMode("workspace_runs");
-    if (workspaceAiRunsHydrated) {
-      return;
-    }
-    await loadWorkspaceAiRuns();
-  }
-
-  async function openWorkspaceActivity() {
-    setInspectorMode("activity");
-    if (workspaceAiRunsHydrated) {
-      return;
-    }
-    await loadWorkspaceAiRuns();
-  }
-
   async function applyOverview(
     overview: WorkspaceOverview,
     options: { preserveSelection?: boolean } = {},
@@ -661,51 +255,23 @@ export default function App() {
       selectedNodeId &&
       findNodeById(overview.tree, selectedNodeId)
     ) {
-      const reloaded = await fetchNodeDetail(selectedNodeId, overview.root_dir, {
+      const reloaded = await fetchNodeContext(selectedNodeId, overview.root_dir, {
         silentError: true,
       });
       if (reloaded) {
-        return;
-      }
-    }
-
-    if (
-      options.preserveSelection &&
-      selectedSourceId &&
-      overview.sources.some((source) => source.id === selectedSourceId)
-    ) {
-      const reloaded = await fetchSourceDetail(
-        selectedSourceId,
-        overview.root_dir,
-        {
-          silentError: true,
-          targetChunkId: selectedSourceChunkId,
-        },
-      );
-      if (reloaded) {
-        return;
-      }
-    }
-
-    if (
-      options.preserveSelection &&
-      (inspectorMode === "workspace_runs" || inspectorMode === "activity")
-    ) {
-      const reloaded = await loadWorkspaceAiRuns(overview.root_dir, {
-        silentError: true,
-        preserveSelected: true,
-      });
-      if (reloaded) {
+        if (selectedSourceId) {
+          await fetchSourceDetail(selectedSourceId, overview.root_dir, {
+            silentError: true,
+          });
+        }
         return;
       }
     }
 
     const fallbackNodeId =
-      overview.tree.node.id ||
-      findNodeById(overview.tree, "root")?.node.id ||
-      null;
+      overview.tree.node.id || findNodeById(overview.tree, "root")?.node.id || null;
     if (fallbackNodeId) {
-      const reloaded = await fetchNodeDetail(fallbackNodeId, overview.root_dir, {
+      const reloaded = await fetchNodeContext(fallbackNodeId, overview.root_dir, {
         silentError: true,
       });
       if (reloaded) {
@@ -714,20 +280,13 @@ export default function App() {
     }
 
     setSelectedNodeId(null);
+    setSelectedNodeContext(null);
     setSelectedSourceId(null);
-    setSelectedNodeDetail(null);
-    setSelectedNodeAiRuns([]);
-    setSelectedAiRunId(null);
-    setSelectedAiRunShow(null);
-    setSelectedAiRunArtifacts(null);
-    setSelectedAiRunCompare(null);
-    setSelectedAiRunLoading(false);
     setSelectedSourceDetail(null);
-    setSelectedSourceChunkId(null);
-    setContextNodeId(null);
-    setContextSourceId(null);
-    setInspectorMode("selection");
-    resetWorkspaceAiRunsState();
+    setSelectionPanelTab("context");
+    setPatchEditor("");
+    setPatchDraftOrigin(null);
+    setReviewDraft(null);
   }
 
   async function openWorkspaceCommand(path: string) {
@@ -767,7 +326,7 @@ export default function App() {
     }
   }
 
-  async function fetchNodeDetail(
+  async function fetchNodeContext(
     nodeId: string,
     path = workspacePath,
     options: { silentError?: boolean } = {},
@@ -777,27 +336,18 @@ export default function App() {
     }
 
     try {
-      const sourceContextId = selectedSourceDetail
-        ? selectedSourceId
-        : contextSourceId;
-      const [detail, aiRuns] = await Promise.all([
-        invokeCommand<NodeDetail>("get_node_detail", {
+      const context = await invokeCommand<NodeWorkspaceContext>(
+        "get_node_workspace_context",
+        {
           start_path: path,
           node_id: nodeId,
-        }),
-        invokeCommand<AiRunRecord[]>("get_ai_run_history", {
-          start_path: path,
-          node_id: nodeId,
-        }),
-      ]);
-      setContextNodeId(nodeId);
-      setContextSourceId(sourceContextId);
+        },
+      );
       setSelectedNodeId(nodeId);
+      setSelectedNodeContext(context);
       setSelectedSourceId(null);
-      setSelectedNodeDetail(detail);
-      setSelectedNodeAiRuns(aiRuns);
       setSelectedSourceDetail(null);
-      setSelectedSourceChunkId(null);
+      setSelectionPanelTab("context");
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -810,31 +360,20 @@ export default function App() {
   async function fetchSourceDetail(
     sourceId: string,
     path = workspacePath,
-    options: { silentError?: boolean; targetChunkId?: string | null } = {},
+    options: { silentError?: boolean } = {},
   ) {
     if (!ensureWorkspace(path)) {
       return false;
     }
 
     try {
-      const nodeContextId = selectedNodeDetail ? selectedNodeId : contextNodeId;
       const detail = await invokeCommand<SourceDetail>("get_source_detail", {
         start_path: path,
         source_id: sourceId,
       });
-      setContextSourceId(sourceId);
-      setContextNodeId(nodeContextId);
       setSelectedSourceId(sourceId);
-      setSelectedNodeId(null);
       setSelectedSourceDetail(detail);
-      setSelectedSourceChunkId(options.targetChunkId ?? null);
-      setSelectedNodeDetail(null);
-      setSelectedNodeAiRuns([]);
-      setSelectedAiRunId(null);
-      setSelectedAiRunShow(null);
-      setSelectedAiRunArtifacts(null);
-      setSelectedAiRunCompare(null);
-      setSelectedAiRunLoading(false);
+      setSelectionPanelTab("context");
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -844,28 +383,20 @@ export default function App() {
     }
   }
 
-  async function refreshWorkspace(options: {
-    preserveSelection?: boolean;
-    successMessage?: boolean;
-  } = {}) {
+  async function refreshWorkspace() {
     if (!ensureWorkspace()) {
       return;
     }
 
     try {
       const overview = await openWorkspaceCommand(workspacePath);
-      await applyOverview(overview, {
-        preserveSelection: options.preserveSelection ?? true,
-      });
-
-      if (options.successMessage ?? true) {
-        setConsoleMessage(
-          t("messages.refreshedWorkspace", {
-            name: overview.workspace_name,
-          }),
-          "success",
-        );
-      }
+      await applyOverview(overview, { preserveSelection: true });
+      setConsoleMessage(
+        t("messages.refreshedWorkspace", {
+          name: overview.workspace_name,
+        }),
+        "success",
+      );
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
     }
@@ -886,12 +417,6 @@ export default function App() {
       const report = await invokeCommand<ApplyPatchReport>("preview_patch", {
         start_path: workspacePath,
         patch_json: patchJson,
-      });
-      setLastPatchResult({
-        kind: "preview",
-        report,
-        draft_origin: patchDraftOrigin,
-        patch_text: patchJson,
       });
       setConsoleMessage(renderPatchReport(report, true, t, patchDraftOrigin), "success");
     } catch (error) {
@@ -914,42 +439,26 @@ export default function App() {
       const args: Record<string, unknown> = {
         start_path: workspacePath,
         patch_json: patchJson,
+        focus_node_id: selectedNodeId,
       };
       if (patchDraftOrigin?.kind === "ai_run") {
         args.ai_run_id = patchDraftOrigin.run_id;
       }
-      const report = await invokeCommand<ApplyPatchReport>("apply_patch", args);
-      const nextDraftOrigin = linkPatchRunToDraftOrigin(
-        patchDraftOrigin,
-        report.run_id,
+
+      const output = await invokeCommand<ApplyReviewedPatchOutput>(
+        "apply_reviewed_patch",
+        args,
       );
-      setPatchDraftOrigin(nextDraftOrigin);
-      setLastPatchResult({
-        kind: "apply",
-        report,
-        draft_origin: nextDraftOrigin,
-        patch_text: patchJson,
-      });
-      setCurrentDraftRun((current) =>
-        nextDraftOrigin?.kind === "ai_run" && report.run_id
-          ? attachPatchRunToRun(current, report.run_id, report.summary)
-          : current,
-      );
-      if (nextDraftOrigin?.kind === "ai_run" && report.run_id) {
-        setSelectedNodeAiRuns((current) =>
-          attachPatchRunToAiRuns(
-            current,
-            nextDraftOrigin.run_id,
-            report.run_id!,
-            report.summary,
-          ),
-        );
+      await applyOverview(output.overview, { preserveSelection: false });
+      if (output.focus_node_context) {
+        setSelectedNodeId(output.focus_node_context.node_detail.node.id);
+        setSelectedNodeContext(output.focus_node_context);
       }
-      await refreshWorkspace({
-        preserveSelection: true,
-        successMessage: false,
-      });
-      setConsoleMessage(renderPatchReport(report, false, t, nextDraftOrigin), "success");
+      setSelectionPanelTab("review");
+      setConsoleMessage(
+        renderPatchReport(output.report, false, t, patchDraftOrigin),
+        "success",
+      );
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
     }
@@ -967,16 +476,17 @@ export default function App() {
     }
 
     try {
-      setShowAdvancedPatchEditor(false);
       const patch = await invokeCommand<PatchDocument>("draft_add_node_patch", {
         title,
         parent_id: selectedNodeId,
-        kind: optionalText(addChildKind) ?? "topic",
+        kind: "topic",
         body: optionalText(addChildBody),
         position: null,
       });
       setPatchEditor(JSON.stringify(patch, null, 2));
       setPatchDraftOrigin(null);
+      setReviewDraft(null);
+      setSelectionPanelTab("review");
       setConsoleMessage(
         t("messages.draftedAddChild", { nodeId: selectedNodeId! }),
         "success",
@@ -992,28 +502,20 @@ export default function App() {
     }
 
     try {
-      setShowAdvancedPatchEditor(false);
-      const result = await invokeCommand<ExternalRunnerReport>("draft_ai_expand_patch", {
+      const result = await invokeCommand<DraftReviewPayload>("draft_node_expand", {
         start_path: workspacePath,
         node_id: selectedNodeId,
       });
       setPatchEditor(JSON.stringify(result.patch, null, 2));
-      setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
-      setCurrentDraftRun(aiMetadataToRunRecord(result.metadata));
-      setSelectedNodeAiRuns((current) =>
-        mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
+      setPatchDraftOrigin(aiRunRecordToDraftOrigin(result.run));
+      setReviewDraft(result);
+      setSelectionPanelTab("review");
+      setConsoleMessage(
+        renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
+        "success",
       );
-      if (workspaceAiRunsHydrated) {
-        setWorkspaceAiRuns((current) =>
-          mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
-        );
-        if (inspectorMode === "workspace_runs") {
-          setWorkspaceSelectedAiRunId(result.metadata.run_id);
-        }
-      }
-      setConsoleMessage(renderExternalRunnerReport(result, t), "success");
     } catch (error) {
-      setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
+      setConsoleMessage(formatError(error), "error");
     }
   }
 
@@ -1025,71 +527,51 @@ export default function App() {
     }
 
     try {
-      setShowAdvancedPatchEditor(false);
-      const result = await invokeCommand<ExternalRunnerReport>(
-        "draft_ai_explore_patch",
-        {
-          start_path: workspacePath,
-          node_id: selectedNodeId,
-          by,
-        },
-      );
+      const result = await invokeCommand<DraftReviewPayload>("draft_node_explore", {
+        start_path: workspacePath,
+        node_id: selectedNodeId,
+        by,
+      });
       setPatchEditor(JSON.stringify(result.patch, null, 2));
-      setPatchDraftOrigin(aiMetadataToDraftOrigin(result));
-      setCurrentDraftRun(aiMetadataToRunRecord(result.metadata));
-      setSelectedNodeAiRuns((current) =>
-        mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
+      setPatchDraftOrigin(aiRunRecordToDraftOrigin(result.run));
+      setReviewDraft(result);
+      setSelectionPanelTab("review");
+      setConsoleMessage(
+        renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
+        "success",
       );
-      if (workspaceAiRunsHydrated) {
-        setWorkspaceAiRuns((current) =>
-          mergeAiRunRecord(current, aiMetadataToRunRecord(result.metadata)),
-        );
-        if (inspectorMode === "workspace_runs") {
-          setWorkspaceSelectedAiRunId(result.metadata.run_id);
-        }
-      }
-      setConsoleMessage(renderExternalRunnerReport(result, t), "success");
     } catch (error) {
-      setConsoleMessage(renderAiDraftFailure(error, desktopAiStatus, t), "error");
+      setConsoleMessage(formatError(error), "error");
     }
   }
 
   async function draftUpdateNodePatch() {
-    if (!ensureNodeSelected() || !ensureWorkspace()) {
+    if (!ensureNodeSelected() || !ensureWorkspace() || !selectedNodeContext) {
       return;
     }
 
-    if (!selectedNodeDetail) {
-      setConsoleMessage(t("messages.selectNodeFirst"), "error");
-      return;
-    }
+    const currentNode = selectedNodeContext.node_detail.node;
+    const title = updateNodeTitle.trim();
+    const body = updateNodeBody;
+    const nextTitle = title && title !== currentNode.title ? title : null;
+    const nextBody = body !== (currentNode.body ?? "") ? body : null;
 
-    const currentNode = selectedNodeDetail.node;
-    const nextTitle = updateNodeTitle.trim();
-    const nextKind = updateNodeKind.trim();
-    const title = nextTitle && nextTitle !== currentNode.title ? nextTitle : null;
-    const kind = nextKind && nextKind !== currentNode.kind ? nextKind : null;
-    const currentBody = currentNode.body ?? "";
-    const bodyChanged = updateNodeBody !== currentBody;
-
-    if (title === null && kind === null && !bodyChanged) {
+    if (nextTitle === null && nextBody === null) {
       setConsoleMessage(t("messages.updateNeedsField"), "error");
       return;
     }
 
     try {
-      setShowAdvancedPatchEditor(false);
-      const patch = await invokeCommand<PatchDocument>(
-        "draft_update_node_patch",
-        {
-          node_id: selectedNodeId,
-          title,
-          kind,
-          body: bodyChanged ? updateNodeBody : null,
-        },
-      );
+      const patch = await invokeCommand<PatchDocument>("draft_update_node_patch", {
+        node_id: selectedNodeId,
+        title: nextTitle,
+        kind: null,
+        body: nextBody,
+      });
       setPatchEditor(JSON.stringify(patch, null, 2));
       setPatchDraftOrigin(null);
+      setReviewDraft(null);
+      setSelectionPanelTab("review");
       setConsoleMessage(
         t("messages.draftedUpdate", { nodeId: selectedNodeId! }),
         "success",
@@ -1099,572 +581,80 @@ export default function App() {
     }
   }
 
-  async function draftMoveNodePatch() {
-    if (!ensureNodeSelected() || !ensureWorkspace()) {
-      return;
-    }
-
-    if (!canRunStructureActions) {
-      setConsoleMessage(t("messages.rootNodeStructureLocked"), "error");
-      return;
-    }
-
-    const parentId = moveNodeParent.trim();
-    if (!parentId) {
-      setConsoleMessage(t("messages.provideParentId"), "error");
-      return;
-    }
-
-    if (!selectedNodeDetail) {
-      setConsoleMessage(t("messages.selectNodeFirst"), "error");
-      return;
-    }
-
-    try {
-      if (parentId === (selectedNodeDetail.parent?.id ?? "")) {
-        setConsoleMessage(t("messages.moveNeedsChange"), "error");
-        return;
-      }
-
-      setShowAdvancedPatchEditor(false);
-      const patch = await invokeCommand<PatchDocument>("draft_move_node_patch", {
-        node_id: selectedNodeId,
-        parent_id: parentId,
-        position: null,
-      });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setConsoleMessage(
-        t("messages.draftedMove", { nodeId: selectedNodeId! }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function draftDeleteNodePatch() {
-    if (!ensureNodeSelected() || !ensureWorkspace()) {
-      return;
-    }
-
-    if (!canRunStructureActions) {
-      setConsoleMessage(t("messages.rootNodeStructureLocked"), "error");
-      return;
-    }
-
-    try {
-      setShowAdvancedPatchEditor(false);
-      const patch = await invokeCommand<PatchDocument>(
-        "draft_delete_node_patch",
-        {
-          node_id: selectedNodeId,
-        },
-      );
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setConsoleMessage(
-        t("messages.draftedDelete", { nodeId: selectedNodeId! }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function draftSourceChunkCitation(chunkId: string, cited: boolean) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    if (!contextNodeId) {
-      setConsoleMessage(t("messages.selectNodeContextFirst"), "error");
-      return;
-    }
-
-    try {
-      setShowAdvancedPatchEditor(false);
-      const command = cited
-        ? "draft_uncite_source_chunk_patch"
-        : "draft_cite_source_chunk_patch";
-      const patch = await invokeCommand<PatchDocument>(command, {
-        node_id: contextNodeId,
-        chunk_id: chunkId,
-      });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setConsoleMessage(
-        cited
-          ? t("messages.draftedUncitation", { nodeId: contextNodeId })
-          : t("messages.draftedCitation", { nodeId: contextNodeId }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  function clearPatchEditor() {
-    setPatchEditor("");
-    setPatchDraftOrigin(null);
-    setShowAdvancedPatchEditor(false);
-    setConsoleMessage(t("messages.patchEditorCleared"), "success");
-  }
-
-  async function loadAiRunPatch(run: AiRunRecord) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      setShowAdvancedPatchEditor(false);
-      const patch = await invokeCommand<PatchDocument>("get_ai_run_patch", {
-        start_path: workspacePath,
-        run_id: run.id,
-      });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(aiRunRecordToDraftOrigin(run));
-      setCurrentDraftRun(run);
-      setConsoleMessage(t("messages.loadedAiRunPatch", { runId: run.id }), "success");
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function loadAiRunPatchById(runId: string) {
-    try {
-      const run = await getAiRunRecord(runId);
-      await loadAiRunPatch(run);
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function loadPatchRunPatch(patchRunId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      setShowAdvancedPatchEditor(false);
-      const patch = await invokeCommand<PatchDocument>("get_patch_document", {
-        start_path: workspacePath,
-        run_id: patchRunId,
-      });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setConsoleMessage(
-        t("messages.loadedPatchRunPatch", { runId: patchRunId }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function restoreSnapshotById(snapshotId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      const overview = await invokeCommand<WorkspaceOverview>("restore_snapshot", {
-        start_path: workspacePath,
-        snapshot_id: snapshotId,
-      });
-      await applyOverview(overview, {
-        preserveSelection: true,
-      });
-      setInspectorMode("activity");
-      setConsoleMessage(
-        t("messages.restoredSnapshotFromActivity", { snapshotId }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function getAiRunRecord(runId: string): Promise<AiRunRecord> {
-    if (selectedAiRunShow?.record.id === runId) {
-      return selectedAiRunShow.record;
-    }
-
-    if (workspaceSelectedAiRunShow?.record.id === runId) {
-      return workspaceSelectedAiRunShow.record;
-    }
-
-    const currentRun = selectedNodeAiRuns.find((run) => run.id === runId);
-    if (currentRun) {
-      return currentRun;
-    }
-
-    const workspaceRun = workspaceAiRuns.find((run) => run.id === runId);
-    if (workspaceRun) {
-      return workspaceRun;
-    }
-
-    return invokeCommand<AiRunRecord>("get_ai_run_record", {
-      start_path: workspacePath,
-      run_id: runId,
-    });
-  }
-
-  async function replayAiRunDryRun(runId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      setShowAdvancedPatchEditor(false);
-      const replay = await invokeCommand<AiRunReplayReport>("preview_ai_run_replay", {
-        start_path: workspacePath,
-        run_id: runId,
-      });
-      const patchJson = JSON.stringify(replay.replay_patch, null, 2);
-      const draftOrigin = aiRunRecordToDraftOrigin(replay.source_run);
-      setPatchEditor(patchJson);
-      setPatchDraftOrigin(draftOrigin);
-      setCurrentDraftRun(replay.source_run);
-      setLastPatchResult({
-        kind: "preview",
-        report: replay.report,
-        draft_origin: draftOrigin,
-        patch_text: patchJson,
-      });
-      setSelectedNodeAiRuns((current) =>
-        mergeAiRunRecord(current, replay.source_run),
-      );
-      setConsoleMessage(renderAiRunReplayReport(replay, t), "success");
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function compareAiRuns(leftRunId: string, rightRunId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      const output = await invokeCommand<AiRunCompareOutput>("compare_ai_runs", {
-        start_path: workspacePath,
-        left_run_id: leftRunId,
-        right_run_id: rightRunId,
-      });
-      setSelectedAiRunCompare(output);
-      setConsoleMessage(
-        t("messages.loadedAiRunCompare", {
-          leftRunId: leftRunId,
-          rightRunId: rightRunId,
-        }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function compareWorkspaceAiRuns(leftRunId: string, rightRunId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      const output = await invokeCommand<AiRunCompareOutput>("compare_ai_runs", {
-        start_path: workspacePath,
-        left_run_id: leftRunId,
-        right_run_id: rightRunId,
-      });
-      setWorkspaceSelectedAiRunCompare(output);
-      setConsoleMessage(
-        t("messages.loadedAiRunCompare", {
-          leftRunId: leftRunId,
-          rightRunId: rightRunId,
-        }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function openAiEvidenceSourceChunk(sourceId: string, chunkId: string) {
-    const focused = await fetchSourceDetail(sourceId, workspacePath, {
-      targetChunkId: chunkId,
-    });
-    if (focused) {
-      setInspectorMode("selection");
-    }
-  }
-
-  async function openNodeForAiRun(runId: string) {
-    await focusAiRunInInspector(runId);
-  }
-
-  async function focusAiRunInInspector(runId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      const run = await getAiRunRecord(runId);
-      const focused = await fetchNodeDetail(run.node_id, workspacePath, {
-        silentError: true,
-      });
-      if (!focused) {
-        setConsoleMessage(
-          t("messages.patchDraftOriginTraceUnavailable", { runId }),
-          "error",
-        );
-        return;
-      }
-      setInspectorMode("selection");
-      setSelectedAiRunId(runId);
-      setConsoleMessage(
-        t("messages.focusedAiRunInspector", { runId }),
-        "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function showAiRunTraceById(runId: string) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      const run = await getAiRunRecord(runId);
-      setConsoleMessage(
-        renderAiRunTrace(run, t),
-        run.status === "failed" ? "error" : "success",
-      );
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  async function showAiRunArtifactById(
-    runId: string,
-    kind: "request" | "response" | "metadata",
-  ) {
-    if (!ensureWorkspace()) {
-      return;
-    }
-
-    try {
-      const artifact = await invokeCommand<AiRunArtifact>("get_ai_run_artifact", {
-        start_path: workspacePath,
-        run_id: runId,
-        kind,
-      });
-      setConsoleMessage(renderAiRunArtifact(artifact, t), "success");
-    } catch (error) {
-      setConsoleMessage(formatError(error), "error");
-    }
-  }
-
-  function showCurrentDraftOriginTrace() {
-    if (!patchDraftOrigin) {
-      return;
-    }
-
-    void showAiRunTraceById(patchDraftOrigin.run_id);
-  }
-
-  function showCurrentDraftOriginArtifact(
-    kind: "request" | "response" | "metadata",
-  ) {
-    if (!patchDraftOrigin) {
-      return;
-    }
-
-    void showAiRunArtifactById(patchDraftOrigin.run_id, kind);
-  }
-
   return (
-    <div className="flex h-screen w-full flex-col gap-3 overflow-hidden px-3 py-3">
+    <div className="flex h-screen w-full flex-col gap-3 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.96),rgba(243,244,246,0.98),rgba(229,231,235,0.92))] px-3 py-3">
       {workspaceOverview ? (
-        <main className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)_400px]">
-          <TreePane
-            workspaceOverview={workspaceOverview}
-            treeSummary={treeSummary}
-            treeQuery={treeQuery}
-            query={deferredTreeQuery}
-            filteredTree={filteredTree}
-            selectedNodeId={selectedNodeId}
-            t={t}
-            onQueryChange={setTreeQuery}
-            onSelectNode={(nodeId) => {
-              setInspectorMode("selection");
-              void fetchNodeDetail(nodeId);
-            }}
-          />
-          <InspectorPane
-            hasWorkspace
-            workspaceOverview={workspaceOverview}
-            inspectorMode={inspectorMode}
-            desktopAiStatus={desktopAiStatus}
-            workspaceAiRuns={workspaceAiRuns}
-            workspaceAiRunsHydrated={workspaceAiRunsHydrated}
-            workspaceAiRunsLoading={workspaceAiRunsLoading}
-            workspaceSelectedAiRunId={workspaceSelectedAiRunId}
-            workspaceSelectedAiRunShow={workspaceSelectedAiRunShow}
-            workspaceSelectedAiRunArtifacts={workspaceSelectedAiRunArtifacts}
-            workspaceSelectedAiRunCompare={workspaceSelectedAiRunCompare}
-            workspaceSelectedAiRunLoading={workspaceSelectedAiRunLoading}
-            selectedNodeDetail={selectedNodeDetail}
-            selectedNodeAiRuns={selectedNodeAiRuns}
-            selectedAiRunId={selectedAiRunId}
-            selectedAiRunShow={selectedAiRunShow}
-            selectedAiRunArtifacts={selectedAiRunArtifacts}
-            selectedAiRunCompare={selectedAiRunCompare}
-            selectedAiRunLoading={selectedAiRunLoading}
-            patchDraftOrigin={patchDraftOrigin}
-            selectedSourceDetail={selectedSourceDetail}
-            selectedSourceChunkId={selectedSourceChunkId}
-            contextNodeId={contextNodeId}
-            contextSourceId={contextSourceId}
-            consoleMessage={consoleMessage}
-            consoleTone={consoleTone}
-            showConsoleDetails={showConsoleDetails}
-            t={t}
-            onToggleConsoleDetails={() => {
-              setShowConsoleDetails((current) => !current);
-            }}
-            onOpenWorkspaceAiRuns={() => {
-              void openWorkspaceAiRuns();
-            }}
-            onOpenWorkspaceActivity={() => {
-              void openWorkspaceActivity();
-            }}
-            onReturnToSelection={() => {
-              setInspectorMode("selection");
-            }}
-            onSelectNode={(nodeId) => {
-              setInspectorMode("selection");
-              void fetchNodeDetail(nodeId);
-            }}
-            onSelectSource={(sourceId) => {
-              setInspectorMode("selection");
-              void fetchSourceDetail(sourceId);
-            }}
-            onSelectAiRun={(runId) => {
-              setSelectedAiRunId(runId);
-            }}
-            onSelectWorkspaceAiRun={(runId) => {
-              setWorkspaceSelectedAiRunId(runId);
-            }}
-            onLoadAiRunPatch={(runId) => {
-              void loadAiRunPatchById(runId);
-            }}
-            onReplayAiRunDryRun={(runId) => {
-              void replayAiRunDryRun(runId);
-            }}
-            onCompareAiRuns={(leftRunId, rightRunId) => {
-              void compareAiRuns(leftRunId, rightRunId);
-            }}
-            onClearAiRunCompare={() => {
-              setSelectedAiRunCompare(null);
-            }}
-            onCompareWorkspaceAiRuns={(leftRunId, rightRunId) => {
-              void compareWorkspaceAiRuns(leftRunId, rightRunId);
-            }}
-            onClearWorkspaceAiRunCompare={() => {
-              setWorkspaceSelectedAiRunCompare(null);
-            }}
-            onOpenWorkspaceAiRunInspector={(runId) => {
-              void openWorkspaceAiRunInspector(runId);
-            }}
-            onOpenNodeForAiRun={(runId) => {
-              void openNodeForAiRun(runId);
-            }}
-            onLoadPatchRunPatch={(patchRunId) => {
-              void loadPatchRunPatch(patchRunId);
-            }}
-            onRestoreSnapshot={(snapshotId) => {
-              void restoreSnapshotById(snapshotId);
-            }}
-            onOpenAiEvidenceSourceChunk={(sourceId, chunkId) => {
-              void openAiEvidenceSourceChunk(sourceId, chunkId);
-            }}
-            onDraftCiteChunk={(chunkId) => {
-              void draftSourceChunkCitation(chunkId, false);
-            }}
-            onDraftUnciteChunk={(chunkId) => {
-              void draftSourceChunkCitation(chunkId, true);
-            }}
-          />
-          <EditorPane
-            hasWorkspace
-            desktopAiStatus={desktopAiStatus}
-            selectedNodeDetail={selectedNodeDetail}
-            updateNodeTitle={updateNodeTitle}
-            updateNodeKind={updateNodeKind}
-            updateNodeBody={updateNodeBody}
-            addChildTitle={addChildTitle}
-            addChildKind={addChildKind}
-            addChildBody={addChildBody}
-            moveNodeParent={moveNodeParent}
-            moveParentOptions={moveParentOptions}
-            patchEditor={patchEditor}
-            patchDraftOrigin={patchDraftOrigin}
-            currentDraftRun={currentDraftRun}
-            currentDraftComparison={currentDraftComparison}
-            lastPatchResult={lastPatchResult}
-            lastPatchResultCurrent={lastPatchResultCurrent}
-            showAdvancedPatchEditor={showAdvancedPatchEditor}
-            canRunStructureActions={canRunStructureActions}
-            patchDraftState={patchDraftState}
-            t={t}
-            onTitleChange={setUpdateNodeTitle}
-            onKindChange={setUpdateNodeKind}
-            onBodyChange={setUpdateNodeBody}
-            onAddChildTitleChange={setAddChildTitle}
-            onAddChildKindChange={setAddChildKind}
-            onAddChildBodyChange={setAddChildBody}
-            onParentChange={setMoveNodeParent}
-            onPatchEditorChange={setPatchEditor}
-            onToggleAdvancedPatchEditor={() => {
-              setShowAdvancedPatchEditor((current) => !current);
-            }}
-            onClearPatchEditor={clearPatchEditor}
-            onDraftUpdate={() => {
-              void draftUpdateNodePatch();
-            }}
-            onDraftAiExpand={() => {
-              void draftAiExpandPatch();
-            }}
-            onDraftAiExplore={(by) => {
-              void draftAiExplorePatch(by);
-            }}
-            onDraftAddChild={() => {
-              void draftAddChildPatch();
-            }}
-            onDraftMove={() => {
-              void draftMoveNodePatch();
-            }}
-            onDraftDelete={() => {
-              void draftDeleteNodePatch();
-            }}
-            onPreviewPatch={() => {
-              void previewPatch();
-            }}
-            onApplyPatch={() => {
-              void applyPatch();
-            }}
-            onLoadAppliedPatch={(patchRunId) => {
-              void loadPatchRunPatch(patchRunId);
-            }}
-            onOpenAiRunInspector={(runId) => {
-              void focusAiRunInInspector(runId);
-            }}
-            onShowDraftOriginTrace={showCurrentDraftOriginTrace}
-            onShowDraftOriginArtifact={(kind) => {
-              showCurrentDraftOriginArtifact(kind);
-            }}
-          />
+        <main className="flex min-h-0 flex-1 flex-col gap-3">
+          <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[280px_minmax(0,1.08fr)_minmax(360px,0.92fr)]">
+            <TreePane
+              workspaceOverview={workspaceOverview}
+              treeSummary={treeSummary}
+              treeQuery={treeQuery}
+              query={deferredTreeQuery}
+              filteredTree={filteredTree}
+              selectedNodeId={selectedNodeId}
+              t={t}
+              onQueryChange={setTreeQuery}
+              onSelectNode={(nodeId) => {
+                void fetchNodeContext(nodeId);
+              }}
+            />
+
+            <WorkbenchMainPane
+              nodeContext={selectedNodeContext}
+              updateNodeTitle={updateNodeTitle}
+              updateNodeBody={updateNodeBody}
+              addChildTitle={addChildTitle}
+              addChildBody={addChildBody}
+              t={t}
+              onTitleChange={setUpdateNodeTitle}
+              onBodyChange={setUpdateNodeBody}
+              onAddChildTitleChange={setAddChildTitle}
+              onAddChildBodyChange={setAddChildBody}
+              onSelectNode={(nodeId) => {
+                void fetchNodeContext(nodeId);
+              }}
+              onOpenSource={(sourceId) => {
+                void fetchSourceDetail(sourceId);
+              }}
+              onDraftAiExpand={() => {
+                void draftAiExpandPatch();
+              }}
+              onDraftAiExplore={(by) => {
+                void draftAiExplorePatch(by);
+              }}
+              onDraftAddChild={() => {
+                void draftAddChildPatch();
+              }}
+              onDraftUpdate={() => {
+                void draftUpdateNodePatch();
+              }}
+            />
+
+            <WorkbenchSidePane
+              selectionTab={selectionPanelTab}
+              nodeContext={selectedNodeContext}
+              selectedSourceDetail={selectedSourceDetail}
+              selectedSourceChunkId={null}
+              reviewDraft={reviewDraft}
+              patchDraftState={patchDraftState}
+              t={t}
+              onSelectSelectionTab={setSelectionPanelTab}
+              onOpenSource={(sourceId) => {
+                void fetchSourceDetail(sourceId);
+              }}
+              onBackToNodeContext={() => {
+                setSelectedSourceId(null);
+                setSelectedSourceDetail(null);
+              }}
+              onPreviewPatch={() => {
+                void previewPatch();
+              }}
+              onApplyPatch={() => {
+                void applyPatch();
+              }}
+            />
+          </div>
         </main>
       ) : (
         <main className="flex min-h-0 flex-1">
@@ -1683,47 +673,7 @@ export default function App() {
   );
 }
 
-function aiMetadataToDraftOrigin(
-  result: ExternalRunnerReport,
-): PatchDraftOrigin {
-  return {
-    kind: "ai_run",
-    run_id: result.metadata.run_id,
-    capability: result.metadata.capability,
-    explore_by: result.metadata.explore_by,
-    provider: result.metadata.provider,
-    model: result.metadata.model,
-    patch_run_id: result.metadata.patch_run_id,
-  };
-}
-
-function aiMetadataToRunRecord(metadata: ExternalRunnerReport["metadata"]): AiRunRecord {
-  return {
-    id: metadata.run_id,
-    capability: metadata.capability,
-    explore_by: metadata.explore_by,
-    node_id: metadata.node_id,
-    command: metadata.command,
-    dry_run: metadata.dry_run,
-    status: metadata.status,
-    started_at: metadata.started_at,
-    finished_at: metadata.finished_at,
-    request_path: metadata.request_path,
-    response_path: metadata.response_path,
-    exit_code: metadata.exit_code,
-    provider: metadata.provider,
-    model: metadata.model,
-    provider_run_id: metadata.provider_run_id,
-    retry_count: metadata.retry_count,
-    last_error_category: metadata.last_error_category,
-    last_error_message: metadata.last_error_message,
-    last_status_code: metadata.last_status_code,
-    patch_run_id: metadata.patch_run_id,
-    patch_summary: metadata.patch_summary,
-  };
-}
-
-function aiRunRecordToDraftOrigin(run: AiRunRecord): PatchDraftOrigin {
+function aiRunRecordToDraftOrigin(run: DraftReviewPayload["run"]): PatchDraftOrigin {
   return {
     kind: "ai_run",
     run_id: run.id,
@@ -1732,114 +682,5 @@ function aiRunRecordToDraftOrigin(run: AiRunRecord): PatchDraftOrigin {
     provider: run.provider,
     model: run.model,
     patch_run_id: run.patch_run_id,
-  };
-}
-
-function mergeAiRunRecord(
-  current: AiRunRecord[],
-  next: AiRunRecord,
-): AiRunRecord[] {
-  return [next, ...current.filter((run) => run.id !== next.id)].sort((left, right) => {
-    if (right.started_at !== left.started_at) {
-      return right.started_at - left.started_at;
-    }
-    return right.id.localeCompare(left.id);
-  });
-}
-
-function attachPatchRunToAiRuns(
-  current: AiRunRecord[],
-  aiRunId: string,
-  patchRunId: string,
-  patchSummary: string | null,
-): AiRunRecord[] {
-  return current.map((run) =>
-    run.id === aiRunId
-      ? {
-          ...run,
-          patch_run_id: patchRunId,
-          patch_summary: patchSummary ?? run.patch_summary,
-        }
-      : run,
-  );
-}
-
-function attachPatchRunToRun(
-  current: AiRunRecord | null,
-  patchRunId: string,
-  patchSummary: string | null,
-): AiRunRecord | null {
-  if (!current) {
-    return current;
-  }
-
-  return {
-    ...current,
-    patch_run_id: patchRunId,
-    patch_summary: patchSummary ?? current.patch_summary,
-  };
-}
-
-function linkPatchRunToDraftOrigin(
-  origin: PatchDraftOrigin | null,
-  patchRunId: string | null,
-): PatchDraftOrigin | null {
-  if (!origin || !patchRunId) {
-    return origin;
-  }
-
-  return {
-    ...origin,
-    patch_run_id: patchRunId,
-  };
-}
-
-function compareCurrentDraftWithAppliedPatch(
-  patchDraftState: ReturnType<typeof inspectPatchDraft>,
-  patchEditor: string,
-  appliedPatch: PatchDocument | null,
-): "matching" | "different" | null {
-  if (patchDraftState.state !== "ready" || !appliedPatch) {
-    return null;
-  }
-
-  try {
-    const currentPatch = JSON.parse(patchEditor) as PatchDocument;
-    return JSON.stringify(currentPatch) === JSON.stringify(appliedPatch)
-      ? "matching"
-      : "different";
-  } catch {
-    return null;
-  }
-}
-
-function comparePatchTexts(
-  left: string | null,
-  right: string,
-): boolean | null {
-  if (!left) {
-    return null;
-  }
-
-  try {
-    return JSON.stringify(JSON.parse(left)) === JSON.stringify(JSON.parse(right));
-  } catch {
-    return left.trim() === right.trim();
-  }
-}
-
-function toAiRunArtifactState(
-  result: PromiseSettledResult<AiRunArtifact>,
-) {
-  if (result.status === "fulfilled") {
-    return {
-      artifact: result.value,
-      error: null,
-    };
-  }
-
-  return {
-    artifact: null,
-    error: formatError(result.reason),
   };
 }

@@ -5,18 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
-    "dev:desktop": "tauri dev",
     "dev:web": "vite",
     "build": "tauri build",
-    "build:desktop": "tauri build",
     "build:web": "tsc && vite build",
-    "vite:dev": "vite",
-    "vite:build": "tsc && vite build",
     "check": "tsc --noEmit",
-    "check:web": "tsc --noEmit",
     "check:tauri": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test:core": "cargo test --manifest-path ../Cargo.toml",
-    "check:all": "npm run check:web && npm run check:tauri && npm run test:core"
+    "check:all": "npm run check && npm run check:tauri && npm run test:core"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.1",
