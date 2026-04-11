@@ -14,7 +14,7 @@ Nodex 的长期目标不是“做一个只活在 CLI 里的工具”，而是：
 
 ## 当前已经落地的结构
 
-当前仓库已经从单一 CLI 二进制，演化成“共享内核 + CLI + 最小桌面壳”的结构：
+当前仓库已经从单一 CLI 二进制，演化成“共享内核 + CLI + 过渡性桌面壳”的结构：
 
 ### `src/lib.rs`
 
@@ -117,7 +117,7 @@ AI request / response 编排层。
 
 ### `desktop/src-tauri`
 
-最小 Tauri 桌面壳后端。
+过渡性 Tauri 桌面壳后端。
 
 职责：
 
@@ -142,14 +142,15 @@ AI request / response 编排层。
   - 对当前 anthropic provider entry 来说，这意味着桌面默认会优先进入 `langchain_anthropic_runner.py`
   - 模型和认证默认从本地 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` / `ANTHROPIC_MODEL` 读取
 - 把菜单动作和工作区状态变化通过事件发回前端
+- 当前这层后端主要承担“桌面命令桥 + 审计入口”的职责，不等于最终产品交互层已经确定
 
 ### `desktop/src`
 
-最小桌面壳前端，当前用 `React + Vite + TypeScript + Tailwind CSS` 组织。
+过渡性桌面壳前端，当前用 `React + Vite + TypeScript + Tailwind CSS` 组织。
 
 职责：
 
-- 维持单屏、薄壳的桌面工作台
+- 维持一层单屏、薄壳的桌面工作台
 - 提供三块核心区域：
   - 左栏：树视图
   - 中栏：详情摘要与底部控制台
@@ -173,6 +174,8 @@ AI request / response 编排层。
 - 负责 patch 预览与应用
 - 监听原生菜单事件并更新页面状态
 - 不再把所有低频入口都堆在页面里
+- 当前这层前端已经证明共享内核、patch 编辑链路和 AI 审计链路都能接进桌面环境
+- 但它仍然暴露了较多 `patch` / `run-id` / artifact 等低层概念，更接近调试与审计工作台，不应继续被视为最终人类交互基线
 
 ### `desktop/index.html` + `desktop/vite.config.ts`
 
@@ -207,6 +210,30 @@ AI request / response 编排层。
            |        SQLite + files       |
            +-----------------------------+
 ```
+
+## 当前桌面壳判断
+
+当前桌面壳已经完成了一件重要工作：
+
+- 它证明现有共享内核足以支撑桌面应用
+- 它也证明 source import、snapshot、patch 编辑、AI run 审计这些能力都能通过 Tauri 命令面复用
+
+但它也暴露了一个同样重要的事实：
+
+- 当前前端信息架构更像调试壳，而不是人类高频使用的产品界面
+- 问题主要在壳层表达和交互组织，而不是 `store / patch / ai` 这些底层能力不成立
+
+因此接下来更合理的方向是：
+
+- 保留共享 Rust 内核
+- 保留 Tauri 壳和桌面命令桥
+- 在其上补更薄的桌面 façade / 高层交互
+- 重做桌面前端的信息架构与主路径
+
+而不是：
+
+- 继续在当前前端上叠加更多主视图和调试入口
+- 或者连共享内核一起推翻重写
 
 ## 表达层分层方向
 
@@ -244,6 +271,11 @@ AI request / response 编排层。
   - `node add/update/move/delete`
   - `source import`
   - desktop 中的 draft / preview / apply 入口
+
+对桌面端来说，这条方向尤其重要：
+
+- 当前壳层之所以难用，不是因为 patch-first 不能做桌面端
+- 而是因为桌面端还缺一层更贴近人类交互的高层表达
 
 ### Canonical Patch Layer
 
@@ -419,4 +451,4 @@ CLI、Tauri、AI runtime 都应该只是这些能力的不同入口。
 - 初始节点树生成
 - chunk 级基础关联
 
-目前已经有一层最小桌面壳，所以接下来更适合做的，不是“先把 GUI 做大”，而是让 GUI 继续薄、内核继续稳，并把 AI patch 能力接到同一套边界上。
+目前已经有一层完成复用验证的过渡性桌面壳，所以接下来更适合做的，不是在现壳上继续把 GUI 做大，而是保留共享内核与桌面命令桥，重做一版更人类可用的桌面交互层，并继续把 AI patch 能力接到同一套边界上。
