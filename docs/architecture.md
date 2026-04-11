@@ -167,6 +167,9 @@ AI request / response 编排层。
 - 当前实现刻意不把工作区级 AI runs、Activity、Run Inspector 继续放在主舞台
 - 因此它不再是“调试 / 审计壳优先”，而是一版更接近节点工作流的最小 façade
 - 但它仍然只是过渡性实现，不应被视为最终人类交互基线
+- 桌面 v2 当前默认选择 `React Flow` 作为画布层实现方向
+- 这层画布只负责节点空间投影、viewport、selection、连线渲染和聚焦反馈
+- 它不持有 canonical workspace state；结构编辑仍应继续编译到 patch，再复用 Rust 侧 validate / apply / archive
 
 ### `desktop/index.html` + `desktop/vite.config.ts`
 
@@ -225,6 +228,23 @@ AI request / response 编排层。
 
 - 继续在当前前端上叠加更多主视图和调试入口
 - 或者连共享内核一起推翻重写
+
+## 当前桌面画布方向
+
+桌面 v2 当前默认采用 `React Flow` 作为画布引擎。
+
+这不是因为 Nodex 要转成“通用白板产品”，而是因为当前更需要一层：
+
+- 贴近节点型 UI 的空间呈现
+- 能直接复用现有 `React` 前端与桌面命令桥
+- 不会天然把状态主权从共享内核抢到前端 store
+
+这条选择的边界也需要明确：
+
+- `React Flow` 负责“怎么看、怎么选、怎么聚焦”
+- 共享 Rust 内核仍负责“系统实际保存什么、怎么校验、怎么应用”
+- 画布上的结构动作如果要真正写入，仍应落回现有 façade / patch 边界
+- 如果后续要补自动布局，更适合作为 `React Flow` 之上的补充能力，例如 `ELKjs`，而不是改掉当前画布方向
 
 ## 表达层分层方向
 
@@ -375,7 +395,7 @@ Intent Resolver / Compiler
 
 负责 Tauri 图形界面：
 
-- 画布
+- 基于 `React Flow` 的画布层
 - 大纲
 - patch 预览器
 - 来源查看器

@@ -183,6 +183,7 @@
 - 已形成树、详情和编辑器组成的基础工作台，并保留 patch preview / apply 边界
 - 已接通 source import、snapshot、history、evidence draft 和 AI draft 的最小入口
 - 已验证桌面端可以复用现有 patch、source 和 AI 审计链路
+- 桌面 v2 的画布层方向当前已收敛到 `React Flow`，但它仍只承担交互与呈现，不替代 patch / store / ai 边界
 - 但当前前端仍暴露较多底层概念，更接近调试 / 审计壳，不应被视为已经达到“人类可用桌面产品”目标
 
 长期方向补充：
@@ -190,6 +191,7 @@
 - GUI 主工作流不应长期停留在“直接编辑 primitive patch”
 - 更适合让 GUI 动作逐步提升为高层 intent，patch 预览作为确认层，原始 patch JSON 退到高级模式或调试模式
 - 短期内更合理的方向不是继续在现壳上叠更多面板，而是保留共享内核与 Tauri 命令桥，重做一版更贴近人类高频使用的桌面端
+- 这轮桌面重做默认以 `React Flow` 承接画布层；如果后续补自动布局，也更适合作为其上的补充能力，而不是重新发起一轮画布选型
 
 关键问题：
 
