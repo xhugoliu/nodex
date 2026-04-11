@@ -81,6 +81,7 @@ export default function App() {
   const [patchDraftOrigin, setPatchDraftOrigin] =
     useState<PatchDraftOrigin | null>(null);
   const [reviewDraft, setReviewDraft] = useState<DraftReviewPayload | null>(null);
+  const [applyResult, setApplyResult] = useState<ApplyPatchReport | null>(null);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeBody, setUpdateNodeBody] = useState("");
   const [addChildTitle, setAddChildTitle] = useState("");
@@ -242,7 +243,7 @@ export default function App() {
 
   async function applyOverview(
     overview: WorkspaceOverview,
-    options: { preserveSelection?: boolean } = {},
+    options: { preserveSelection?: boolean; skipAutoSelect?: boolean } = {},
   ) {
     startTransition(() => {
       setWorkspaceOverview(overview);
@@ -268,6 +269,10 @@ export default function App() {
       }
     }
 
+    if (options.skipAutoSelect) {
+      return;
+    }
+
     const fallbackNodeId =
       overview.tree.node.id || findNodeById(overview.tree, "root")?.node.id || null;
     if (fallbackNodeId) {
@@ -287,6 +292,7 @@ export default function App() {
     setPatchEditor("");
     setPatchDraftOrigin(null);
     setReviewDraft(null);
+    setApplyResult(null);
   }
 
   async function openWorkspaceCommand(path: string) {
@@ -373,6 +379,7 @@ export default function App() {
       });
       setSelectedSourceId(sourceId);
       setSelectedSourceDetail(detail);
+      setApplyResult(null);
       setSelectionPanelTab("context");
       return true;
     } catch (error) {
@@ -418,6 +425,7 @@ export default function App() {
         start_path: workspacePath,
         patch_json: patchJson,
       });
+      setApplyResult(null);
       setConsoleMessage(renderPatchReport(report, true, t, patchDraftOrigin), "success");
     } catch (error) {
       setConsoleMessage(formatError(error), "error");
@@ -449,12 +457,21 @@ export default function App() {
         "apply_reviewed_patch",
         args,
       );
-      await applyOverview(output.overview, { preserveSelection: false });
-      if (output.focus_node_context) {
-        setSelectedNodeId(output.focus_node_context.node_detail.node.id);
-        setSelectedNodeContext(output.focus_node_context);
+      await applyOverview(output.overview, {
+        preserveSelection: false,
+        skipAutoSelect: true,
+      });
+      setApplyResult(output.report);
+      const nextNodeId =
+        output.report.created_nodes[0]?.id ??
+        output.focus_node_context?.node_detail.node.id ??
+        null;
+      if (nextNodeId) {
+        await fetchNodeContext(nextNodeId, output.overview.root_dir, {
+          silentError: true,
+        });
       }
-      setSelectionPanelTab("review");
+      setSelectionPanelTab("context");
       setConsoleMessage(
         renderPatchReport(output.report, false, t, patchDraftOrigin),
         "success",
@@ -486,6 +503,7 @@ export default function App() {
       setPatchEditor(JSON.stringify(patch, null, 2));
       setPatchDraftOrigin(null);
       setReviewDraft(null);
+      setApplyResult(null);
       setSelectionPanelTab("review");
       setConsoleMessage(
         t("messages.draftedAddChild", { nodeId: selectedNodeId! }),
@@ -509,6 +527,7 @@ export default function App() {
       setPatchEditor(JSON.stringify(result.patch, null, 2));
       setPatchDraftOrigin(aiRunRecordToDraftOrigin(result.run));
       setReviewDraft(result);
+      setApplyResult(null);
       setSelectionPanelTab("review");
       setConsoleMessage(
         renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
@@ -535,6 +554,7 @@ export default function App() {
       setPatchEditor(JSON.stringify(result.patch, null, 2));
       setPatchDraftOrigin(aiRunRecordToDraftOrigin(result.run));
       setReviewDraft(result);
+      setApplyResult(null);
       setSelectionPanelTab("review");
       setConsoleMessage(
         renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
@@ -571,6 +591,7 @@ export default function App() {
       setPatchEditor(JSON.stringify(patch, null, 2));
       setPatchDraftOrigin(null);
       setReviewDraft(null);
+      setApplyResult(null);
       setSelectionPanelTab("review");
       setConsoleMessage(
         t("messages.draftedUpdate", { nodeId: selectedNodeId! }),
@@ -602,6 +623,7 @@ export default function App() {
 
             <WorkbenchMainPane
               nodeContext={selectedNodeContext}
+              applyResult={applyResult}
               updateNodeTitle={updateNodeTitle}
               updateNodeBody={updateNodeBody}
               addChildTitle={addChildTitle}
@@ -612,6 +634,9 @@ export default function App() {
               onAddChildTitleChange={setAddChildTitle}
               onAddChildBodyChange={setAddChildBody}
               onSelectNode={(nodeId) => {
+                void fetchNodeContext(nodeId);
+              }}
+              onOpenCreatedNode={(nodeId) => {
                 void fetchNodeContext(nodeId);
               }}
               onOpenSource={(sourceId) => {

@@ -153,29 +153,20 @@ AI request / response 编排层。
 - 维持一层单屏、薄壳的桌面工作台
 - 提供三块核心区域：
   - 左栏：树视图
-  - 中栏：详情摘要与底部控制台
-  - 右栏：统一节点编辑器与 patch 编辑器
+  - 中栏：节点工作区
+  - 右栏：`Context / Review`
 - 负责把节点编辑动作起草为 patch
-- 负责把 AI expand / explore 结果作为 patch 草案载入编辑器
-- 负责在 patch 编辑器里展示当前草案是否来自某次 AI run
-- 负责让 patch 编辑器和 Run Inspector 互相回跳，而不是把审计链路和草案链路割裂开
-- 负责在节点详情里提供 Run Inspector：
-  - 选中某条 AI run 后直接查看 explanation、patch、request / response / metadata
-  - explanation 里的 direct evidence 可继续跳到对应 source chunk
-  - 在同一处触发 replay dry-run
-  - 在同一处比较两条 run 的差异，并高亮 rationale / patch summary / notes / patch preview 的变化
-  - 也能把 compare 两侧的 patch 重新送回 patch 编辑器
-- 也负责提供工作区级 AI run 浏览入口：
-  - 不依赖当前节点选择也能查看全局已索引 AI runs
-  - 可从某条全局 run 直接回到对应节点与该 run 的 inspector
-- 也负责提供工作区级 Activity 视图：
-  - 把 AI run、patch run 和 snapshot 按时间线混排
-  - 可在同一处打开 run inspector、载入 patch、恢复 snapshot
-- 负责 patch 预览与应用
+- 负责把 AI expand / explore 结果送入 review 层
+- 负责在 review 层展示理由摘要、direct evidence 和 patch 预览
+- 负责在 apply 后把用户继续带到最合适的节点：
+  - 优先聚焦本次 patch 新增的节点
+  - 如果没有新增节点，则回到当前节点
+- 负责把来源上下文收成默认可见的信息，而不是把 request / response / artifact 暴露到主界面
 - 监听原生菜单事件并更新页面状态
-- 不再把所有低频入口都堆在页面里
-- 当前这层前端已经证明共享内核、patch 编辑链路和 AI 审计链路都能接进桌面环境
-- 但它仍然暴露了较多 `patch` / `run-id` / artifact 等低层概念，更接近调试与审计工作台，不应继续被视为最终人类交互基线
+- 当前这层前端已经证明共享内核、patch 编辑链路和 AI draft review 都能接进桌面环境
+- 当前实现刻意不把工作区级 AI runs、Activity、Run Inspector 继续放在主舞台
+- 因此它不再是“调试 / 审计壳优先”，而是一版更接近节点工作流的最小 façade
+- 但它仍然只是过渡性实现，不应被视为最终人类交互基线
 
 ### `desktop/index.html` + `desktop/vite.config.ts`
 

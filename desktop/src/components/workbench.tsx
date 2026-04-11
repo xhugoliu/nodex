@@ -4,6 +4,7 @@ import {
   type Translator,
 } from "../app-helpers";
 import type {
+  ApplyPatchReport,
   DraftReviewPayload,
   NodeWorkspaceContext,
   SourceChunkDetail,
@@ -24,6 +25,7 @@ import {
 
 export function WorkbenchMainPane(props: {
   nodeContext: NodeWorkspaceContext | null;
+  applyResult: ApplyPatchReport | null;
   updateNodeTitle: string;
   updateNodeBody: string;
   addChildTitle: string;
@@ -34,6 +36,7 @@ export function WorkbenchMainPane(props: {
   onAddChildTitleChange: (value: string) => void;
   onAddChildBodyChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;
+  onOpenCreatedNode: (nodeId: string) => void;
   onOpenSource: (sourceId: string) => void;
   onDraftAiExpand: () => void;
   onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
@@ -56,6 +59,32 @@ export function WorkbenchMainPane(props: {
   return (
     <section className={`${panelClass} scroll-panel min-h-0 overflow-auto`}>
       <div className="space-y-5">
+        {props.applyResult ? (
+          <section className="rounded-[1.5rem] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-5 py-4">
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-[color:var(--text)]">
+                {props.t("workbench.applyResultTitle")}
+              </div>
+              <div className="text-sm leading-6 text-[color:var(--text)]">
+                {props.applyResult.summary || props.t("reports.patchApplied")}
+              </div>
+              {props.applyResult.created_nodes.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {props.applyResult.created_nodes.map((node) => (
+                    <button
+                      key={node.id}
+                      className={ghostButtonClass}
+                      onClick={() => props.onOpenCreatedNode(node.id)}
+                    >
+                      {node.title}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         <section className="space-y-3 rounded-[1.5rem] border border-[color:var(--line-soft)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(249,250,251,0.88))] px-5 py-5">
           <h2
             className="text-3xl font-semibold text-[color:var(--text)]"

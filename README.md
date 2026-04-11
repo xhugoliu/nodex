@@ -36,8 +36,8 @@ cargo run -- export outline
 - 多 provider 调试工具链：`anthropic` / `openai` / `codex` / `gemini` runner，统一 `doctor` / `status` / `providers` / `smoke`
 - LangChain 最小试点：`scripts/langchain_openai_runner.py` 继续复用同一套 external runner contract 和本地审计边界
 - Anthropic-compatible LangChain 主路：`scripts/langchain_anthropic_runner.py` 已成为当前默认推荐试点链路
-- 过渡性 Tauri 桌面壳：三栏工作台、AI draft 入口、节点详情里的 Run Inspector、工作区级 AI runs / Activity 视图、AI run compare / replay dry-run、原生菜单驱动的低频动作
-  这层桌面壳已经证明共享内核可以被桌面端复用，但当前更接近调试与审计工作台，不代表最终人类可用产品形态
+- 过渡性 Tauri 桌面壳：三栏最小工作台、节点上下文 / 来源查看、AI draft review、apply 后继续聚焦新增节点、原生菜单驱动的低频动作
+  这层桌面壳已经证明共享内核可以被桌面端复用，但当前仍是一版最小节点工作流验证，不代表最终人类可用产品形态
 
 当前还没落地：
 
@@ -45,6 +45,7 @@ cargo run -- export outline
 - PDF 导入与来源切片
 - 完整来源追踪与证据视图
 - 一版真正面向人类高频使用的脑图优先桌面端
+- 更清楚的来源“为什么值得看”摘要与桌面主流程 smoke
 
 ## Docs
 

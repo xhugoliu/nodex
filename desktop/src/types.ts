@@ -36,6 +36,7 @@ export interface ApplyPatchReport {
   run_id: string | null;
   summary: string | null;
   preview: string[];
+  created_nodes: NodeSummary[];
 }
 
 export interface AiEvidenceReference {

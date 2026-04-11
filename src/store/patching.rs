@@ -125,12 +125,14 @@ impl Workspace {
     ) -> Result<ApplyPatchReport> {
         let patch = self.prepare_patch_document(patch)?;
         let preview = patch.preview_lines();
+        let created_nodes = created_nodes_from_patch(&patch);
 
         if dry_run {
             return Ok(ApplyPatchReport {
                 run_id: None,
                 summary: patch.summary.clone(),
                 preview,
+                created_nodes,
             });
         }
 
@@ -164,6 +166,7 @@ impl Workspace {
             run_id: Some(archive.run_id),
             summary: patch.summary,
             preview,
+            created_nodes,
         })
     }
 
@@ -283,6 +286,24 @@ impl Workspace {
         }
         Ok(())
     }
+}
+
+fn created_nodes_from_patch(patch: &PatchDocument) -> Vec<NodeSummary> {
+    patch
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            PatchOp::AddNode {
+                id: Some(id),
+                title,
+                ..
+            } => Some(NodeSummary {
+                id: id.clone(),
+                title: title.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 #[derive(Default)]

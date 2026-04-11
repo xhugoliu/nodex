@@ -60,6 +60,7 @@ pub struct ApplyPatchReport {
     pub run_id: Option<String>,
     pub summary: Option<String>,
     pub preview: Vec<String>,
+    pub created_nodes: Vec<NodeSummary>,
 }
 
 #[derive(Debug, Clone, Serialize)]

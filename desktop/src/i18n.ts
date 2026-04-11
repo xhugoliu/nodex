@@ -65,6 +65,7 @@ const translations: Record<Locale, TranslationTree> = {
       addChildBody: "Draft one new child branch without leaving the node workspace.",
       editNodeTitle: "Refine this node",
       editNodeBody: "Tighten the wording here before you draft the next structural change.",
+      applyResultTitle: "Applied",
       nodeActivity: "Recent node activity",
       nodeActivityBody:
         "Recent AI drafts and applied patches tied to this node stay visible here.",
@@ -563,6 +564,7 @@ const translations: Record<Locale, TranslationTree> = {
       addChildBody: "不离开当前节点工作区，先起草一个新的子分支。",
       editNodeTitle: "润色当前节点",
       editNodeBody: "先把这一层表达清楚，再起草下一步结构变化。",
+      applyResultTitle: "已应用",
       nodeActivity: "最近节点活动",
       nodeActivityBody:
         "这个节点最近的 AI 草案和已应用 patch 会继续在这里保持可见。",
