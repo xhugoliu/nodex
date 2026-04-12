@@ -1651,6 +1651,42 @@ mod tests {
     }
 
     #[test]
+    fn desktop_ai_status_maps_known_override_provider_runner_route() {
+        let _guard = desktop_ai_env_lock()
+            .lock()
+            .expect("desktop ai env lock should not be poisoned");
+        let previous = std::env::var_os("NODEX_DESKTOP_AI_COMMAND");
+        unsafe {
+            std::env::set_var(
+                "NODEX_DESKTOP_AI_COMMAND",
+                "python3 ./scripts/provider_runner.py --provider codex --use-default-args",
+            );
+        }
+
+        let status = desktop_ai_status();
+
+        if let Some(previous) = previous {
+            unsafe {
+                std::env::set_var("NODEX_DESKTOP_AI_COMMAND", previous);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("NODEX_DESKTOP_AI_COMMAND");
+            }
+        }
+
+        assert_eq!(status.command_source, "override");
+        assert_eq!(
+            status.command,
+            "python3 ./scripts/provider_runner.py --provider codex --use-default-args"
+        );
+        assert_eq!(status.provider.as_deref(), Some("codex"));
+        assert_eq!(status.runner, "provider_runner.py");
+        assert!(status.uses_provider_defaults);
+        assert_eq!(status.reasoning_effort.as_deref(), Some("low"));
+    }
+
+    #[test]
     fn preferred_focus_node_uses_first_created_node_when_available() {
         let report = ApplyPatchReport {
             run_id: Some("run-1".to_string()),
