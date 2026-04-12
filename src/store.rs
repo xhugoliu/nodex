@@ -263,6 +263,31 @@ mod tests {
 
     use super::*;
 
+    fn shell_quote(value: &str) -> String {
+        #[cfg(windows)]
+        {
+            format!("'{}'", value.replace('\'', "''"))
+        }
+
+        #[cfg(not(windows))]
+        {
+            format!("'{}'", value.replace('\'', "'\\''"))
+        }
+    }
+
+    fn test_python_command(
+        temp_dir: &tempfile::TempDir,
+        file_name: &str,
+        script: &str,
+    ) -> Result<String> {
+        let script_path = temp_dir.path().join(file_name);
+        std::fs::write(&script_path, script)?;
+        Ok(format!(
+            "python3 {}",
+            shell_quote(&script_path.display().to_string())
+        ))
+    }
+
     #[test]
     fn init_creates_root_and_initial_snapshot() -> Result<()> {
         let temp_dir = tempdir()?;
@@ -1528,8 +1553,10 @@ mod tests {
     fn snapshot_restore_keeps_ai_runs_and_ai_artifacts() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
-        let command = r#"python3 - <<'PY'
-import json
+        let command = test_python_command(
+            &temp_dir,
+            "snapshot_boundary_runner.py",
+            r#"import json
 import os
 from pathlib import Path
 
@@ -1567,9 +1594,10 @@ response = {
     "notes": []
 }
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
-PY"#;
+"#,
+        )?;
 
-        let runner_report = workspace.run_external_ai_expand("root", command, true)?;
+        let runner_report = workspace.run_external_ai_expand("root", &command, true)?;
         let snapshot = workspace.save_snapshot(Some("before-local-edit".to_string()))?;
         workspace.add_node(
             "Local Edit".to_string(),

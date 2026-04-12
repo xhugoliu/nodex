@@ -804,7 +804,15 @@ fn desktop_ai_status() -> DesktopAiStatus {
 }
 
 fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
+    #[cfg(windows)]
+    {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
+    #[cfg(not(windows))]
+    {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
 }
 
 fn build_native_menu<R: Runtime>(

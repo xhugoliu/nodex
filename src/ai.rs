@@ -1194,6 +1194,37 @@ pub fn write_ai_json_document<T: Serialize>(path: &std::path::Path, value: &T) -
     Ok(())
 }
 
+#[cfg(test)]
+fn shell_quote(value: &str) -> String {
+    #[cfg(windows)]
+    {
+        format!("'{}'", value.replace('\'', "''"))
+    }
+
+    #[cfg(not(windows))]
+    {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+#[cfg(windows)]
+fn build_external_shell_command(command: &str) -> Command {
+    let mut process = Command::new("powershell");
+    process
+        .arg("-NoProfile")
+        .arg("-NonInteractive")
+        .arg("-Command")
+        .arg(format!("& {command}; exit $LASTEXITCODE"));
+    process
+}
+
+#[cfg(not(windows))]
+fn build_external_shell_command(command: &str) -> Command {
+    let mut process = Command::new("sh");
+    process.arg("-lc").arg(command);
+    process
+}
+
 fn run_external_command(
     paths: &ProjectPaths,
     command: &str,
@@ -1202,9 +1233,7 @@ fn run_external_command(
     metadata_path: &std::path::Path,
     node_id: &str,
 ) -> Result<Output> {
-    Command::new("zsh")
-        .arg("-lc")
-        .arg(command)
+    build_external_shell_command(command)
         .env("NODEX_AI_REQUEST", request_path)
         .env("NODEX_AI_RESPONSE", response_path)
         .env("NODEX_AI_META", metadata_path)
@@ -1363,10 +1392,23 @@ mod tests {
     use tempfile::tempdir;
 
     use crate::{
-        ai::{AiRunMetadata, derive_ai_metadata_path, parse_ai_patch_response},
+        ai::{AiRunMetadata, derive_ai_metadata_path, parse_ai_patch_response, shell_quote},
         patch::{PatchDocument, PatchOp},
         store::Workspace,
     };
+
+    fn test_python_command(
+        temp_dir: &tempfile::TempDir,
+        file_name: &str,
+        script: &str,
+    ) -> Result<String> {
+        let script_path = temp_dir.path().join(file_name);
+        std::fs::write(&script_path, script)?;
+        Ok(format!(
+            "python3 {}",
+            shell_quote(&script_path.display().to_string())
+        ))
+    }
 
     #[test]
     fn ai_expand_preview_builds_prompt_and_patch_scaffold() -> Result<()> {
@@ -1710,8 +1752,10 @@ mod tests {
     fn external_runner_can_round_trip_request_and_response() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
-        let command = r#"python3 - <<'PY'
-import json
+        let command = test_python_command(
+            &temp_dir,
+            "round_trip_runner.py",
+            r#"import json
 import os
 from pathlib import Path
 
@@ -1751,9 +1795,10 @@ response = {
     "notes": ["ok"]
 }
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
-PY"#;
+"#,
+        )?;
 
-        let report = workspace.run_external_ai_expand("root", command, true)?;
+        let report = workspace.run_external_ai_expand("root", &command, true)?;
         let history = workspace.ai_run_history(Some("root"))?;
 
         assert_eq!(report.exit_code, 0);
@@ -1777,8 +1822,10 @@ PY"#;
     fn external_runner_can_round_trip_explore_request_and_response() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
-        let command = r#"python3 - <<'PY'
-import json
+        let command = test_python_command(
+            &temp_dir,
+            "explore_runner.py",
+            r#"import json
 import os
 from pathlib import Path
 
@@ -1818,9 +1865,10 @@ response = {
     "notes": ["ok"]
 }
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
-PY"#;
+"#,
+        )?;
 
-        let report = workspace.run_external_ai_explore("root", "action", command, true)?;
+        let report = workspace.run_external_ai_explore("root", "action", &command, true)?;
 
         assert_eq!(report.exit_code, 0);
         assert_eq!(report.metadata.capability, "explore");
@@ -1838,8 +1886,10 @@ PY"#;
     fn ai_run_show_output_loads_explanation_patch_preview_and_notes() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
-        let command = r#"python3 - <<'PY'
-import json
+        let command = test_python_command(
+            &temp_dir,
+            "show_output_runner.py",
+            r#"import json
 import os
 from pathlib import Path
 
@@ -1879,9 +1929,10 @@ response = {
     "notes": ["show-note"]
 }
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
-PY"#;
+"#,
+        )?;
 
-        let report = workspace.run_external_ai_expand("root", command, true)?;
+        let report = workspace.run_external_ai_expand("root", &command, true)?;
         let output = workspace.ai_run_show_output(&report.metadata.run_id)?;
 
         assert_eq!(output.record.id, report.metadata.run_id);
@@ -1910,8 +1961,10 @@ PY"#;
     fn ai_run_compare_output_detects_patch_and_note_differences() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
-        let first_command = r#"python3 - <<'PY'
-import json
+        let first_command = test_python_command(
+            &temp_dir,
+            "compare_left_runner.py",
+            r#"import json
 import os
 from pathlib import Path
 
@@ -1949,9 +2002,12 @@ response = {
     "notes": ["left-note"]
 }
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
-PY"#;
-        let second_command = r#"python3 - <<'PY'
-import json
+"#,
+        )?;
+        let second_command = test_python_command(
+            &temp_dir,
+            "compare_right_runner.py",
+            r#"import json
 import os
 from pathlib import Path
 
@@ -1989,10 +2045,11 @@ response = {
     "notes": ["right-note"]
 }
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
-PY"#;
+"#,
+        )?;
 
-        let left = workspace.run_external_ai_expand("root", first_command, true)?;
-        let right = workspace.run_external_ai_expand("root", second_command, true)?;
+        let left = workspace.run_external_ai_expand("root", &first_command, true)?;
+        let right = workspace.run_external_ai_expand("root", &second_command, true)?;
         let compare =
             workspace.ai_run_compare_output(&left.metadata.run_id, &right.metadata.run_id)?;
 
@@ -2009,14 +2066,18 @@ PY"#;
     fn external_runner_failure_surfaces_stderr_category() -> Result<()> {
         let temp_dir = tempdir()?;
         let mut workspace = Workspace::init_at(temp_dir.path())?;
-        let command = r#"python3 - <<'PY'
-import sys
+        let command = test_python_command(
+            &temp_dir,
+            "failing_runner.py",
+            r#"import sys
+
 sys.stderr.write("[rate_limit] retry budget exhausted\n")
 raise SystemExit(23)
-PY"#;
+"#,
+        )?;
 
         let error = workspace
-            .run_external_ai_expand("root", command, true)
+            .run_external_ai_expand("root", &command, true)
             .expect_err("runner should fail");
 
         assert!(error.to_string().contains("[rate_limit]"));

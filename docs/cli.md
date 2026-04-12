@@ -157,6 +157,10 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `NODEX_AI_WORKSPACE`
   - `NODEX_AI_NODE_ID`
 - 外部命令只需要读取 request JSON，并把符合 contract 的 response JSON 写到 `NODEX_AI_RESPONSE`
+- `ai run-external` 当前会按平台选择 shell：
+  - Windows：通过 `PowerShell` 执行命令字符串
+  - macOS / Linux：通过 POSIX shell 执行命令字符串
+  - 这意味着传给 `ai run-external` 的命令文本应当符合当前平台 shell 的 quoting 规则
 - CLI 会额外生成一份 `.meta.json`，记录：
   - provider
   - model
