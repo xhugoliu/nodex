@@ -245,6 +245,10 @@ const translations: Record<Locale, TranslationTree> = {
       evidenceWorthReading: "Worth reading because: {value}",
       evidenceWorthReadingFallback:
         "Worth reading because this source is already cited as evidence for the current node.",
+      sourceLinkedNodes: "Continue from linked nodes",
+      sourceEvidenceLinks: "Evidence links",
+      citationKindDirect: "direct",
+      citationKindInferred: "inferred",
       chunkMeta: "Chunk {ordinal} · {start}-{end}",
       nodes: "Nodes: {value}",
       evidenceNodes: "Evidence nodes: {value}",
@@ -254,6 +258,10 @@ const translations: Record<Locale, TranslationTree> = {
         "Open this source from a node first, then draft cite or uncite patches here.",
       draftCite: "Draft Cite",
       draftUncite: "Draft Uncite",
+      chunkCitationAvailable:
+        "This chunk can be cited for the current node from here.",
+      chunkCitationActive:
+        "This chunk is already cited for the current node. You can remove or revisit it here.",
       none: "(none)",
       createdAt: "Created: {value}",
       updatedAt: "Updated: {value}",
@@ -770,6 +778,10 @@ const translations: Record<Locale, TranslationTree> = {
       evidenceWorthReading: "值得先看的原因：{value}",
       evidenceWorthReadingFallback:
         "值得先看，因为这个来源已经被当前节点作为证据引用。",
+      sourceLinkedNodes: "可继续进入的关联节点",
+      sourceEvidenceLinks: "证据关联",
+      citationKindDirect: "直接",
+      citationKindInferred: "推断",
       chunkMeta: "切片 {ordinal} · {start}-{end}",
       nodes: "关联节点：{value}",
       evidenceNodes: "证据节点：{value}",
@@ -778,6 +790,8 @@ const translations: Record<Locale, TranslationTree> = {
       citationContextMissing: "请先从某个节点打开这个来源，再在这里起草 cite 或 uncite patch。",
       draftCite: "起草引用",
       draftUncite: "起草取消引用",
+      chunkCitationAvailable: "这个切片可以直接为当前节点起草证据引用。",
+      chunkCitationActive: "这个切片已经被当前节点引用，你可以在这里取消或继续回看它。",
       none: "（无）",
       createdAt: "创建时间：{value}",
       updatedAt: "更新时间：{value}",

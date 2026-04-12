@@ -131,6 +131,7 @@ interface WorkspaceLoadedEvent {
   overview: WorkspaceOverview;
   message: string;
   tone: ConsoleTone;
+  focus_node_id?: string | null;
 }
 
 interface ConsoleEventPayload {
@@ -259,7 +260,9 @@ export default function App() {
         await listen<WorkspaceLoadedEvent>(
           "desktop://workspace-loaded",
           (event) => {
-            void applyOverview(event.payload.overview);
+            void applyOverview(event.payload.overview, {
+              preferredNodeId: event.payload.focus_node_id ?? null,
+            });
             setConsoleMessage(event.payload.message, event.payload.tone);
           },
         ),
@@ -349,7 +352,11 @@ export default function App() {
 
   async function applyOverview(
     overview: WorkspaceOverview,
-    options: { preserveSelection?: boolean; skipAutoSelect?: boolean } = {},
+    options: {
+      preserveSelection?: boolean;
+      skipAutoSelect?: boolean;
+      preferredNodeId?: string | null;
+    } = {},
   ) {
     const workspaceChanged = overview.root_dir !== workspacePath;
 
@@ -382,6 +389,22 @@ export default function App() {
 
     if (options.skipAutoSelect) {
       return;
+    }
+
+    if (
+      options.preferredNodeId &&
+      findNodeById(overview.tree, options.preferredNodeId)
+    ) {
+      const reloaded = await fetchNodeContext(
+        options.preferredNodeId,
+        overview.root_dir,
+        {
+          silentError: true,
+        },
+      );
+      if (reloaded) {
+        return;
+      }
     }
 
     const fallbackNodeId =
@@ -713,6 +736,54 @@ export default function App() {
     }
   }
 
+  async function draftCiteChunkPatch(chunkId: string) {
+    if (!ensureNodeSelected()) {
+      return;
+    }
+
+    try {
+      const patch = await invokeCommand<PatchDocument>("draft_cite_source_chunk_patch", {
+        node_id: selectedNodeId,
+        chunk_id: chunkId,
+      });
+      setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
+      setReviewDraft(null);
+      setApplyResult(null);
+      setSelectionPanelTab("review");
+      setConsoleMessage(
+        t("messages.draftedCitation", { nodeId: selectedNodeId! }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
+  async function draftUnciteChunkPatch(chunkId: string) {
+    if (!ensureNodeSelected()) {
+      return;
+    }
+
+    try {
+      const patch = await invokeCommand<PatchDocument>("draft_uncite_source_chunk_patch", {
+        node_id: selectedNodeId,
+        chunk_id: chunkId,
+      });
+      setPatchEditor(JSON.stringify(patch, null, 2));
+      setPatchDraftOrigin(null);
+      setReviewDraft(null);
+      setApplyResult(null);
+      setSelectionPanelTab("review");
+      setConsoleMessage(
+        t("messages.draftedUncitation", { nodeId: selectedNodeId! }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   return (
     <div className="flex h-screen w-full flex-col gap-3 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.96),rgba(243,244,246,0.98),rgba(229,231,235,0.92))] px-3 py-3">
       {workspaceOverview ? (
@@ -817,9 +888,18 @@ export default function App() {
               onOpenCreatedNode={(nodeId) => {
                 void fetchNodeContext(nodeId);
               }}
+              onOpenLinkedNode={(nodeId) => {
+                void fetchNodeContext(nodeId);
+              }}
               onBackToNodeContext={() => {
                 setSelectedSourceId(null);
                 setSelectedSourceDetail(null);
+              }}
+              onDraftCiteChunk={(chunkId) => {
+                void draftCiteChunkPatch(chunkId);
+              }}
+              onDraftUnciteChunk={(chunkId) => {
+                void draftUnciteChunkPatch(chunkId);
               }}
               onDraftUpdate={() => {
                 void draftUpdateNodePatch();

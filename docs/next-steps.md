@@ -29,6 +29,10 @@
 
 > 打开工作区 -> 选中一个节点 -> 看懂节点上下文与来源 -> 用 Anthropic-compatible LangChain 默认主路起草 AI draft -> 预览 patch -> 应用 patch -> 继续进入新增节点
 
+对真实材料路径，当前默认收口应补上：
+
+> source import -> 选中导入 root node -> 看懂来源上下文 -> 起草 AI draft -> review -> apply
+
 短期内，判断优先级时优先看这条路径是否更顺，而不是入口是否更多、界面是否更大。
 
 ## 当前接力焦点
@@ -43,7 +47,10 @@
   - 当前已经把用户带到了哪里
   - 下一步最自然的继续动作是什么
 - 把 `打开工作区 -> 选中节点 -> 起草 expand -> review -> apply -> 聚焦新增节点` 收成一条稳定 smoke
+- 把 `source import -> 选中导入 root node -> expand/explore -> review -> apply` 做成同一条主路径里的自然入口
 - 如果前面三项已经顺下来，再补一条 `source import -> 选中来源节点 -> AI expand -> review -> apply` 的真实材料闭环
+- 保持来源详情继续可操作，至少能从 source detail 回到相关节点继续工作
+- 如果当前已经有节点上下文，来源详情也应能直接起草 cite / uncite patch，而不是只停留在阅读层
 
 当前明确不抢优先级的内容：
 
@@ -104,6 +111,7 @@
 - 选中节点后，右栏能给出至少一层更接近人类判断的来源摘要，而不只是 chunk 标签拼接
 - apply 成功后，界面文案能同时表达“变更结果”和“下一步入口”
 - 如果 patch 新增了节点，系统会优先把用户带到新增节点，并且这个结果在 UI 上是可见的
+- 如果从桌面原生路径导入 source，界面会优先选中导入得到的 root node，而不是回退到工作区根节点
 - 这条闭环不要求用户理解 run-id、artifact 或 raw patch JSON
 
 ### 2. 给当前主路径补一条稳定 smoke

@@ -71,6 +71,7 @@ struct WorkspaceLoadedPayload {
     overview: WorkspaceOverview,
     message: String,
     tone: String,
+    focus_node_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -233,6 +234,7 @@ fn emit_workspace_loaded<R: Runtime>(
     state: &DesktopState,
     overview: WorkspaceOverview,
     message: impl Into<String>,
+    focus_node_id: Option<String>,
 ) {
     set_current_workspace(app, state, overview.root_dir.clone());
     let _ = app.emit(
@@ -241,6 +243,7 @@ fn emit_workspace_loaded<R: Runtime>(
             overview,
             message: message.into(),
             tone: "success".to_string(),
+            focus_node_id,
         },
     );
 }
@@ -952,7 +955,7 @@ fn handle_workspace_open_menu<R: Runtime>(app: &AppHandle<R>) {
                     format!("Opened {}", overview.root_dir)
                 };
                 let state = app_handle.state::<DesktopState>();
-                emit_workspace_loaded(&app_handle, state.inner(), overview, message);
+                emit_workspace_loaded(&app_handle, state.inner(), overview, message, None);
             }
             Err(err) => emit_console(&app_handle, err.to_string(), "error"),
         }
@@ -997,10 +1000,10 @@ fn handle_source_import_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopStat
                 }
             } else {
                 match open_workspace_from(&workspace_path)
-                    .and_then(|mut workspace| workspace.import_source(&file_path))
-                    .and_then(|report| {
-                        let workspace = open_workspace_from(&workspace_path)?;
-                        Ok((workspace_overview(&workspace)?, report))
+                    .and_then(|mut workspace| {
+                        let report = workspace.import_source(&file_path)?;
+                        let overview = workspace_overview(&workspace)?;
+                        Ok((overview, report))
                     }) {
                     Ok((overview, report)) => {
                         let state = app_handle.state::<DesktopState>();
@@ -1009,6 +1012,7 @@ fn handle_source_import_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopStat
                             state.inner(),
                             overview,
                             format!("Imported {}", report.original_name),
+                            Some(report.root_node_id),
                         );
                     }
                     Err(err) => emit_console(&app_handle, err.to_string(), "error"),
@@ -1024,7 +1028,9 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, state: &DesktopState, event
         MENU_WORKSPACE_OPEN => handle_workspace_open_menu(app),
         MENU_WORKSPACE_REFRESH => {
             match with_current_workspace(state, |workspace| workspace_overview(workspace)) {
-                Ok(overview) => emit_workspace_loaded(app, state, overview, "Workspace refreshed."),
+                Ok(overview) => {
+                    emit_workspace_loaded(app, state, overview, "Workspace refreshed.", None)
+                }
                 Err(err) => emit_console(app, err.to_string(), "error"),
             }
         }
@@ -1053,6 +1059,7 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, state: &DesktopState, event
                     state,
                     overview,
                     format!("Restored snapshot {snapshot_id}"),
+                    None,
                 ),
                 Err(err) => emit_console(app, err.to_string(), "error"),
             }

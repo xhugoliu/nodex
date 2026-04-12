@@ -123,7 +123,10 @@ export function WorkbenchSidePane(props: {
   onBodyChange: (value: string) => void;
   onOpenSource: (sourceId: string) => void;
   onOpenCreatedNode: (nodeId: string) => void;
+  onOpenLinkedNode: (nodeId: string) => void;
   onBackToNodeContext: () => void;
+  onDraftCiteChunk: (chunkId: string) => void;
+  onDraftUnciteChunk: (chunkId: string) => void;
   onDraftUpdate: () => void;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
@@ -159,8 +162,12 @@ export function WorkbenchSidePane(props: {
             <SourceContextSurface
               detail={props.selectedSourceDetail}
               selectedSourceChunkId={props.selectedSourceChunkId}
+              nodeContext={props.nodeContext}
               t={props.t}
+              onOpenLinkedNode={props.onOpenLinkedNode}
               onBackToNodeContext={props.onBackToNodeContext}
+              onDraftCiteChunk={props.onDraftCiteChunk}
+              onDraftUnciteChunk={props.onDraftUnciteChunk}
             />
           ) : (
             <NodeContextSurface
@@ -421,9 +428,20 @@ function NodeContextSurface(props: {
 function SourceContextSurface(props: {
   detail: SourceDetail;
   selectedSourceChunkId: string | null;
+  nodeContext: NodeWorkspaceContext | null;
   t: Translator;
+  onOpenLinkedNode: (nodeId: string) => void;
   onBackToNodeContext: () => void;
+  onDraftCiteChunk: (chunkId: string) => void;
+  onDraftUnciteChunk: (chunkId: string) => void;
 }) {
+  const citationNodeId = props.nodeContext?.node_detail.node.id ?? null;
+  const citedChunkIds = new Set(
+    props.nodeContext?.node_detail.evidence.flatMap((detail) =>
+      detail.citations.map((citation) => citation.chunk.id),
+    ) ?? [],
+  );
+
   return (
     <div className="space-y-4">
       <section className={`${cardClass} space-y-3`}>
@@ -435,6 +453,11 @@ function SourceContextSurface(props: {
             {props.t("workbench.backToNode")}
           </button>
         </div>
+        <div className="text-sm leading-6 text-[color:var(--muted)]">
+          {citationNodeId
+            ? props.t("detail.citationContextReady", { nodeId: citationNodeId })
+            : props.t("detail.citationContextMissing")}
+        </div>
       </section>
 
       {props.detail.chunks.length ? (
@@ -444,7 +467,12 @@ function SourceContextSurface(props: {
               key={chunk.chunk.id}
               detail={chunk}
               selected={props.selectedSourceChunkId === chunk.chunk.id}
+              citationNodeId={citationNodeId}
+              isCitedForCurrentNode={citedChunkIds.has(chunk.chunk.id)}
               t={props.t}
+              onOpenLinkedNode={props.onOpenLinkedNode}
+              onDraftCiteChunk={props.onDraftCiteChunk}
+              onDraftUnciteChunk={props.onDraftUnciteChunk}
             />
           ))}
         </div>
@@ -575,8 +603,22 @@ function SourceCard(props: {
 function SourceChunkCard(props: {
   detail: SourceChunkDetail;
   selected: boolean;
+  citationNodeId: string | null;
+  isCitedForCurrentNode: boolean;
   t: Translator;
+  onOpenLinkedNode: (nodeId: string) => void;
+  onDraftCiteChunk: (chunkId: string) => void;
+  onDraftUnciteChunk: (chunkId: string) => void;
 }) {
+  const linkedNodes = dedupeNodeSummaries(props.detail.linked_nodes);
+  const evidenceLinks = props.detail.evidence_links?.length
+    ? props.detail.evidence_links
+    : dedupeNodeSummaries(props.detail.evidence_nodes).map((node) => ({
+        node,
+        citation_kind: "",
+        rationale: null,
+      }));
+
   return (
     <div
       className={[
@@ -600,6 +642,87 @@ function SourceChunkCard(props: {
         <div className="whitespace-pre-wrap text-sm leading-6 text-[color:var(--text)]">
           {clipText(props.detail.chunk.text, 360)}
         </div>
+        {props.citationNodeId ? (
+          <div className="space-y-2 pt-2">
+            <div className="text-xs text-[color:var(--muted)]">
+              {props.isCitedForCurrentNode
+                ? props.t("detail.chunkCitationActive")
+                : props.t("detail.chunkCitationAvailable")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+            <button
+              className={secondaryButtonClass}
+              disabled={props.isCitedForCurrentNode}
+              onClick={() => props.onDraftCiteChunk(props.detail.chunk.id)}
+              type="button"
+            >
+              {props.t("detail.draftCite")}
+            </button>
+            <button
+              className={ghostButtonClass}
+              disabled={!props.isCitedForCurrentNode}
+              onClick={() => props.onDraftUnciteChunk(props.detail.chunk.id)}
+              type="button"
+            >
+              {props.t("detail.draftUncite")}
+            </button>
+            </div>
+          </div>
+        ) : null}
+        {linkedNodes.length ? (
+          <div className="space-y-2 pt-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("detail.sourceLinkedNodes")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {linkedNodes.map((node) => (
+                <button
+                  key={`linked-${node.id}`}
+                  className={ghostButtonClass}
+                  onClick={() => props.onOpenLinkedNode(node.id)}
+                  type="button"
+                >
+                  {node.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {evidenceLinks.length ? (
+          <div className="space-y-2 pt-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("detail.sourceEvidenceLinks")}
+            </div>
+            <div className="space-y-2">
+              {evidenceLinks.map((link) => (
+                <div
+                  key={`evidence-${link.node.id}-${link.citation_kind}-${link.rationale ?? ""}`}
+                  className="rounded-xl border border-[rgba(15,118,110,0.14)] bg-[rgba(15,118,110,0.05)] px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      className={ghostButtonClass}
+                      onClick={() => props.onOpenLinkedNode(link.node.id)}
+                      type="button"
+                    >
+                      {link.node.title}
+                    </button>
+                    {link.citation_kind ? (
+                      <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-white/85 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                        {formatCitationKind(link.citation_kind, props.t)}
+                      </span>
+                    ) : null}
+                  </div>
+                  {link.rationale ? (
+                    <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                      {clipText(normalizeInlineText(link.rationale), 160)}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -682,6 +805,31 @@ function summarizeChunkText(text: string): string {
     normalized;
 
   return clipText(candidate, 120);
+}
+
+function dedupeNodeSummaries(nodes: Array<{ id: string; title: string }>) {
+  const seen = new Set<string>();
+  const result = new Array<{ id: string; title: string }>();
+
+  for (const node of nodes) {
+    if (!node.id || seen.has(node.id)) {
+      continue;
+    }
+    seen.add(node.id);
+    result.push(node);
+  }
+
+  return result;
+}
+
+function formatCitationKind(kind: string, t: Translator): string {
+  if (kind === "direct") {
+    return t("detail.citationKindDirect");
+  }
+  if (kind === "inferred") {
+    return t("detail.citationKindInferred");
+  }
+  return kind;
 }
 
 function normalizeInlineText(text: string): string {

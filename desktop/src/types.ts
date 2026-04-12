@@ -256,6 +256,12 @@ export interface SourceChunkRecord {
   end_line: number;
 }
 
+export interface EvidenceNodeSummary {
+  node: NodeSummary;
+  citation_kind: string;
+  rationale: string | null;
+}
+
 export interface NodeSourceDetail {
   source: SourceRecord;
   chunks: SourceChunkRecord[];
@@ -285,6 +291,7 @@ export interface SourceChunkDetail {
   chunk: SourceChunkRecord;
   linked_nodes: NodeSummary[];
   evidence_nodes: NodeSummary[];
+  evidence_links?: EvidenceNodeSummary[];
 }
 
 export interface SourceDetail {
