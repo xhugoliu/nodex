@@ -1,0 +1,75 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+  buildAiDraftNextSteps,
+  renderAiDraftFailure,
+  type Translator,
+} from "./app-helpers";
+import type { DesktopAiStatus } from "./types";
+
+const t: Translator = (key, vars) =>
+  vars ? `${key} ${JSON.stringify(vars)}` : key;
+
+function makeStatus(overrides: Partial<DesktopAiStatus>): DesktopAiStatus {
+  return {
+    command: "python3 scripts/provider_runner.py --provider anthropic --use-default-args",
+    command_source: "default",
+    provider: "anthropic",
+    runner: "provider_runner.py",
+    model: null,
+    reasoning_effort: null,
+    has_auth: true,
+    has_process_env_conflict: false,
+    has_shell_env_conflict: false,
+    uses_provider_defaults: true,
+    status_error: null,
+    ...overrides,
+  };
+}
+
+test("buildAiDraftNextSteps suggests auth setup when auth is missing", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      provider: "anthropic",
+      has_auth: false,
+    }),
+    t,
+  );
+
+  assert.ok(
+    steps.some((step) => step.startsWith("messages.aiDraftNextSetupAuth")),
+  );
+});
+
+test("buildAiDraftNextSteps flags custom override for unknown command route", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      command: "python3 scripts/custom_runner.py",
+      command_source: "override",
+      provider: null,
+      runner: "custom",
+      uses_provider_defaults: false,
+      status_error:
+        "Desktop AI runner override uses an unknown command. Set NODEX_DESKTOP_AI_COMMAND to a known provider runner route.",
+    }),
+    t,
+  );
+
+  assert.ok(
+    steps.includes("messages.aiDraftNextCustomOverride"),
+    "custom override action should be included for unknown override commands",
+  );
+});
+
+test("rate limit status error maps to retry guidance and is rendered in failure output", () => {
+  const status = makeStatus({
+    status_error: "[rate_limit] too many requests",
+  });
+  const steps = buildAiDraftNextSteps(status, t);
+
+  assert.ok(steps.includes("messages.aiDraftNextRateLimit"));
+
+  const message = renderAiDraftFailure(new Error("request failed"), status, t);
+  assert.match(message, /nodeEditing\.aiDraftNextTitle/);
+  assert.match(message, /messages\.aiDraftNextRateLimit/);
+});
