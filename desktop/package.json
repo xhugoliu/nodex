@@ -11,15 +11,18 @@
     "check": "tsc --noEmit",
     "check:tauri": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test:core": "cargo test --manifest-path ../Cargo.toml",
-    "check:all": "npm run check && npm run check:tauri && npm run test:core"
+    "test:logic": "node --import tsx --test src/app-helpers.ai-route.test.ts",
+    "check:all": "npm run check && npm run test:logic && npm run check:tauri && npm run test:core"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
     "@tauri-apps/cli": "^2.10.1",
+    "@types/node": "^24.6.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.1",
     "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.0",
     "vite": "^8.0.2"
   },
