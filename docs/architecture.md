@@ -161,6 +161,10 @@ AI request / response 编排层。
 - 负责把 `Expand` / `Explore` / `Add Child` 这类高频入口尽量收回画布节点卡片，而不是长期散落在画布外
 - 负责把节点展开 / 折叠和局部聚焦这类纯 view state 收在画布层，而不反向污染 canonical state
 - 负责把节点摘要、来源上下文、apply 完成态和按需编辑收口到右栏 `Context`
+- 负责把当前默认 AI draft route 的轻量状态收口到右栏：
+  - provider / runner / model / auth / env
+  - draft 失败时的下一步建议
+  - 但不把它重新膨胀成主舞台上的调试面板
 - 负责在 apply 后把用户继续带到最合适的节点：
   - 优先聚焦本次 patch 新增的节点
   - 如果没有新增节点，则回到当前节点

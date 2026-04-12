@@ -1496,10 +1496,13 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{
+        path::Path,
+        sync::{Mutex, OnceLock},
+    };
 
     use super::{
-        desktop_default_ai_runner_command, detected_provider_from_command,
+        desktop_ai_status, desktop_default_ai_runner_command, detected_provider_from_command,
         effective_model_for_command, effective_reasoning_for_command,
         parse_provider_doctor_summary, preferred_focus_node_id_after_apply,
     };
@@ -1507,6 +1510,11 @@ mod tests {
 
     #[cfg(windows)]
     use super::display_path_text;
+
+    fn desktop_ai_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn desktop_default_ai_runner_uses_provider_entry_defaults() {
@@ -1600,6 +1608,45 @@ mod tests {
             )
             .as_deref(),
             Some("medium")
+        );
+    }
+
+    #[test]
+    fn desktop_ai_status_marks_unknown_override_command_as_needing_attention() {
+        let _guard = desktop_ai_env_lock()
+            .lock()
+            .expect("desktop ai env lock should not be poisoned");
+        let previous = std::env::var_os("NODEX_DESKTOP_AI_COMMAND");
+        unsafe {
+            std::env::set_var("NODEX_DESKTOP_AI_COMMAND", "bash ./custom-runner.sh");
+        }
+
+        let status = desktop_ai_status();
+
+        if let Some(previous) = previous {
+            unsafe {
+                std::env::set_var("NODEX_DESKTOP_AI_COMMAND", previous);
+            }
+        } else {
+            unsafe {
+                std::env::remove_var("NODEX_DESKTOP_AI_COMMAND");
+            }
+        }
+
+        assert_eq!(status.command_source, "override");
+        assert_eq!(status.command, "bash ./custom-runner.sh");
+        assert_eq!(status.provider, None);
+        assert_eq!(status.runner, "custom");
+        assert_eq!(status.has_auth, None);
+        assert_eq!(status.has_process_env_conflict, None);
+        assert_eq!(status.has_shell_env_conflict, None);
+        assert_eq!(status.reasoning_effort, None);
+        assert!(!status.uses_provider_defaults);
+        assert!(
+            status
+                .status_error
+                .as_deref()
+                .is_some_and(|value| value.contains("does not map to a known provider runner"))
         );
     }
 

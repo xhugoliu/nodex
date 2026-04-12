@@ -41,16 +41,11 @@
 
 当前最值得接力的实现范围是：
 
-- 让右栏来源卡片开始回答“为什么值得看”，而不只是罗列 chunk label 或行号
-- 让 apply 完成态明确告诉用户：
-  - 这次新增了什么
-  - 当前已经把用户带到了哪里
-  - 下一步最自然的继续动作是什么
-- 把 `打开工作区 -> 选中节点 -> 起草 expand -> review -> apply -> 聚焦新增节点` 收成一条稳定 smoke
-- 把 `source import -> 选中导入 root node -> expand/explore -> review -> apply` 做成同一条主路径里的自然入口
-- 如果前面三项已经顺下来，再补一条 `source import -> 选中来源节点 -> AI expand -> review -> apply` 的真实材料闭环
-- 保持来源详情继续可操作，至少能从 source detail 回到相关节点继续工作
-- 如果当前已经有节点上下文，来源详情也应能直接起草 cite / uncite patch，而不是只停留在阅读层
+- 守住左栏 `Import Source` 入口，避免真实材料路径又退回桌面原生菜单
+- 守住右栏来源上下文的人话摘要、继续入口和 cite / uncite 工作流
+- 守住 apply 后统一的 focus node 语义，避免前后端再次各自猜“下一步去哪”
+- 把右栏轻量 `AI draft route` 提示继续收成“需要时可见、失败时有下一步”的状态层，而不是重新长回重型调试面板
+- 给 `desktop_ai_status` 和主流程 smoke 继续补回归验证，防止 provider route、auth/env 提示和 next steps 被无声回退
 
 当前明确不抢优先级的内容：
 
@@ -75,6 +70,7 @@
 
 - apply 之后系统是否明确把用户带到下一步
 - 来源卡片是否能解释“为什么值得看”，而不只是列 chunk 摘要
+- AI draft 默认主路是否在主界面里足够可见，失败时是否给出下一步
 - 真实 provider 路径是否有稳定、可回归的主流程 smoke
 - 文档是否和当前最小实现完全对齐
 
@@ -101,9 +97,12 @@
 
 下一轮最小切口：
 
-- 在 apply 结果里继续补“新增了什么”和“去哪继续”
-- 为来源卡片补最小的人话摘要
-- 避免在主界面回填任何 run-id、artifact、compare、history 式入口
+- 为 `desktop_ai_status` 补确定性的回归验证，尤其守住 override command / unknown provider 的失败提示
+- 同步 desktop 文档口径，明确当前已经落地：
+  - 左栏主界面导入 source
+  - 右栏来源上下文摘要与继续入口
+  - 右栏轻量 AI draft route 提示
+- 继续避免在主界面回填任何 run-id、artifact、compare、history 式入口
 - 如果某条信息不能帮助用户继续当前节点工作流，就不进入主界面
 
 这一轮的最小验收标准：
@@ -112,6 +111,7 @@
 - apply 成功后，界面文案能同时表达“变更结果”和“下一步入口”
 - 如果 patch 新增了节点，系统会优先把用户带到新增节点，并且这个结果在 UI 上是可见的
 - 如果从桌面原生路径导入 source，界面会优先选中导入得到的 root node，而不是回退到工作区根节点
+- 如果 AI draft 路径不可用、缺 auth 或 env 冲突，右栏会给出轻量状态提示和下一步建议，而不是只剩一条报错
 - 这条闭环不要求用户理解 run-id、artifact 或 raw patch JSON
 
 ### 2. 给当前主路径补一条稳定 smoke

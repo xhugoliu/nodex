@@ -29,6 +29,7 @@
 
 - 没有长期驻场的 header / dashboard
 - 左栏已收成可折叠导航轨
+  - 导入 source 入口也已回到左栏主界面，而不是只留在桌面原生菜单
 - 中栏已收成纯画布工作区
 - 右栏只保留 `Context / Review`
 - 选中节点后，画布节点卡片已直接承接：
@@ -54,6 +55,10 @@
 - 当前节点摘要、来源上下文和按需编辑已经收回右栏 `Context`
 - source detail 当前也不再只是静态切片列表，而开始允许从来源上下文继续打开关联节点与证据节点
 - 在已有节点上下文时，source detail 也应允许直接起草 cite / uncite patch，把来源查看继续接回 review / apply 流
+- 右栏现在也已有一层轻量 `AI draft route` 提示：
+  - 当前 provider / runner / model / auth / env 状态
+  - draft 失败时的下一步建议
+  - 但它刻意保持为轻量状态层，而不是恢复一整块重型调试面板
 
 这意味着当前实现已经明显偏离“调试 / 审计工作台”，开始进入“最小节点工作流”阶段。
 
@@ -69,18 +74,16 @@
 
 当前最值得继续压实的是：
 
-- 右栏来源卡片补上“为什么值得看”的最小人话摘要
-- apply 完成态补上：
-  - 这次新增了什么
-  - 当前把用户带到了哪个节点
-  - 下一步最自然的继续动作
+- 守住左栏 source import、右栏来源上下文和 apply 完成态这条已经收顺的主路径
 - 把 `打开工作区 -> 选中节点 -> 起草 AI draft -> review -> apply -> 聚焦新增节点` 收成稳定 smoke
+- 给轻量 `AI draft route` 提示补回归验证，防止 provider route / auth / env 提示再次静默消失
 - 在上面这条闭环稳定后，再补一条 `source import -> 选中来源节点 -> AI expand -> review -> apply` 的真实材料路径
 - 保持 source detail 继续是可推进的上下文层，而不是看完就结束的只读面板
 
 当前不应抢占优先级的是：
 
 - 把 `AI runs` / `Activity` / `Run Inspector` 重新放回主舞台
+- 把 `AI draft route` 重新膨胀成厚重的调试 / 配置面板
 - 为主界面恢复 raw patch、artifact、run-id 等低层概念
 - 完整自由画布、复杂拖拽布局或新的状态写入路径
 - 为了补视觉热闹度继续加 dashboard、header 或次级面板
@@ -182,6 +185,7 @@ v2 第一版建议收敛为 3 个层级：
   - 节点树 / 大纲
   - 搜索
   - 可折叠导航轨
+  - source import 入口
 - 中栏：画布工作区
   - 基于 `React Flow` 的脑图 / 节点画布
   - 当前节点的子节点关系与结构走向
@@ -190,6 +194,7 @@ v2 第一版建议收敛为 3 个层级：
   - 纯 view-state，例如展开 / 折叠和 focus，不应越界成另一套状态内核
 - 右栏：上下文面板
   - 默认显示节点摘要、来源 / evidence、apply 完成态和按需编辑
+  - 保留一层轻量的 AI draft route 状态与失败引导
   - 起草后切到 review
   - 不退回“系统控制台式”布局
 
