@@ -670,6 +670,150 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(result["metrics"]["verification_ok_cases"], 3)
         self.assertEqual(result["metrics"]["verification_failed_cases"], 0)
 
+    def test_desktop_flow_smoke_dry_run_reports_next_focus_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': 'desktop flow dry-run summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': 'desktop flow dry-run rationale',",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': ['keep the focus on the first branch'],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': 'desktop-dry-run',",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': 'desktop flow dry-run summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Desktop Flow Draft Branch',",
+                        "                'kind': 'action',",
+                        "                'body': 'A branch that should appear as the next focus candidate in dry-run mode.',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            command = shlex.join([sys.executable, str(fake_runner)])
+            result = run_script(
+                "scripts/desktop_flow_smoke.py",
+                "--runner-command",
+                command,
+                "--fixture",
+                str(FIXTURE_PATH),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["mode"], "dry_run")
+        checks = payload["desktop_flow"]["checks"]
+        self.assertTrue(checks["source_context_target_selected"])
+        self.assertTrue(checks["draft_generated"])
+        self.assertTrue(checks["review_payload_available"])
+        self.assertTrue(checks["dry_run_verified"])
+        self.assertTrue(checks["next_focus_candidate_ready"])
+        self.assertEqual(
+            payload["desktop_flow"]["next_focus_candidate"]["title"],
+            "Desktop Flow Draft Branch",
+        )
+
+    def test_desktop_flow_smoke_apply_reports_created_node_focus(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': 'desktop flow apply summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': 'desktop flow apply rationale',",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': ['focus the new branch'],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': 'desktop-apply',",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': 'desktop flow apply summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Desktop Flow Applied Branch',",
+                        "                'kind': 'evidence',",
+                        "                'body': 'A branch that should be created and focused after apply.',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': ['applied'],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            command = shlex.join([sys.executable, str(fake_runner)])
+            result = run_script(
+                "scripts/desktop_flow_smoke.py",
+                "--runner-command",
+                command,
+                "--fixture",
+                str(FIXTURE_PATH),
+                "--apply",
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["mode"], "apply")
+        checks = payload["desktop_flow"]["checks"]
+        self.assertTrue(checks["patch_applied"])
+        self.assertTrue(checks["created_node_verified"])
+        self.assertTrue(checks["next_focus_candidate_ready"])
+        candidate = payload["desktop_flow"]["next_focus_candidate"]
+        self.assertTrue(candidate["id"])
+        self.assertEqual(candidate["title"], "Desktop Flow Applied Branch")
+
     def test_provider_doctor_json_includes_summary(self) -> None:
         result = run_script("scripts/provider_doctor.py", "--provider", "openai", "--json")
         self.assertEqual(result.returncode, 0, result.stderr)

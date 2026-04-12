@@ -133,11 +133,14 @@
   - review
   - apply
   - 聚焦新增节点
+- 当前已落地统一入口：`python3 scripts/desktop_flow_smoke.py`
+  - 默认复用 `provider_smoke` 的 `source-context` 场景，不新增状态边界
+  - `--json` 输出会带 `next_focus_candidate`，用于回归 apply 后是否能继续进入新增节点
 - 这条 smoke 优先服务当前最小 UI，而不是覆盖已删除的二级视图
 
 当前交付要求：
 
-- 如果能在一天内做完自动化 smoke，优先把它收成统一入口
+- 自动化 smoke 已收口到统一入口后，优先补测试和文档，避免脚本入口漂移
 - 如果自动化还不稳，至少先把固定场景、固定步骤、预期结果写进项目文档，避免每次接力都重新摸索
 - smoke 的默认目标不是“覆盖所有功能”，而是守住当前桌面主路径不回退
 

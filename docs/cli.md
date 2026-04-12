@@ -93,6 +93,9 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
   - `--scenario minimal`
   - `--scenario source-context`
   - 其中 `source-context` 会导入固定 Markdown fixture、补一条 evidence citation，再在真实来源节点上跑 draft
+- 如果你要守住“桌面主流程不回退”，可以直接走 `desktop_flow_smoke.py`：
+  - 入口固定复用 `source-context` 场景（`init -> source import/target -> ai draft -> review -> apply/dry-run`）
+  - 会额外给出 `next_focus_candidate`，用于验证 apply 后应当聚焦到哪个新增节点（或 dry-run 下应该先看哪个预览分支）
 - `ai expand` 本身只负责 dry-run request 预览，不直接调用模型
 - `ai explore` 也同样只负责 dry-run request 预览，但会额外要求 `--by`
 - 当前 `ai explore` 支持这些角度：
@@ -302,6 +305,19 @@ python3 scripts/provider_smoke.py --provider anthropic --scenario source-context
 ```
 
 `provider_smoke.py` 会先做一层 provider preflight；如果当前 provider 没有可用 auth，会直接提示先跑对应的 `provider_doctor.py`。
+
+如果你想直接回归“桌面主流程 smoke”（source-context 目标节点 -> draft/review -> apply 或 dry-run -> next focus candidate），可以这样跑：
+
+```bash
+python3 scripts/desktop_flow_smoke.py --provider anthropic --json
+python3 scripts/desktop_flow_smoke.py --provider anthropic --apply --json
+```
+
+如果你在自动化里不想依赖 provider preflight，也可以直接传 runner 命令：
+
+```bash
+python3 scripts/desktop_flow_smoke.py --runner-command "python3 scripts/langchain_anthropic_runner.py" --json
+```
 
 现在也可以直接通过 CLI 入口调用：
 
