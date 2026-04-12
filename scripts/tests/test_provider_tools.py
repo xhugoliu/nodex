@@ -742,6 +742,18 @@ class ProviderToolScriptsTests(unittest.TestCase):
             payload["desktop_flow"]["next_focus_candidate"]["title"],
             "Desktop Flow Draft Branch",
         )
+        ai_status = payload["ai_status"]
+        self.assertEqual(ai_status["command"], command)
+        self.assertEqual(ai_status["command_source"], "override")
+        self.assertIsNone(ai_status["provider"])
+        self.assertEqual(ai_status["runner"], "custom")
+        self.assertEqual(ai_status["model"], "fake")
+        self.assertIsNone(ai_status["reasoning_effort"])
+        self.assertIsNone(ai_status["has_auth"])
+        self.assertIsNone(ai_status["has_process_env_conflict"])
+        self.assertIsNone(ai_status["has_shell_env_conflict"])
+        self.assertFalse(ai_status["uses_provider_defaults"])
+        self.assertIn("does not map to a known provider runner", ai_status["status_error"])
 
     def test_desktop_flow_smoke_apply_reports_created_node_focus(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -813,6 +825,18 @@ class ProviderToolScriptsTests(unittest.TestCase):
         candidate = payload["desktop_flow"]["next_focus_candidate"]
         self.assertTrue(candidate["id"])
         self.assertEqual(candidate["title"], "Desktop Flow Applied Branch")
+        ai_status = payload["ai_status"]
+        self.assertEqual(ai_status["command"], command)
+        self.assertEqual(ai_status["command_source"], "override")
+        self.assertIsNone(ai_status["provider"])
+        self.assertEqual(ai_status["runner"], "custom")
+        self.assertEqual(ai_status["model"], "fake")
+        self.assertIsNone(ai_status["reasoning_effort"])
+        self.assertIsNone(ai_status["has_auth"])
+        self.assertIsNone(ai_status["has_process_env_conflict"])
+        self.assertIsNone(ai_status["has_shell_env_conflict"])
+        self.assertFalse(ai_status["uses_provider_defaults"])
+        self.assertIn("does not map to a known provider runner", ai_status["status_error"])
 
     def test_provider_doctor_json_includes_summary(self) -> None:
         result = run_script("scripts/provider_doctor.py", "--provider", "openai", "--json")

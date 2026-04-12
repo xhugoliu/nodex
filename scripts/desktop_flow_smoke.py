@@ -91,7 +91,7 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     manifest_path = repo_root / "Cargo.toml"
     scripts_dir = Path(__file__).resolve().parent
-    runner_command_text, preflight_summary = resolve_runner_command(
+    runner_command_text, preflight_summary, command_source = resolve_runner_command(
         provider=args.provider,
         runner_command=args.runner_command,
         passthrough=passthrough,
@@ -113,6 +113,7 @@ def main() -> int:
             citation_rationale=args.citation_rationale,
             preflight_summary=preflight_summary,
             provider=args.provider if not args.runner_command else None,
+            command_source=command_source,
         )
     elif args.keep_workspace:
         workspace_dir = Path(tempfile.mkdtemp(prefix="nodex-desktop-flow-smoke-"))
@@ -126,6 +127,7 @@ def main() -> int:
             citation_rationale=args.citation_rationale,
             preflight_summary=preflight_summary,
             provider=args.provider if not args.runner_command else None,
+            command_source=command_source,
         )
     else:
         with tempfile.TemporaryDirectory(prefix="nodex-desktop-flow-smoke-") as tmp_dir:
@@ -140,6 +142,7 @@ def main() -> int:
                 citation_rationale=args.citation_rationale,
                 preflight_summary=preflight_summary,
                 provider=args.provider if not args.runner_command else None,
+                command_source=command_source,
             )
 
     if args.json:
@@ -156,9 +159,9 @@ def resolve_runner_command(
     runner_command: Optional[str],
     passthrough: list[str],
     scripts_dir: Path,
-) -> tuple[str, Optional[dict]]:
+) -> tuple[str, Optional[dict], str]:
     if runner_command:
-        return runner_command, None
+        return runner_command, None, "override"
 
     diagnostics = load_provider_payload(provider, script_path=Path(__file__))
     summary = diagnostics.get("summary", {})
@@ -179,7 +182,7 @@ def resolve_runner_command(
         *entry.default_smoke_args,
         *passthrough,
     ]
-    return shlex.join(runner_command_parts), summary
+    return shlex.join(runner_command_parts), summary, "default"
 
 
 def run_desktop_flow_smoke(
@@ -193,6 +196,7 @@ def run_desktop_flow_smoke(
     citation_rationale: str,
     preflight_summary: Optional[dict],
     provider: Optional[str],
+    command_source: str,
 ) -> dict:
     smoke_result = run_smoke(
         manifest_path=manifest_path,
@@ -207,11 +211,19 @@ def run_desktop_flow_smoke(
         json_mode=True,
     )
     desktop_flow = build_desktop_flow_summary(smoke_result, apply=apply)
+    ai_status = build_ai_status(
+        runner_command_text=runner_command_text,
+        command_source=command_source,
+        smoke_result=smoke_result,
+        preflight_summary=preflight_summary,
+        provider=provider,
+    )
     result = {
         "ok": desktop_flow["ok"],
         "mode": "apply" if apply else "dry_run",
         "workspace_dir": str(workspace_dir),
         "runner_command": runner_command_text,
+        "ai_status": ai_status,
         "desktop_flow": desktop_flow,
         "smoke": smoke_result,
     }
@@ -284,6 +296,133 @@ def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:
         else 0,
         "next_focus_candidate": next_focus_candidate,
     }
+
+
+def build_ai_status(
+    *,
+    runner_command_text: str,
+    command_source: str,
+    smoke_result: dict,
+    preflight_summary: Optional[dict],
+    provider: Optional[str],
+) -> dict:
+    run_payload = smoke_result.get("run_external_json") or {}
+    metadata = run_payload.get("metadata") or {}
+    generator = run_payload.get("generator") or {}
+    detected_provider = provider or detected_provider_from_command(runner_command_text)
+    uses_provider_defaults = "--use-default-args" in runner_command_text
+    status_error = None
+    if command_source == "override" and detected_provider is None:
+        status_error = (
+            "NODEX_DESKTOP_AI_COMMAND does not map to a known provider runner."
+        )
+
+    model = extract_command_flag_value(runner_command_text, "--model")
+    if not model and isinstance(generator.get("model"), str):
+        model = generator["model"]
+    if not model and isinstance(metadata.get("model"), str):
+        model = metadata["model"]
+
+    reasoning_effort = extract_command_flag_value(
+        runner_command_text, "--reasoning-effort"
+    )
+    if not reasoning_effort and uses_provider_defaults:
+        reasoning_effort = provider_default_reasoning_effort(detected_provider)
+
+    has_auth = summary_bool(preflight_summary, "has_auth")
+    has_process_env_conflict = summary_bool(
+        preflight_summary, "has_process_env_conflict"
+    )
+    has_shell_env_conflict = summary_bool(preflight_summary, "has_shell_env_conflict")
+
+    return {
+        "command": runner_command_text,
+        "command_source": command_source,
+        "provider": detected_provider,
+        "runner": detected_runner_from_command(runner_command_text),
+        "model": model,
+        "reasoning_effort": reasoning_effort,
+        "has_auth": has_auth,
+        "has_process_env_conflict": has_process_env_conflict,
+        "has_shell_env_conflict": has_shell_env_conflict,
+        "uses_provider_defaults": uses_provider_defaults,
+        "status_error": status_error,
+    }
+
+
+def summary_bool(summary: Optional[dict], key: str) -> Optional[bool]:
+    if not isinstance(summary, dict):
+        return None
+    value = summary.get(key)
+    return value if isinstance(value, bool) else None
+
+
+def extract_command_flag_value(command: str, flag: str) -> Optional[str]:
+    spaced_flag = f"{flag} "
+    equals_flag = f"{flag}="
+    if equals_flag in command:
+        return extract_flag_token(command.split(equals_flag, maxsplit=1)[1])
+    if spaced_flag in command:
+        return extract_flag_token(command.split(spaced_flag, maxsplit=1)[1])
+    return None
+
+
+def extract_flag_token(value: str) -> Optional[str]:
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    token = trimmed.split(maxsplit=1)[0].strip("'\"")
+    return token or None
+
+
+def provider_default_reasoning_effort(provider: Optional[str]) -> Optional[str]:
+    if provider == "codex":
+        return "low"
+    return None
+
+
+def detected_provider_from_command(command: str) -> Optional[str]:
+    if (
+        "--provider codex" in command
+        or "--provider=codex" in command
+        or "codex_runner.py" in command
+    ):
+        return "codex"
+    if (
+        "--provider anthropic" in command
+        or "--provider=anthropic" in command
+        or "langchain_anthropic_runner.py" in command
+    ):
+        return "anthropic"
+    if (
+        "--provider openai" in command
+        or "--provider=openai" in command
+        or "openai_runner.py" in command
+    ):
+        return "openai"
+    if (
+        "--provider gemini" in command
+        or "--provider=gemini" in command
+        or "gemini_runner.py" in command
+    ):
+        return "gemini"
+    return None
+
+
+def detected_runner_from_command(command: str) -> str:
+    if "provider_runner.py" in command:
+        return "provider_runner.py"
+    if "langchain_anthropic_runner.py" in command:
+        return "langchain_anthropic_runner.py"
+    if "langchain_openai_runner.py" in command:
+        return "langchain_openai_runner.py"
+    if "codex_runner.py" in command:
+        return "codex_runner.py"
+    if "openai_runner.py" in command:
+        return "openai_runner.py"
+    if "gemini_runner.py" in command:
+        return "gemini_runner.py"
+    return "custom"
 
 
 def build_next_focus_candidate(

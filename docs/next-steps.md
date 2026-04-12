@@ -136,6 +136,7 @@
 - 当前已落地统一入口：`python3 scripts/desktop_flow_smoke.py`
   - 默认复用 `provider_smoke` 的 `source-context` 场景，不新增状态边界
   - `--json` 输出会带 `next_focus_candidate`，用于回归 apply 后是否能继续进入新增节点
+  - `--json` 输出当前也已带 `ai_status`，用于守住 desktop 默认 draft route 的 provider / auth / env 提示
 - 这条 smoke 优先服务当前最小 UI，而不是覆盖已删除的二级视图
 
 当前交付要求：
