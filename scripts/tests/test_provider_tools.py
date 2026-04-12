@@ -15,6 +15,7 @@ from langchain_anthropic_runner import (
     coerce_direct_evidence,
     normalize_expand_like_patch,
 )
+from desktop_flow_smoke import build_ai_status
 from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
 from source_context_scenario import fixture_set_cases
@@ -837,6 +838,42 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIsNone(ai_status["has_shell_env_conflict"])
         self.assertFalse(ai_status["uses_provider_defaults"])
         self.assertIn("does not map to a known provider runner", ai_status["status_error"])
+
+    def test_desktop_flow_ai_status_uses_provider_preflight_for_default_route(self) -> None:
+        ai_status = build_ai_status(
+            runner_command_text=(
+                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
+            ),
+            command_source="default",
+            smoke_result={
+                "run_external_json": {
+                    "metadata": {
+                        "model": "claude-sonnet",
+                    }
+                }
+            },
+            preflight_summary={
+                "has_auth": True,
+                "has_process_env_conflict": False,
+                "has_shell_env_conflict": True,
+            },
+            provider="anthropic",
+        )
+
+        self.assertEqual(
+            ai_status["command"],
+            "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args",
+        )
+        self.assertEqual(ai_status["command_source"], "default")
+        self.assertEqual(ai_status["provider"], "anthropic")
+        self.assertEqual(ai_status["runner"], "provider_runner.py")
+        self.assertEqual(ai_status["model"], "claude-sonnet")
+        self.assertIsNone(ai_status["reasoning_effort"])
+        self.assertTrue(ai_status["has_auth"])
+        self.assertFalse(ai_status["has_process_env_conflict"])
+        self.assertTrue(ai_status["has_shell_env_conflict"])
+        self.assertTrue(ai_status["uses_provider_defaults"])
+        self.assertIsNone(ai_status["status_error"])
 
     def test_provider_doctor_json_includes_summary(self) -> None:
         result = run_script("scripts/provider_doctor.py", "--provider", "openai", "--json")
