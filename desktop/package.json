@@ -11,7 +11,7 @@
     "check": "tsc --noEmit",
     "check:tauri": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test:core": "cargo test --manifest-path ../Cargo.toml",
-    "test:logic": "node --import tsx --test src/app-helpers.ai-route.test.ts",
+    "test:logic": "node --import tsx --test src/app-helpers.ai-route.test.ts src/workbench.ai-route-surface.test.tsx",
     "check:all": "npm run check && npm run test:logic && npm run check:tauri && npm run test:core"
   },
   "devDependencies": {

@@ -144,6 +144,7 @@
 - 自动化 smoke 已收口到统一入口后，优先补测试和文档，避免脚本入口漂移
 - `desktop/package.json` 的 `check:all` 当前也应继续带上 `test:logic`
   - 用来守住右栏轻量 `AI draft route` 的前端纯逻辑分支
+  - 当前也已开始覆盖 `AiDraftRouteSurface` 的轻量静态渲染分支，而不是只测 helper
 - 如果自动化还不稳，至少先把固定场景、固定步骤、预期结果写进项目文档，避免每次接力都重新摸索
 - smoke 的默认目标不是“覆盖所有功能”，而是守住当前桌面主路径不回退
 

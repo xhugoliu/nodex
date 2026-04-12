@@ -203,7 +203,7 @@ export function WorkbenchSidePane(props: {
   );
 }
 
-function AiDraftRouteSurface(props: {
+export function AiDraftRouteSurface(props: {
   status: DesktopAiStatus | null;
   loading: boolean;
   draftError: string | null;
@@ -254,6 +254,7 @@ function AiDraftRouteSurface(props: {
   const toneClass = routeNeedsAttention
     ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.05)]"
     : "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.05)]";
+  const showNextSteps = Boolean(props.draftError) || (routeNeedsAttention && nextSteps.length > 0);
 
   return (
     <section className={`${cardClass} mb-4 space-y-3 ${toneClass}`}>
@@ -321,7 +322,7 @@ function AiDraftRouteSurface(props: {
         </div>
       ) : null}
 
-      {props.draftError || nextSteps.length ? (
+      {showNextSteps ? (
         <div className="rounded-xl border border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.08)] px-3 py-3">
           <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--danger)]">
             {props.t("nodeEditing.aiDraftNextTitle")}
