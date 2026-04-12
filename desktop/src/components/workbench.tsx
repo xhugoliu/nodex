@@ -586,7 +586,7 @@ function NodeContextSurface(props: {
   );
 }
 
-function SourceContextSurface(props: {
+export function SourceContextSurface(props: {
   detail: SourceDetail;
   selectedSourceChunkId: string | null;
   nodeContext: NodeWorkspaceContext | null;
