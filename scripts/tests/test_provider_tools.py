@@ -1,4 +1,5 @@
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -874,6 +875,53 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(ai_status["has_shell_env_conflict"])
         self.assertTrue(ai_status["uses_provider_defaults"])
         self.assertIsNone(ai_status["status_error"])
+
+    def test_desktop_ai_status_contract_matches_rust_struct_fields(self) -> None:
+        rust_lib = REPO_ROOT / "desktop" / "src-tauri" / "src" / "lib.rs"
+        rust_text = rust_lib.read_text(encoding="utf-8")
+        struct_match = re.search(
+            r"struct\s+DesktopAiStatus\s*\{(?P<body>.*?)\n\}",
+            rust_text,
+            flags=re.DOTALL,
+        )
+        self.assertIsNotNone(struct_match, "DesktopAiStatus struct was not found in lib.rs")
+
+        rust_fields = set(
+            re.findall(
+                r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:\s*[^,]+,",
+                struct_match.group("body"),
+                flags=re.MULTILINE,
+            )
+        )
+        self.assertTrue(rust_fields, "DesktopAiStatus field list was empty")
+
+        ai_status = build_ai_status(
+            runner_command_text=(
+                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
+            ),
+            command_source="default",
+            smoke_result={"run_external_json": {"metadata": {"model": "claude-sonnet"}}},
+            preflight_summary={
+                "has_auth": True,
+                "has_process_env_conflict": False,
+                "has_shell_env_conflict": True,
+            },
+            provider="anthropic",
+        )
+        python_keys = set(ai_status.keys())
+
+        missing_in_python = sorted(rust_fields - python_keys)
+        extra_in_python = sorted(python_keys - rust_fields)
+        self.assertEqual(
+            missing_in_python,
+            [],
+            f"build_ai_status() is missing DesktopAiStatus fields: {missing_in_python}",
+        )
+        self.assertEqual(
+            extra_in_python,
+            [],
+            f"build_ai_status() returned keys not present in DesktopAiStatus: {extra_in_python}",
+        )
 
     def test_provider_doctor_json_includes_summary(self) -> None:
         result = run_script("scripts/provider_doctor.py", "--provider", "openai", "--json")
