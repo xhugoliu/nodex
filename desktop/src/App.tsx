@@ -11,6 +11,7 @@ import {
   formatError,
   inspectPatchDraft,
   renderPatchReport,
+  renderAiDraftFailure,
   type ConsoleTone,
 } from "./app-helpers";
 import {
@@ -25,6 +26,7 @@ import { hasTauriRuntime, invokeCommand, openPath } from "./tauri";
 import type {
   ApplyPatchReport,
   ApplyReviewedPatchOutput,
+  DesktopAiStatus,
   DraftReviewPayload,
   LanguagePreference,
   Locale,
@@ -171,6 +173,9 @@ export default function App() {
     useState<PatchDraftOrigin | null>(null);
   const [reviewDraft, setReviewDraft] = useState<DraftReviewPayload | null>(null);
   const [applyResult, setApplyResult] = useState<ApplyPatchReport | null>(null);
+  const [desktopAiStatus, setDesktopAiStatus] = useState<DesktopAiStatus | null>(null);
+  const [isDesktopAiStatusLoading, setIsDesktopAiStatusLoading] = useState(false);
+  const [lastAiDraftError, setLastAiDraftError] = useState<string | null>(null);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeBody, setUpdateNodeBody] = useState("");
   const [addChildTitle, setAddChildTitle] = useState("");
@@ -235,6 +240,14 @@ export default function App() {
       window.removeEventListener("languagechange", handleLanguageChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasTauriRuntime() || !workspaceOverview) {
+      return;
+    }
+
+    void refreshDesktopAiStatus({ silentError: true });
+  }, [workspaceOverview?.root_dir]);
 
   useEffect(() => {
     if (!selectedNodeContext) {
@@ -467,6 +480,33 @@ export default function App() {
     }
   }
 
+  async function refreshDesktopAiStatus(options: {
+    silentError?: boolean;
+    clearDraftError?: boolean;
+  } = {}) {
+    if (!hasTauriRuntime()) {
+      return null;
+    }
+
+    setIsDesktopAiStatusLoading(true);
+    try {
+      const status = await invokeCommand<DesktopAiStatus>("get_desktop_ai_status", {});
+      setDesktopAiStatus(status);
+      if (options.clearDraftError) {
+        setLastAiDraftError(null);
+      }
+      return status;
+    } catch (error) {
+      setDesktopAiStatus(null);
+      if (!options.silentError) {
+        setConsoleMessage(formatError(error), "error");
+      }
+      return null;
+    } finally {
+      setIsDesktopAiStatusLoading(false);
+    }
+  }
+
   async function importSourceFromShortcut(path = workspacePath) {
     if (!ensureWorkspace(path)) {
       return;
@@ -695,6 +735,7 @@ export default function App() {
     }
 
     try {
+      setLastAiDraftError(null);
       const result = await invokeCommand<DraftReviewPayload>("draft_node_expand", {
         start_path: workspacePath,
         node_id: selectedNodeId,
@@ -704,12 +745,15 @@ export default function App() {
       setReviewDraft(result);
       setApplyResult(null);
       setSelectionPanelTab("review");
+      void refreshDesktopAiStatus({ silentError: true, clearDraftError: true });
       setConsoleMessage(
         renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
         "success",
       );
     } catch (error) {
-      setConsoleMessage(formatError(error), "error");
+      const status = await refreshDesktopAiStatus({ silentError: true });
+      setLastAiDraftError(formatError(error));
+      setConsoleMessage(renderAiDraftFailure(error, status, t), "error");
     }
   }
 
@@ -721,6 +765,7 @@ export default function App() {
     }
 
     try {
+      setLastAiDraftError(null);
       const result = await invokeCommand<DraftReviewPayload>("draft_node_explore", {
         start_path: workspacePath,
         node_id: selectedNodeId,
@@ -731,12 +776,15 @@ export default function App() {
       setReviewDraft(result);
       setApplyResult(null);
       setSelectionPanelTab("review");
+      void refreshDesktopAiStatus({ silentError: true, clearDraftError: true });
       setConsoleMessage(
         renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
         "success",
       );
     } catch (error) {
-      setConsoleMessage(formatError(error), "error");
+      const status = await refreshDesktopAiStatus({ silentError: true });
+      setLastAiDraftError(formatError(error));
+      setConsoleMessage(renderAiDraftFailure(error, status, t), "error");
     }
   }
 
@@ -914,6 +962,9 @@ export default function App() {
 
             <WorkbenchSidePane
               selectionTab={selectionPanelTab}
+              aiDraftStatus={desktopAiStatus}
+              aiDraftStatusLoading={isDesktopAiStatusLoading}
+              aiDraftError={lastAiDraftError}
               nodeContext={selectedNodeContext}
               applyResult={applyResult}
               updateNodeTitle={updateNodeTitle}
@@ -924,6 +975,9 @@ export default function App() {
               patchDraftState={patchDraftState}
               t={t}
               onSelectSelectionTab={setSelectionPanelTab}
+              onRefreshAiDraftStatus={() => {
+                void refreshDesktopAiStatus({ clearDraftError: true });
+              }}
               onTitleChange={setUpdateNodeTitle}
               onBodyChange={setUpdateNodeBody}
               onOpenSource={(sourceId) => {

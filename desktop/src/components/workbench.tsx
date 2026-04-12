@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 
 import {
+  buildAiDraftNextSteps,
   describePatchOperation,
   type PatchDraftState,
   type Translator,
 } from "../app-helpers";
 import type {
   ApplyPatchReport,
+  DesktopAiStatus,
   DraftReviewPayload,
   NodeEvidenceDetail,
   NodeSourceDetail,
@@ -109,6 +111,9 @@ export function WorkbenchMainPane(props: {
 
 export function WorkbenchSidePane(props: {
   selectionTab: "context" | "review";
+  aiDraftStatus: DesktopAiStatus | null;
+  aiDraftStatusLoading: boolean;
+  aiDraftError: string | null;
   nodeContext: NodeWorkspaceContext | null;
   applyResult: ApplyPatchReport | null;
   updateNodeTitle: string;
@@ -119,6 +124,7 @@ export function WorkbenchSidePane(props: {
   patchDraftState: PatchDraftState;
   t: Translator;
   onSelectSelectionTab: (tab: "context" | "review") => void;
+  onRefreshAiDraftStatus: () => void;
   onTitleChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onOpenSource: (sourceId: string) => void;
@@ -148,6 +154,14 @@ export function WorkbenchSidePane(props: {
             {props.t("workbench.reviewTab")}
           </button>
         </div>
+
+        <AiDraftRouteSurface
+          draftError={props.aiDraftError}
+          loading={props.aiDraftStatusLoading}
+          status={props.aiDraftStatus}
+          t={props.t}
+          onRefresh={props.onRefreshAiDraftStatus}
+        />
 
         <div className="scroll-panel min-h-0 flex-1 overflow-auto">
           {props.selectionTab === "review" ? (
@@ -185,6 +199,152 @@ export function WorkbenchSidePane(props: {
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+function AiDraftRouteSurface(props: {
+  status: DesktopAiStatus | null;
+  loading: boolean;
+  draftError: string | null;
+  t: Translator;
+  onRefresh: () => void;
+}) {
+  const status = props.status;
+  const routeUnavailable = !status || Boolean(status.status_error);
+  const routeNeedsAttention =
+    routeUnavailable ||
+    status?.has_auth === false ||
+    status?.has_process_env_conflict === true ||
+    status?.has_shell_env_conflict === true;
+  const nextSteps = buildAiDraftNextSteps(
+    status,
+    props.t,
+    props.draftError || status?.status_error,
+  );
+  const sourceLabel =
+    status?.command_source === "override"
+      ? props.t("nodeEditing.aiDraftSourceOverride")
+      : props.t("nodeEditing.aiDraftSourceDefault");
+  const authLabel =
+    status?.has_auth === true
+      ? props.t("nodeEditing.aiDraftAuthReady")
+      : status?.has_auth === false
+        ? props.t("nodeEditing.aiDraftAuthMissing")
+        : props.t("nodeEditing.aiDraftUnknown");
+  const processEnvLabel =
+    status?.has_process_env_conflict === true
+      ? props.t("nodeEditing.aiDraftEnvDetected")
+      : status?.has_process_env_conflict === false
+        ? props.t("nodeEditing.aiDraftEnvClean")
+        : props.t("nodeEditing.aiDraftUnknown");
+  const shellEnvLabel =
+    status?.has_shell_env_conflict === true
+      ? props.t("nodeEditing.aiDraftEnvDetected")
+      : status?.has_shell_env_conflict === false
+        ? props.t("nodeEditing.aiDraftEnvClean")
+        : props.t("nodeEditing.aiDraftUnknown");
+  const statusLabel = props.loading
+    ? props.t("nodeEditing.aiDraftChecking")
+    : routeUnavailable
+      ? props.t("nodeEditing.aiDraftUnavailable")
+      : routeNeedsAttention
+        ? props.t("nodeEditing.aiDraftNeedsAttention")
+        : props.t("nodeEditing.aiDraftReady");
+  const toneClass = routeNeedsAttention
+    ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.05)]"
+    : "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.05)]";
+
+  return (
+    <section className={`${cardClass} mb-4 space-y-3 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="text-sm font-medium text-[color:var(--text)]">
+            {props.t("nodeEditing.aiDraftRoute")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("nodeEditing.aiDraftRouteMeta")}
+          </div>
+        </div>
+        <button className={ghostButtonClass} onClick={props.onRefresh} type="button">
+          {props.t("nodeEditing.aiDraftRefresh")}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+        <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+          {statusLabel}
+        </span>
+        <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+          {sourceLabel}
+        </span>
+        {status?.provider ? (
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("nodeEditing.aiDraftProvider")}: {status.provider}
+          </span>
+        ) : null}
+        <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+          {props.t("nodeEditing.aiDraftRunner")}: {status?.runner || props.t("nodeEditing.aiDraftUnknown")}
+        </span>
+      </div>
+
+      <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3 text-sm leading-6 text-[color:var(--text)]">
+        <div>
+          {props.t("nodeEditing.aiDraftModel")}: {status?.model || props.t("nodeEditing.aiDraftUnknown")}
+        </div>
+        <div>
+          {props.t("nodeEditing.aiDraftReasoning")}: {status?.reasoning_effort || props.t("nodeEditing.aiDraftUnknown")}
+        </div>
+        <div>
+          {props.t("nodeEditing.aiDraftAuth")}: {authLabel}
+        </div>
+        <div>
+          {props.t("nodeEditing.aiDraftProcessEnv")}: {processEnvLabel} · {props.t("nodeEditing.aiDraftShellEnv")}: {shellEnvLabel}
+        </div>
+        <div>
+          {props.t("nodeEditing.aiDraftUsesProviderDefaults")}:{" "}
+          {status?.uses_provider_defaults
+            ? props.t("nodeEditing.aiDraftAuthReady")
+            : props.t("nodeEditing.aiDraftCustomRunner")}
+        </div>
+      </div>
+
+      {status?.command &&
+      (routeNeedsAttention || status.command_source === "override") ? (
+        <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("nodeEditing.aiDraftCommand")}
+          </div>
+          <div className="mt-2 break-all text-xs leading-6 text-[color:var(--text)]">
+            {status.command}
+          </div>
+        </div>
+      ) : null}
+
+      {props.draftError || nextSteps.length ? (
+        <div className="rounded-xl border border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.08)] px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--danger)]">
+            {props.t("nodeEditing.aiDraftNextTitle")}
+          </div>
+          {props.draftError ? (
+            <div className="mt-2 text-sm leading-6 text-[color:var(--danger)]">
+              {props.draftError}
+            </div>
+          ) : null}
+          {nextSteps.length ? (
+            <div className="mt-2 space-y-2">
+              {nextSteps.map((step) => (
+                <div
+                  key={step}
+                  className="text-sm leading-6 text-[color:var(--text)]"
+                >
+                  {step}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
