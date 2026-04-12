@@ -45,7 +45,9 @@
 - 守住右栏来源上下文的人话摘要、继续入口和 cite / uncite 工作流
 - 守住 apply 后统一的 focus node 语义，避免前后端再次各自猜“下一步去哪”
 - 把右栏轻量 `AI draft route` 提示继续收成“需要时可见、失败时有下一步”的状态层，而不是重新长回重型调试面板
-- 给 `desktop_ai_status` 和主流程 smoke 继续补回归验证，防止 provider route、auth/env 提示和 next steps 被无声回退
+- 把 `desktop_flow_smoke.py` 和 `test:logic` 继续当作当前两条默认回归门：
+  - `desktop_flow_smoke.py` 守主流程闭环
+  - `test:logic` 守右栏轻量 UI 语义
 
 当前明确不抢优先级的内容：
 
@@ -97,11 +99,11 @@
 
 下一轮最小切口：
 
-- 为 `desktop_ai_status` 补确定性的回归验证，尤其守住 override command / unknown provider 的失败提示
-- 同步 desktop 文档口径，明确当前已经落地：
-  - 左栏主界面导入 source
-  - 右栏来源上下文摘要与继续入口
-  - 右栏轻量 AI draft route 提示
+- 守住 `test:logic` 当前已覆盖的三块右栏语义：
+  - `AiDraftRouteSurface`
+  - `SourceContextSurface`
+  - `NodeContextSurface`
+- 如果再推进一轮，优先补“左栏导入 -> 节点落点 -> 右栏上下文 / Review 切换”这组高频交接验证
 - 继续避免在主界面回填任何 run-id、artifact、compare、history 式入口
 - 如果某条信息不能帮助用户继续当前节点工作流，就不进入主界面
 
@@ -145,6 +147,9 @@
 - `desktop/package.json` 的 `check:all` 当前也应继续带上 `test:logic`
   - 用来守住右栏轻量 `AI draft route` 的前端纯逻辑分支
   - 当前也已开始覆盖 `AiDraftRouteSurface` 的轻量静态渲染分支，而不是只测 helper
+- `test:logic` 当前也已覆盖：
+  - `SourceContextSurface`
+  - `NodeContextSurface`
 - 如果自动化还不稳，至少先把固定场景、固定步骤、预期结果写进项目文档，避免每次接力都重新摸索
 - smoke 的默认目标不是“覆盖所有功能”，而是守住当前桌面主路径不回退
 

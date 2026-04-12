@@ -59,6 +59,12 @@
   - 当前 provider / runner / model / auth / env 状态
   - draft 失败时的下一步建议
   - 但它刻意保持为轻量状态层，而不是恢复一整块重型调试面板
+- 当前桌面测试链也已开始收口成两层：
+  - `desktop_flow_smoke.py`：守主流程闭环和 `ai_status`
+  - `test:logic`：守右栏轻量 UI 语义
+    - `AiDraftRouteSurface`
+    - `SourceContextSurface`
+    - `NodeContextSurface`
 
 这意味着当前实现已经明显偏离“调试 / 审计工作台”，开始进入“最小节点工作流”阶段。
 
@@ -76,7 +82,8 @@
 
 - 守住左栏 source import、右栏来源上下文和 apply 完成态这条已经收顺的主路径
 - 把 `打开工作区 -> 选中节点 -> 起草 AI draft -> review -> apply -> 聚焦新增节点` 收成稳定 smoke
-- 给轻量 `AI draft route` 提示补回归验证，防止 provider route / auth / env 提示再次静默消失
+- 继续把右栏轻量 `AI draft route`、来源上下文和 apply 完成态守在同一条轻量测试链里，防止 UI 语义静默回退
+- 如果再推进一轮，优先补“左栏导入 -> 节点落点 -> 右栏上下文 / Review 切换”这组高频交接验证
 - 在上面这条闭环稳定后，再补一条 `source import -> 选中来源节点 -> AI expand -> review -> apply` 的真实材料路径
 - 保持 source detail 继续是可推进的上下文层，而不是看完就结束的只读面板
 
