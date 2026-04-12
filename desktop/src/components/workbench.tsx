@@ -350,7 +350,7 @@ export function AiDraftRouteSurface(props: {
   );
 }
 
-function NodeContextSurface(props: {
+export function NodeContextSurface(props: {
   applyResult: ApplyPatchReport | null;
   nodeContext: NodeWorkspaceContext | null;
   updateNodeTitle: string;
