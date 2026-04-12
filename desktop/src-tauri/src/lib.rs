@@ -51,6 +51,7 @@ struct DraftReviewPayload {
 struct ApplyReviewedPatchOutput {
     report: ApplyPatchReport,
     overview: WorkspaceOverview,
+    preferred_focus_node_id: Option<String>,
     focus_node_context: Option<NodeWorkspaceContext>,
 }
 
@@ -378,6 +379,17 @@ fn draft_review_payload_from_report(report: ExternalRunnerReport) -> DraftReview
         patch: report.patch,
         report: report.report,
     }
+}
+
+fn preferred_focus_node_id_after_apply(
+    report: &ApplyPatchReport,
+    fallback_focus_node_id: Option<&str>,
+) -> Option<String> {
+    report
+        .created_nodes
+        .first()
+        .map(|node| node.id.clone())
+        .or_else(|| fallback_focus_node_id.map(ToOwned::to_owned))
 }
 
 fn display_path(path: &Path) -> String {
@@ -1327,7 +1339,9 @@ fn apply_reviewed_patch(
         .apply_patch_document_with_ai_run(patch, "desktop", false, ai_run_id.as_deref())
         .map_err(|err| err.to_string())?;
     let overview = workspace_overview(&workspace).map_err(|err| err.to_string())?;
-    let focus_node_context = focus_node_id
+    let preferred_focus_node_id =
+        preferred_focus_node_id_after_apply(&report, focus_node_id.as_deref());
+    let focus_node_context = preferred_focus_node_id
         .as_deref()
         .and_then(|node_id| node_workspace_context(&workspace, node_id).ok())
         .map(normalize_node_workspace_context);
@@ -1335,6 +1349,7 @@ fn apply_reviewed_patch(
     Ok(ApplyReviewedPatchOutput {
         report,
         overview,
+        preferred_focus_node_id,
         focus_node_context,
     })
 }
@@ -1486,8 +1501,9 @@ mod tests {
     use super::{
         desktop_default_ai_runner_command, detected_provider_from_command,
         effective_model_for_command, effective_reasoning_for_command,
-        parse_provider_doctor_summary,
+        parse_provider_doctor_summary, preferred_focus_node_id_after_apply,
     };
+    use nodex::model::{ApplyPatchReport, NodeSummary};
 
     #[cfg(windows)]
     use super::display_path_text;
@@ -1585,6 +1601,46 @@ mod tests {
             .as_deref(),
             Some("medium")
         );
+    }
+
+    #[test]
+    fn preferred_focus_node_uses_first_created_node_when_available() {
+        let report = ApplyPatchReport {
+            run_id: Some("run-1".to_string()),
+            summary: Some("Applied patch".to_string()),
+            preview: vec!["add child".to_string()],
+            created_nodes: vec![
+                NodeSummary {
+                    id: "node-created-1".to_string(),
+                    title: "First".to_string(),
+                },
+                NodeSummary {
+                    id: "node-created-2".to_string(),
+                    title: "Second".to_string(),
+                },
+            ],
+        };
+
+        assert_eq!(
+            preferred_focus_node_id_after_apply(&report, Some("fallback-node")).as_deref(),
+            Some("node-created-1")
+        );
+    }
+
+    #[test]
+    fn preferred_focus_node_falls_back_to_current_selection_when_no_nodes_were_created() {
+        let report = ApplyPatchReport {
+            run_id: Some("run-2".to_string()),
+            summary: Some("Updated node".to_string()),
+            preview: vec!["update node".to_string()],
+            created_nodes: vec![],
+        };
+
+        assert_eq!(
+            preferred_focus_node_id_after_apply(&report, Some("current-node")).as_deref(),
+            Some("current-node")
+        );
+        assert_eq!(preferred_focus_node_id_after_apply(&report, None), None);
     }
 
     #[test]

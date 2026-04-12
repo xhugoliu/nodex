@@ -324,5 +324,6 @@ export interface DraftReviewPayload {
 export interface ApplyReviewedPatchOutput {
   report: ApplyPatchReport;
   overview: WorkspaceOverview;
+  preferred_focus_node_id: string | null;
   focus_node_context: NodeWorkspaceContext | null;
 }

@@ -6,6 +6,7 @@ import {
   inputClass,
   panelClass,
   primaryButtonClass,
+  secondaryButtonClass,
 } from "./common";
 
 export function TreePane(props: {
@@ -18,6 +19,7 @@ export function TreePane(props: {
   selectedNodeId: string | null;
   t: Translator;
   onToggleCollapse: () => void;
+  onImportSource: () => void;
   onQueryChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;
 }) {
@@ -66,6 +68,9 @@ export function TreePane(props: {
           {props.t("sidebar.tree")}
         </div>
         <div className="flex items-center gap-2">
+          <button className={secondaryButtonClass} onClick={props.onImportSource} type="button">
+            {props.t("workspace.importSource")}
+          </button>
           <div className="text-xs text-[color:var(--muted)]">{props.treeSummary}</div>
           <SidebarToggleButton
             direction="collapse"

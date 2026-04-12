@@ -32,6 +32,7 @@ import type {
   PatchDocument,
   PatchDraftOrigin,
   SourceDetail,
+  SourceImportReport,
   WorkspaceOverview,
 } from "./types";
 
@@ -466,6 +467,46 @@ export default function App() {
     }
   }
 
+  async function importSourceFromShortcut(path = workspacePath) {
+    if (!ensureWorkspace(path)) {
+      return;
+    }
+
+    try {
+      const selectedPath = await openPath({
+        directory: false,
+        title: t("workspace.chooseSourceFile"),
+        filters: [
+          {
+            name: "Markdown / Text",
+            extensions: ["md", "txt"],
+          },
+        ],
+      });
+      if (!selectedPath) {
+        return;
+      }
+
+      const report = await invokeCommand<SourceImportReport>("import_source", {
+        start_path: path,
+        source_path: selectedPath,
+      });
+      const overview = await openWorkspaceCommand(path);
+      await applyOverview(overview, {
+        preferredNodeId: report.root_node_id,
+      });
+      setConsoleMessage(
+        t("messages.importedSource", {
+          name: report.original_name,
+          title: report.root_title,
+        }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function fetchNodeContext(
     nodeId: string,
     path = workspacePath,
@@ -597,7 +638,7 @@ export default function App() {
       });
       setApplyResult(output.report);
       const nextNodeId =
-        output.report.created_nodes[0]?.id ??
+        output.preferred_focus_node_id ??
         output.focus_node_context?.node_detail.node.id ??
         null;
       if (nextNodeId) {
@@ -807,6 +848,9 @@ export default function App() {
               t={t}
               onToggleCollapse={() => {
                 setIsSidebarCollapsed((current) => !current);
+              }}
+              onImportSource={() => {
+                void importSourceFromShortcut();
               }}
               onQueryChange={setTreeQuery}
               onSelectNode={(nodeId) => {

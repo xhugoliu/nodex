@@ -435,12 +435,21 @@ function SourceContextSurface(props: {
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
 }) {
-  const citationNodeId = props.nodeContext?.node_detail.node.id ?? null;
+  const citationNodeTitle = props.nodeContext?.node_detail.node.title?.trim() || null;
   const citedChunkIds = new Set(
     props.nodeContext?.node_detail.evidence.flatMap((detail) =>
       detail.citations.map((citation) => citation.chunk.id),
     ) ?? [],
   );
+  const citedChunkCount = props.detail.chunks.filter((chunk) =>
+    citedChunkIds.has(chunk.chunk.id),
+  ).length;
+  const quickEntry = collectSourceQuickEntryNodes(props.detail.chunks);
+  const continueNodeCount = dedupeNodeSummaries([
+    ...quickEntry.linkedNodes,
+    ...quickEntry.evidenceNodes,
+  ]).length;
+  const summaryReason = summarizeSourceDetailReason(props.detail, props.t);
 
   return (
     <div className="space-y-4">
@@ -453,11 +462,100 @@ function SourceContextSurface(props: {
             {props.t("workbench.backToNode")}
           </button>
         </div>
-        <div className="text-sm leading-6 text-[color:var(--muted)]">
-          {citationNodeId
-            ? props.t("detail.citationContextReady", { nodeId: citationNodeId })
-            : props.t("detail.citationContextMissing")}
+        <div className="space-y-2">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("detail.sourceContextSummaryTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--text)]">{summaryReason}</div>
         </div>
+        <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("detail.sourceContextStatChunks", {
+              count: props.detail.chunks.length,
+            })}
+          </span>
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("detail.sourceContextStatCitable", {
+              count: props.detail.chunks.length,
+            })}
+          </span>
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("detail.sourceContextStatCited", {
+              count: citedChunkCount,
+            })}
+          </span>
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("detail.sourceContextStatContinue", {
+              count: continueNodeCount,
+            })}
+          </span>
+        </div>
+        <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/75 px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("detail.citationWorkflowTitle")}
+          </div>
+          <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+            {citationNodeTitle
+              ? props.t("detail.citationContextReadyForNode", {
+                  title: citationNodeTitle,
+                  cited: citedChunkCount,
+                  total: props.detail.chunks.length,
+                })
+              : props.t("detail.citationContextMissing")}
+          </div>
+        </div>
+      </section>
+
+      <section className={`${cardClass} space-y-3`}>
+        <div className="space-y-1">
+          <div className="text-sm font-medium text-[color:var(--text)]">
+            {props.t("detail.sourceContinueTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("detail.sourceContinueBody")}
+          </div>
+        </div>
+        {quickEntry.linkedNodes.length ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("detail.sourceContinueLinkedNodes")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickEntry.linkedNodes.map((node) => (
+                <button
+                  key={`source-linked-${node.id}`}
+                  className={ghostButtonClass}
+                  onClick={() => props.onOpenLinkedNode(node.id)}
+                  type="button"
+                >
+                  {node.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {quickEntry.evidenceNodes.length ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("detail.sourceContinueEvidenceNodes")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickEntry.evidenceNodes.map((node) => (
+                <button
+                  key={`source-evidence-${node.id}`}
+                  className={ghostButtonClass}
+                  onClick={() => props.onOpenLinkedNode(node.id)}
+                  type="button"
+                >
+                  {node.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {!quickEntry.linkedNodes.length && !quickEntry.evidenceNodes.length ? (
+          <EmptyBox>{props.t("detail.sourceContinueEmpty")}</EmptyBox>
+        ) : null}
       </section>
 
       {props.detail.chunks.length ? (
@@ -467,7 +565,7 @@ function SourceContextSurface(props: {
               key={chunk.chunk.id}
               detail={chunk}
               selected={props.selectedSourceChunkId === chunk.chunk.id}
-              citationNodeId={citationNodeId}
+              citationNodeTitle={citationNodeTitle}
               isCitedForCurrentNode={citedChunkIds.has(chunk.chunk.id)}
               t={props.t}
               onOpenLinkedNode={props.onOpenLinkedNode}
@@ -603,7 +701,7 @@ function SourceCard(props: {
 function SourceChunkCard(props: {
   detail: SourceChunkDetail;
   selected: boolean;
-  citationNodeId: string | null;
+  citationNodeTitle: string | null;
   isCitedForCurrentNode: boolean;
   t: Translator;
   onOpenLinkedNode: (nodeId: string) => void;
@@ -642,30 +740,33 @@ function SourceChunkCard(props: {
         <div className="whitespace-pre-wrap text-sm leading-6 text-[color:var(--text)]">
           {clipText(props.detail.chunk.text, 360)}
         </div>
-        {props.citationNodeId ? (
+        {props.citationNodeTitle ? (
           <div className="space-y-2 pt-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("detail.citationActions")}
+            </div>
             <div className="text-xs text-[color:var(--muted)]">
               {props.isCitedForCurrentNode
                 ? props.t("detail.chunkCitationActive")
                 : props.t("detail.chunkCitationAvailable")}
             </div>
             <div className="flex flex-wrap gap-2">
-            <button
-              className={secondaryButtonClass}
-              disabled={props.isCitedForCurrentNode}
-              onClick={() => props.onDraftCiteChunk(props.detail.chunk.id)}
-              type="button"
-            >
-              {props.t("detail.draftCite")}
-            </button>
-            <button
-              className={ghostButtonClass}
-              disabled={!props.isCitedForCurrentNode}
-              onClick={() => props.onDraftUnciteChunk(props.detail.chunk.id)}
-              type="button"
-            >
-              {props.t("detail.draftUncite")}
-            </button>
+              <button
+                className={secondaryButtonClass}
+                disabled={props.isCitedForCurrentNode}
+                onClick={() => props.onDraftCiteChunk(props.detail.chunk.id)}
+                type="button"
+              >
+                {props.t("detail.draftCite")}
+              </button>
+              <button
+                className={ghostButtonClass}
+                disabled={!props.isCitedForCurrentNode}
+                onClick={() => props.onDraftUnciteChunk(props.detail.chunk.id)}
+                type="button"
+              >
+                {props.t("detail.draftUncite")}
+              </button>
             </div>
           </div>
         ) : null}
@@ -740,6 +841,35 @@ function summarizeChunkMeta(
     .slice(0, 2)
     .map((chunk) => chunk.label || `${chunk.start_line}-${chunk.end_line}`)
     .join(" · ");
+}
+
+function summarizeSourceDetailReason(detail: SourceDetail, t: Translator): string {
+  const rationale = detail.chunks
+    .flatMap((chunkDetail) => chunkDetail.evidence_links ?? [])
+    .map((link) => link.rationale?.trim() || "")
+    .find(Boolean);
+
+  if (rationale) {
+    return t("detail.evidenceWorthReading", {
+      value: clipText(normalizeInlineText(rationale), 180),
+    });
+  }
+
+  const representativeChunk = pickRepresentativeChunk(
+    detail.chunks.map((chunkDetail) => chunkDetail.chunk),
+  );
+  const label = representativeChunk?.label?.trim() || "";
+  const snippet = representativeChunk
+    ? summarizeChunkText(representativeChunk.text)
+    : "";
+  const value =
+    label && snippet && !snippet.toLowerCase().startsWith(label.toLowerCase())
+      ? `${label}: ${snippet}`
+      : snippet || label;
+
+  return value
+    ? t("detail.sourceWorthReading", { value })
+    : t("detail.sourceWorthReadingFallback");
 }
 
 function summarizeSourceReason(detail: NodeSourceDetail, t: Translator): string {
@@ -820,6 +950,24 @@ function dedupeNodeSummaries(nodes: Array<{ id: string; title: string }>) {
   }
 
   return result;
+}
+
+function collectSourceQuickEntryNodes(chunks: SourceChunkDetail[]): {
+  linkedNodes: Array<{ id: string; title: string }>;
+  evidenceNodes: Array<{ id: string; title: string }>;
+} {
+  return {
+    linkedNodes: dedupeNodeSummaries(
+      chunks.flatMap((chunkDetail) => chunkDetail.linked_nodes),
+    ),
+    evidenceNodes: dedupeNodeSummaries(
+      chunks.flatMap((chunkDetail) =>
+        chunkDetail.evidence_links?.length
+          ? chunkDetail.evidence_links.map((link) => link.node)
+          : chunkDetail.evidence_nodes,
+      ),
+    ),
+  };
 }
 
 function formatCitationKind(kind: string, t: Translator): string {
