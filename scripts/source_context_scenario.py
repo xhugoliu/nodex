@@ -140,6 +140,103 @@ def prepare_source_context_scenario(
     }
 
 
+def verify_source_context_workspace_state(
+    *,
+    manifest_path: Path,
+    workspace_dir: Path,
+    scenario_payload: dict[str, Any],
+    created_nodes: Optional[list[dict[str, Any]]] = None,
+    patch_ops: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    target_node = scenario_payload["target_node"]
+    evidence = scenario_payload["evidence"]
+    target_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["node", "show", target_node["id"], "--format", "json"],
+        expect_json=True,
+    )
+    source_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["source", "show", scenario_payload["source_id"], "--format", "json"],
+        expect_json=True,
+    )
+
+    target_evidence_retained = target_has_expected_evidence(
+        node_detail=target_detail,
+        expected_chunk_id=evidence["chunk_id"],
+        expected_citation_kind=evidence["citation_kind"],
+        expected_rationale=evidence["rationale"],
+    )
+    source_evidence_link_retained = source_has_expected_evidence_link(
+        source_detail=source_detail,
+        expected_chunk_id=evidence["chunk_id"],
+        expected_node_id=target_node["id"],
+        expected_citation_kind=evidence["citation_kind"],
+        expected_rationale=evidence["rationale"],
+    )
+
+    created_node_checks = []
+    created_nodes_present = None
+    created_nodes_match_patch = None
+    if created_nodes is not None:
+        child_ids = {
+            item.get("id")
+            for item in target_detail.get("children") or []
+            if isinstance(item, dict) and item.get("id")
+        }
+        expected_created_nodes = expected_created_node_specs(created_nodes, patch_ops)
+        created_nodes_present = True
+        created_nodes_match_patch = True
+        for expected in expected_created_nodes:
+            created_id = expected.get("id")
+            is_child = bool(created_id) and created_id in child_ids
+            created_nodes_present = created_nodes_present and is_child
+            detail = None
+            matches_patch = False
+            if created_id and is_child:
+                detail = run_nodex_command(
+                    manifest_path=manifest_path,
+                    workspace_dir=workspace_dir,
+                    args=["node", "show", created_id, "--format", "json"],
+                    expect_json=True,
+                )
+                node = detail.get("node") or {}
+                parent = detail.get("parent") or {}
+                matches_patch = (
+                    parent.get("id") == target_node["id"]
+                    and node.get("title") == expected.get("expected_title")
+                    and node.get("kind") == expected.get("expected_kind")
+                    and node.get("body") == expected.get("expected_body")
+                )
+            created_nodes_match_patch = created_nodes_match_patch and matches_patch
+            created_node_checks.append(
+                {
+                    "id": created_id,
+                    "reported_title": expected.get("reported_title"),
+                    "expected_title": expected.get("expected_title"),
+                    "present_under_target": is_child,
+                    "matches_patch": matches_patch,
+                }
+            )
+
+    ok = target_evidence_retained and source_evidence_link_retained
+    if created_nodes is not None:
+        ok = ok and bool(created_nodes_present) and bool(created_nodes_match_patch)
+
+    return {
+        "target_node_id": target_node["id"],
+        "expected_chunk_id": evidence["chunk_id"],
+        "target_evidence_retained": target_evidence_retained,
+        "source_evidence_link_retained": source_evidence_link_retained,
+        "created_nodes_present": created_nodes_present,
+        "created_nodes_match_patch": created_nodes_match_patch,
+        "created_node_checks": created_node_checks,
+        "ok": ok,
+    }
+
+
 def select_target_context(source_detail: dict[str, Any], target_label: str) -> dict[str, str]:
     chunks = source_detail.get("chunks")
     if not isinstance(chunks, list):
@@ -167,6 +264,74 @@ def select_target_context(source_detail: dict[str, Any], target_label: str) -> d
     raise ScenarioFailure(
         f"source context chunk `{target_label}` was not found; available labels: {available_labels}"
     )
+
+
+def target_has_expected_evidence(
+    *,
+    node_detail: dict[str, Any],
+    expected_chunk_id: str,
+    expected_citation_kind: str,
+    expected_rationale: str,
+) -> bool:
+    for evidence_detail in node_detail.get("evidence") or []:
+        citations = evidence_detail.get("citations") or []
+        for citation in citations:
+            chunk = citation.get("chunk") or {}
+            if chunk.get("id") != expected_chunk_id:
+                continue
+            if citation.get("citation_kind") != expected_citation_kind:
+                continue
+            if citation.get("rationale") != expected_rationale:
+                continue
+            return True
+    return False
+
+
+def source_has_expected_evidence_link(
+    *,
+    source_detail: dict[str, Any],
+    expected_chunk_id: str,
+    expected_node_id: str,
+    expected_citation_kind: str,
+    expected_rationale: str,
+) -> bool:
+    for chunk_detail in source_detail.get("chunks") or []:
+        chunk = chunk_detail.get("chunk") or {}
+        if chunk.get("id") != expected_chunk_id:
+            continue
+        evidence_links = chunk_detail.get("evidence_links") or []
+        for link in evidence_links:
+            node = link.get("node") or {}
+            if node.get("id") != expected_node_id:
+                continue
+            if link.get("citation_kind") != expected_citation_kind:
+                continue
+            if link.get("rationale") != expected_rationale:
+                continue
+            return True
+    return False
+
+
+def expected_created_node_specs(
+    created_nodes: list[dict[str, Any]],
+    patch_ops: Optional[list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    add_node_ops = [
+        op for op in (patch_ops or []) if isinstance(op, dict) and op.get("type") == "add_node"
+    ]
+    expected_nodes = []
+    for index, created in enumerate(created_nodes):
+        add_node_op = add_node_ops[index] if index < len(add_node_ops) else {}
+        expected_nodes.append(
+            {
+                "id": created.get("id"),
+                "reported_title": created.get("title"),
+                "expected_title": add_node_op.get("title"),
+                "expected_kind": add_node_op.get("kind"),
+                "expected_body": add_node_op.get("body"),
+            }
+        )
+    return expected_nodes
 
 
 def fixture_set_names() -> tuple[str, ...]:

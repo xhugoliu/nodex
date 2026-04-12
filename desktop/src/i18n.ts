@@ -66,6 +66,23 @@ const translations: Record<Locale, TranslationTree> = {
       editNodeTitle: "Refine this node",
       editNodeBody: "Tighten the wording here before you draft the next structural change.",
       applyResultTitle: "Applied",
+      applyResultChangedLabel: "What changed",
+      applyResultCreatedNodesLabel: "New nodes",
+      applyResultFocusLabel: "Where you are now",
+      applyResultNextLabel: "Natural next step",
+      applyResultFocusNewNode:
+        "The canvas and context pane are now focused on the new node “{title}”.",
+      applyResultFocusCurrentNode:
+        "The canvas and context pane are now focused on “{title}”.",
+      applyResultNextCreated:
+        "Open the new branch or draft one more expand from here.",
+      applyResultNextWithSources:
+        "Open one source card, then decide whether this node needs another expand or a text edit.",
+      applyResultNextWithChildren:
+        "Review this branch, then expand one child or refine this node.",
+      applyResultNextDefault:
+        "Draft the next child branch or refine this node's text.",
+      applyResultMoreChanges: "{count} more changes in this patch.",
       nodeActivity: "Recent node activity",
       nodeActivityBody:
         "Recent AI drafts and applied patches tied to this node stay visible here.",
@@ -222,6 +239,12 @@ const translations: Record<Locale, TranslationTree> = {
       moreChunks: "{count} more chunks",
       noLabel: "(no label)",
       sourceLevelOnly: "Source-level link only",
+      sourceWorthReading: "Worth reading: {value}",
+      sourceWorthReadingFallback:
+        "Worth reading for the linked context this source adds to the current node.",
+      evidenceWorthReading: "Worth reading because: {value}",
+      evidenceWorthReadingFallback:
+        "Worth reading because this source is already cited as evidence for the current node.",
       chunkMeta: "Chunk {ordinal} · {start}-{end}",
       nodes: "Nodes: {value}",
       evidenceNodes: "Evidence nodes: {value}",
@@ -577,6 +600,18 @@ const translations: Record<Locale, TranslationTree> = {
       editNodeTitle: "润色当前节点",
       editNodeBody: "先把这一层表达清楚，再起草下一步结构变化。",
       applyResultTitle: "已应用",
+      applyResultChangedLabel: "这次改了什么",
+      applyResultCreatedNodesLabel: "新增节点",
+      applyResultFocusLabel: "现在带你到了哪",
+      applyResultNextLabel: "下一步最自然的动作",
+      applyResultFocusNewNode: "画布和右侧上下文现在已经聚焦到新节点“{title}”。",
+      applyResultFocusCurrentNode: "画布和右侧上下文现在聚焦在“{title}”。",
+      applyResultNextCreated: "先打开这个新分支，再决定是否继续从这里起草下一次拓展。",
+      applyResultNextWithSources:
+        "先打开一张来源卡片，再决定这个节点是继续拓展还是先改文字。",
+      applyResultNextWithChildren: "先看看这一层分支是否顺，再继续拓展某个子节点或润色当前节点。",
+      applyResultNextDefault: "先起草下一个子分支，或先润色当前节点文本。",
+      applyResultMoreChanges: "这个 patch 里还有 {count} 条变更。",
       nodeActivity: "最近节点活动",
       nodeActivityBody:
         "这个节点最近的 AI 草案和已应用 patch 会继续在这里保持可见。",
@@ -730,6 +765,11 @@ const translations: Record<Locale, TranslationTree> = {
       moreChunks: "另有 {count} 个切片",
       noLabel: "（无标签）",
       sourceLevelOnly: "只有 source-level link",
+      sourceWorthReading: "值得先看的原因：{value}",
+      sourceWorthReadingFallback: "值得先看，因为这个来源补充了当前节点下一步决策所需的上下文。",
+      evidenceWorthReading: "值得先看的原因：{value}",
+      evidenceWorthReadingFallback:
+        "值得先看，因为这个来源已经被当前节点作为证据引用。",
       chunkMeta: "切片 {ordinal} · {start}-{end}",
       nodes: "关联节点：{value}",
       evidenceNodes: "证据节点：{value}",

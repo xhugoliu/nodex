@@ -8,7 +8,10 @@ import {
 import type {
   ApplyPatchReport,
   DraftReviewPayload,
+  NodeEvidenceDetail,
+  NodeSourceDetail,
   NodeWorkspaceContext,
+  SourceChunkRecord,
   SourceChunkDetail,
   SourceDetail,
   TreeNode,
@@ -207,31 +210,98 @@ function NodeContextSurface(props: {
   }
 
   const detail = props.nodeContext.node_detail;
+  const applyPreviewLines = props.applyResult?.preview.length
+    ? props.applyResult.preview
+    : [props.applyResult?.summary || props.t("reports.patchApplied")];
+  const visibleApplyPreviewLines = applyPreviewLines.slice(0, 3);
+  const hiddenApplyPreviewCount = Math.max(
+    applyPreviewLines.length - visibleApplyPreviewLines.length,
+    0,
+  );
+  const focusMovedToCreatedNode = Boolean(
+    props.applyResult?.created_nodes.some((node) => node.id === detail.node.id),
+  );
+  const nextActionKey = props.applyResult?.created_nodes.length
+    ? "workbench.applyResultNextCreated"
+    : detail.sources.length || detail.evidence.length
+      ? "workbench.applyResultNextWithSources"
+      : detail.children.length
+        ? "workbench.applyResultNextWithChildren"
+        : "workbench.applyResultNextDefault";
 
   return (
     <div className="space-y-4">
       {props.applyResult ? (
         <section className="rounded-[1.5rem] border border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.06)] px-4 py-4">
-          <div className="space-y-3">
+          <div className="space-y-4">
             <div className="text-sm font-medium text-[color:var(--text)]">
               {props.t("workbench.applyResultTitle")}
             </div>
             <div className="text-sm leading-6 text-[color:var(--text)]">
               {props.applyResult.summary || props.t("reports.patchApplied")}
             </div>
-            {props.applyResult.created_nodes.length ? (
-              <div className="flex flex-wrap gap-2">
-                {props.applyResult.created_nodes.map((node) => (
-                  <button
-                    key={node.id}
-                    className={ghostButtonClass}
-                    onClick={() => props.onOpenCreatedNode(node.id)}
+            <div className="space-y-2">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                {props.t("workbench.applyResultChangedLabel")}
+              </div>
+              <div className="space-y-2">
+                {visibleApplyPreviewLines.map((line, index) => (
+                  <div
+                    key={`${line}-${index}`}
+                    className="rounded-xl border border-[rgba(15,118,110,0.14)] bg-white/85 px-3 py-3 text-sm leading-6 text-[color:var(--text)]"
                   >
-                    {node.title}
-                  </button>
+                    {line}
+                  </div>
                 ))}
+                {hiddenApplyPreviewCount ? (
+                  <div className="text-xs text-[color:var(--muted)]">
+                    {props.t("workbench.applyResultMoreChanges", {
+                      count: hiddenApplyPreviewCount,
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+            {props.applyResult.created_nodes.length ? (
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                  {props.t("workbench.applyResultCreatedNodesLabel")}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {props.applyResult.created_nodes.map((node) => (
+                    <button
+                      key={node.id}
+                      className={ghostButtonClass}
+                      onClick={() => props.onOpenCreatedNode(node.id)}
+                    >
+                      {node.title}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : null}
+            <div className="space-y-2">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                {props.t("workbench.applyResultFocusLabel")}
+              </div>
+              <div className="text-sm leading-6 text-[color:var(--text)]">
+                {focusMovedToCreatedNode
+                  ? props.t("workbench.applyResultFocusNewNode", {
+                      title: detail.node.title,
+                    })
+                  : props.t("workbench.applyResultFocusCurrentNode", {
+                      title: detail.node.title,
+                    })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                {props.t("workbench.applyResultNextLabel")}
+              </div>
+              <div className="text-sm leading-6 text-[color:var(--text)]">
+                {props.t(nextActionKey)}
+              </div>
+            </div>
           </div>
         </section>
       ) : null}
@@ -312,7 +382,8 @@ function NodeContextSurface(props: {
               <SourceCard
                 key={source.source.id}
                 title={source.source.original_name}
-                summary={summarizeChunkLabels(source.chunks, props.t)}
+                summary={summarizeSourceReason(source, props.t)}
+                meta={summarizeChunkMeta(source.chunks, props.t)}
                 onClick={() => props.onOpenSource(source.source.id)}
               />
             ))}
@@ -330,7 +401,8 @@ function NodeContextSurface(props: {
               <SourceCard
                 key={source.source.id}
                 title={source.source.original_name}
-                summary={summarizeChunkLabels(source.chunks, props.t)}
+                summary={summarizeEvidenceReason(source, props.t)}
+                meta={summarizeChunkMeta(source.chunks, props.t)}
                 tone="evidence"
                 onClick={() => props.onOpenSource(source.source.id)}
               />
@@ -479,6 +551,7 @@ function ReviewSurface(props: {
 function SourceCard(props: {
   title: string;
   summary: string;
+  meta: string;
   tone?: "neutral" | "evidence";
   onClick: () => void;
 }) {
@@ -493,9 +566,8 @@ function SourceCard(props: {
       onClick={props.onClick}
     >
       <div className="text-sm font-medium text-[color:var(--text)]">{props.title}</div>
-      <div className="mt-1 text-sm leading-6 text-[color:var(--muted)]">
-        {props.summary}
-      </div>
+      <div className="mt-1 text-sm leading-6 text-[color:var(--text)]">{props.summary}</div>
+      <div className="mt-2 text-xs text-[color:var(--muted)]">{props.meta}</div>
     </button>
   );
 }
@@ -533,7 +605,7 @@ function SourceChunkCard(props: {
   );
 }
 
-function summarizeChunkLabels(
+function summarizeChunkMeta(
   chunks: Array<{ label: string | null; start_line: number; end_line: number }>,
   t: Translator,
 ): string {
@@ -545,6 +617,79 @@ function summarizeChunkLabels(
     .slice(0, 2)
     .map((chunk) => chunk.label || `${chunk.start_line}-${chunk.end_line}`)
     .join(" · ");
+}
+
+function summarizeSourceReason(detail: NodeSourceDetail, t: Translator): string {
+  const chunk = pickRepresentativeChunk(detail.chunks);
+  const label = chunk?.label?.trim() || "";
+  const snippet = chunk ? summarizeChunkText(chunk.text) : "";
+  const value =
+    label && snippet && !snippet.toLowerCase().startsWith(label.toLowerCase())
+      ? `${label}: ${snippet}`
+      : snippet || label;
+
+  return value
+    ? t("detail.sourceWorthReading", { value })
+    : t("detail.sourceWorthReadingFallback");
+}
+
+function summarizeEvidenceReason(detail: NodeEvidenceDetail, t: Translator): string {
+  const rationale = detail.citations
+    .map((citation) => citation.rationale?.trim() || "")
+    .find(Boolean);
+
+  if (rationale) {
+    return t("detail.evidenceWorthReading", {
+      value: clipText(normalizeInlineText(rationale), 150),
+    });
+  }
+
+  const chunk = pickRepresentativeChunk(detail.chunks);
+  const label = chunk?.label?.trim() || "";
+  const snippet = chunk ? summarizeChunkText(chunk.text) : "";
+  const value =
+    label && snippet && !snippet.toLowerCase().startsWith(label.toLowerCase())
+      ? `${label}: ${snippet}`
+      : snippet || label;
+
+  return value
+    ? t("detail.evidenceWorthReading", { value })
+    : t("detail.evidenceWorthReadingFallback");
+}
+
+function pickRepresentativeChunk(chunks: SourceChunkRecord[]): SourceChunkRecord | null {
+  if (!chunks.length) {
+    return null;
+  }
+
+  return (
+    chunks.find((chunk) => summarizeChunkText(chunk.text).length >= 48) ||
+    chunks.find((chunk) => normalizeInlineText(chunk.text)) ||
+    chunks[0]
+  );
+}
+
+function summarizeChunkText(text: string): string {
+  const normalized = normalizeInlineText(text);
+  if (!normalized) {
+    return "";
+  }
+
+  const sentences = normalized.split(/(?<=[.!?。！？])\s+/);
+  const candidate =
+    sentences.find((sentence) => sentence.length >= 48) ||
+    sentences[0] ||
+    normalized;
+
+  return clipText(candidate, 120);
+}
+
+function normalizeInlineText(text: string): string {
+  return text
+    .replace(/\r?\n+/g, " ")
+    .replace(/^\s*[-*#>\d.)\s]+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function clipText(text: string, limit: number): string {

@@ -23,6 +23,7 @@ from source_context_scenario import (
     fixture_set_cases,
     fixture_set_names,
     prepare_source_context_scenario,
+    verify_source_context_workspace_state,
 )
 
 
@@ -270,6 +271,7 @@ def run_smoke(
         "scenario": scenario,
         "mode": "apply" if apply else "dry_run",
         "node_id": effective_node_id,
+        "status": expected_status_for_mode(apply),
     }
     if scenario_payload is not None:
         result["scenario_context"] = scenario_payload
@@ -280,7 +282,22 @@ def run_smoke(
         }
         try:
             result["run_external_json"] = json.loads(run_output["stdout"])
-            result["quality"] = build_run_quality_summary(result["run_external_json"])
+            result["quality"] = build_run_quality_summary(
+                result["run_external_json"], apply=apply
+            )
+            result["status"] = result["run_external_json"].get("metadata", {}).get(
+                "status",
+                result["status"],
+            )
+            result["verification"] = build_smoke_verification(
+                manifest_path=manifest_path,
+                workspace_dir=workspace_dir,
+                node_id=effective_node_id,
+                scenario=scenario,
+                scenario_payload=scenario_payload,
+                run_payload=result["run_external_json"],
+                apply=apply,
+            )
         except Exception:
             pass
     return result
@@ -315,9 +332,9 @@ def run_fixture_set_smoke(
         result["case_id"] = case["id"]
         case_results.append(result)
 
-    metrics = build_fixture_set_metrics(case_results)
+    metrics = build_fixture_set_metrics(case_results, apply=apply)
     return {
-        "ok": metrics["failed_cases"] == 0,
+        "ok": metrics["failed_cases"] == 0 and metrics["verification_failed_cases"] == 0,
         "fixture_set": fixture_set_name,
         "mode": "apply" if apply else "dry_run",
         "cases": case_results,
@@ -325,15 +342,23 @@ def run_fixture_set_smoke(
     }
 
 
-def build_fixture_set_metrics(case_results: list[dict]) -> dict:
+def build_fixture_set_metrics(case_results: list[dict], *, apply: bool) -> dict:
+    expected_status = expected_status_for_mode(apply)
     total_cases = len(case_results)
     successful_cases = sum(
         1
         for item in case_results
-        if item.get("run_external_json", {}).get("metadata", {}).get("status")
-        == "dry_run_succeeded"
+        if case_status_matches(item, expected_status)
     )
     failed_cases = total_cases - successful_cases
+    verification_ok_cases = sum(
+        1 for item in case_results if item.get("verification", {}).get("ok") is True
+    )
+    verification_failed_cases = sum(
+        1
+        for item in case_results
+        if "verification" in item and item.get("verification", {}).get("ok") is not True
+    )
     direct_evidence_cases = sum(
         1
         for item in case_results
@@ -349,24 +374,48 @@ def build_fixture_set_metrics(case_results: list[dict]) -> dict:
         "successful_cases": successful_cases,
         "failed_cases": failed_cases,
         "patch_legal_rate": successful_cases / total_cases if total_cases else 0,
+        "verification_ok_cases": verification_ok_cases,
+        "verification_failed_cases": verification_failed_cases,
         "direct_evidence_cases": direct_evidence_cases,
         "explainability_complete_cases": explainability_complete_cases,
     }
 
 
-def build_run_quality_summary(run_payload: dict) -> dict:
+def build_run_quality_summary(run_payload: dict, *, apply: bool) -> dict:
+    expected_status = expected_status_for_mode(apply)
+    metadata = run_payload.get("metadata", {}) or {}
     explanation = run_payload.get("explanation") or {}
+    patch = run_payload.get("patch") or {}
     report = run_payload.get("report") or {}
+    status = metadata.get("status")
     direct_evidence = explanation.get("direct_evidence") or []
     inferred = explanation.get("inferred_suggestions") or []
     rationale = explanation.get("rationale_summary") or ""
+    ops = patch.get("ops") or []
     preview = report.get("preview") or []
+    created_nodes = report.get("created_nodes") or []
+    add_node_ops = [
+        op for op in ops if isinstance(op, dict) and op.get("type") == "add_node"
+    ]
+    patch_run_id = metadata.get("patch_run_id")
     return {
-        "patch_legal": run_payload.get("metadata", {}).get("status") == "dry_run_succeeded",
-        "patch_op_count": len(preview) if isinstance(preview, list) else 0,
+        "status": status,
+        "expected_status": expected_status,
+        "status_ok": status == expected_status,
+        "patch_legal": status == expected_status,
+        "patch_op_count": len(ops) if isinstance(ops, list) else 0,
+        "preview_line_count": len(preview) if isinstance(preview, list) else 0,
         "direct_evidence_count": len(direct_evidence) if isinstance(direct_evidence, list) else 0,
         "has_direct_evidence": bool(direct_evidence),
         "inferred_suggestions_count": len(inferred) if isinstance(inferred, list) else 0,
+        "patch_run_link_ok": bool(patch_run_id) if apply else patch_run_id is None,
+        "created_node_count": len(created_nodes) if isinstance(created_nodes, list) else 0,
+        "add_node_op_count": len(add_node_ops),
+        "created_nodes_recorded": (
+            len(created_nodes) == len(add_node_ops)
+            if apply and isinstance(created_nodes, list)
+            else len(created_nodes) == 0 if isinstance(created_nodes, list) else False
+        ),
         "rationale_present": isinstance(rationale, str) and bool(rationale.strip()),
         "explainability_complete": (
             isinstance(rationale, str)
@@ -375,6 +424,152 @@ def build_run_quality_summary(run_payload: dict) -> dict:
             and isinstance(direct_evidence, list)
         ),
     }
+
+
+def build_smoke_verification(
+    *,
+    manifest_path: Path,
+    workspace_dir: Path,
+    node_id: str,
+    scenario: str,
+    scenario_payload: Optional[dict],
+    run_payload: dict,
+    apply: bool,
+) -> dict:
+    verification = {}
+    metadata = run_payload.get("metadata", {}) or {}
+    run_id = metadata.get("run_id")
+    if isinstance(run_id, str) and run_id:
+        verification["ai_run"] = verify_ai_run_persistence(
+            manifest_path=manifest_path,
+            workspace_dir=workspace_dir,
+            run_id=run_id,
+            node_id=node_id,
+            apply=apply,
+        )
+    if scenario == "source-context" and scenario_payload is not None:
+        verification["scenario"] = verify_source_context_workspace_state(
+            manifest_path=manifest_path,
+            workspace_dir=workspace_dir,
+            scenario_payload=scenario_payload,
+            created_nodes=report_created_nodes(run_payload) if apply else None,
+            patch_ops=patch_ops(run_payload) if apply else None,
+        )
+    verification["ok"] = all(
+        item.get("ok") is True
+        for key, item in verification.items()
+        if isinstance(item, dict) and key != "ok"
+    )
+    return verification
+
+
+def verify_ai_run_persistence(
+    *,
+    manifest_path: Path,
+    workspace_dir: Path,
+    run_id: str,
+    node_id: str,
+    apply: bool,
+) -> dict:
+    history = run_nodex_json_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["ai", "history", "--node-id", node_id, "--format", "json"],
+    )
+    show_output = run_nodex_json_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["ai", "show", run_id, "--format", "json"],
+    )
+    expected_status = expected_status_for_mode(apply)
+    history_entry = next(
+        (
+            item
+            for item in history
+            if isinstance(item, dict) and item.get("id") == run_id
+        ),
+        None,
+    )
+    record = show_output.get("record") or {}
+    patch_preview = show_output.get("patch_preview") or []
+    patch_run_id = record.get("patch_run_id")
+    history_entry_found = history_entry is not None
+    history_status_ok = history_entry is not None and history_entry.get("status") == expected_status
+    history_patch_link_ok = (
+        bool(history_entry.get("patch_run_id")) if apply and history_entry is not None else True
+    )
+    if not apply and history_entry is not None:
+        history_patch_link_ok = history_entry.get("patch_run_id") is None
+    show_status_ok = record.get("status") == expected_status
+    show_patch_link_ok = bool(patch_run_id) if apply else patch_run_id is None
+    ok = (
+        history_entry_found
+        and history_status_ok
+        and history_patch_link_ok
+        and show_status_ok
+        and record.get("node_id") == node_id
+        and isinstance(show_output.get("patch"), dict)
+        and isinstance(show_output.get("explanation"), dict)
+        and isinstance(patch_preview, list)
+        and len(patch_preview) > 0
+        and show_patch_link_ok
+    )
+    return {
+        "run_id": run_id,
+        "history_entry_found": history_entry_found,
+        "history_status_ok": history_status_ok,
+        "history_patch_link_ok": history_patch_link_ok,
+        "show_status_ok": show_status_ok,
+        "show_patch_link_ok": show_patch_link_ok,
+        "show_patch_preview_count": len(patch_preview) if isinstance(patch_preview, list) else 0,
+        "response_notes_count": len(show_output.get("response_notes") or []),
+        "ok": ok,
+    }
+
+
+def run_nodex_json_command(
+    *,
+    manifest_path: Path,
+    workspace_dir: Path,
+    args: list[str],
+) -> dict | list:
+    output = run_command(
+        ["cargo", "run", "--manifest-path", str(manifest_path), "--", *args],
+        cwd=workspace_dir,
+        capture=True,
+    )
+    try:
+        return json.loads(output["stdout"])
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"command {' '.join(args)} did not return valid JSON: {exc}"
+        ) from exc
+
+
+def expected_status_for_mode(apply: bool) -> str:
+    return "applied" if apply else "dry_run_succeeded"
+
+
+def case_status_matches(case_result: dict, expected_status: str) -> bool:
+    quality = case_result.get("quality") or {}
+    if quality.get("status_ok") is True:
+        return True
+    if case_result.get("status") == expected_status:
+        return True
+    metadata = case_result.get("run_external_json", {}).get("metadata", {}) or {}
+    return metadata.get("status") == expected_status
+
+
+def report_created_nodes(run_payload: dict) -> list[dict]:
+    report = run_payload.get("report") or {}
+    created_nodes = report.get("created_nodes") or []
+    return created_nodes if isinstance(created_nodes, list) else []
+
+
+def patch_ops(run_payload: dict) -> list[dict]:
+    patch = run_payload.get("patch") or {}
+    ops = patch.get("ops") or []
+    return ops if isinstance(ops, list) else []
 
 
 def run_command(command: list[str], *, cwd: Path, capture: bool) -> Optional[dict]:

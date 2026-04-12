@@ -516,6 +516,159 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["fixture_set"], "anthropic-default")
         self.assertEqual(result["metrics"]["total_cases"], 3)
+        self.assertEqual(result["metrics"]["verification_ok_cases"], 3)
+
+    def test_provider_smoke_apply_verifies_source_context_post_apply_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "cited = request.get('cited_evidence') or []",
+                        "direct_evidence = []",
+                        "if cited and cited[0].get('chunks'):",
+                        "    chunk = cited[0]['chunks'][0]",
+                        "    direct_evidence.append({",
+                        "        'source_id': cited[0]['source_id'],",
+                        "        'source_name': cited[0]['original_name'],",
+                        "        'chunk_id': chunk['chunk_id'],",
+                        "        'label': chunk.get('label'),",
+                        "        'start_line': chunk['start_line'],",
+                        "        'end_line': chunk['end_line'],",
+                        "        'why_it_matters': 'Fixture-backed support for apply verification',",
+                        "    })",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': 'provider smoke apply summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': 'provider smoke apply rationale',",
+                        "        'direct_evidence': direct_evidence,",
+                        "        'inferred_suggestions': ['follow-up'],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': 'fake-run',",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': 'provider smoke apply summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Applied Smoke Branch',",
+                        "                'kind': 'evidence',",
+                        "                'body': 'Generated from imported evidence',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': ['note-1'],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            result = run_smoke(
+                manifest_path=REPO_ROOT / "Cargo.toml",
+                workspace_dir=Path(tmp_dir),
+                node_id="root",
+                scenario="source-context",
+                fixture_path=FIXTURE_PATH,
+                runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
+                apply=True,
+                json_mode=True,
+            )
+
+        self.assertEqual(result["status"], "applied")
+        self.assertTrue(result["quality"]["status_ok"])
+        self.assertTrue(result["quality"]["patch_run_link_ok"])
+        self.assertEqual(result["quality"]["created_node_count"], 1)
+        self.assertTrue(result["verification"]["ok"])
+        self.assertTrue(result["verification"]["ai_run"]["ok"])
+        self.assertEqual(result["verification"]["ai_run"]["response_notes_count"], 1)
+        self.assertTrue(result["verification"]["scenario"]["ok"])
+        self.assertTrue(result["verification"]["scenario"]["target_evidence_retained"])
+        self.assertTrue(
+            result["verification"]["scenario"]["source_evidence_link_retained"]
+        )
+        self.assertTrue(result["verification"]["scenario"]["created_nodes_present"])
+        self.assertTrue(
+            result["verification"]["scenario"]["created_nodes_match_patch"]
+        )
+
+    def test_provider_smoke_fixture_set_apply_counts_verified_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': request['target_node']['title'],",
+                        "    'explanation': {",
+                        "        'rationale_summary': request['target_node']['title'],",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': request['target_node']['id'],",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': request['target_node']['title'],",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Fixture Set Applied Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated from fixture-set apply smoke',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            result = run_fixture_set_smoke(
+                manifest_path=REPO_ROOT / "Cargo.toml",
+                workspace_root_dir=Path(tmp_dir),
+                fixture_set_name="anthropic-default",
+                fixture_cases=fixture_set_cases("anthropic-default"),
+                runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
+                apply=True,
+                json_mode=True,
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["metrics"]["successful_cases"], 3)
+        self.assertEqual(result["metrics"]["verification_ok_cases"], 3)
+        self.assertEqual(result["metrics"]["verification_failed_cases"], 0)
 
     def test_provider_doctor_json_includes_summary(self) -> None:
         result = run_script("scripts/provider_doctor.py", "--provider", "openai", "--json")
@@ -531,7 +684,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
             use_default_args=True,
         )
         self.assertEqual(command[0], sys.executable)
-        self.assertTrue(command[1].endswith("scripts/codex_runner.py"))
+        self.assertEqual(Path(command[1]).name, "codex_runner.py")
         self.assertEqual(
             command[2:8],
             ["--mode", "plain", "--reasoning-effort", "low", "--max-retries", "3"],

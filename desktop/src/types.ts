@@ -261,9 +261,16 @@ export interface NodeSourceDetail {
   chunks: SourceChunkRecord[];
 }
 
+export interface EvidenceCitationDetail {
+  chunk: SourceChunkRecord;
+  citation_kind: string;
+  rationale: string | null;
+}
+
 export interface NodeEvidenceDetail {
   source: SourceRecord;
   chunks: SourceChunkRecord[];
+  citations: EvidenceCitationDetail[];
 }
 
 export interface NodeDetail {
