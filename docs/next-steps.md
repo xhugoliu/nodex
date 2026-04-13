@@ -14,6 +14,7 @@
 
 ## 当前优先级
 
+- 守住 Anthropic-compatible LangChain 这条默认 AI 主路
 - 守住左栏 `Import Source` 入口
 - 守住右栏来源上下文、人话摘要和 cite / uncite 工作流
 - 守住 apply 后统一的 focus node 语义

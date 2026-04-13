@@ -23,7 +23,7 @@
 - `docs/roadmap.md`
   长期阶段，不写短期执行细节。
 - `docs/langchain-pilot.md`
-  LangChain 试点边界。
+  LangChain 核心路线与当前落地边界。
 
 ## 阅读顺序
 

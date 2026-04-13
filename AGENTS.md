@@ -20,7 +20,7 @@ Nodex 的目标不是做“通用聊天应用”，而是做一个：
 
 ## 当前技术事实
 
-截至当前版本，仓库已经落地的是“共享 Rust CLI 内核 + 过渡性桌面壳 + provider 调试工具链 + LangChain 最小试点”：
+截至当前版本，仓库已经落地的是“共享 Rust CLI 内核 + 过渡性桌面壳 + provider 调试工具链 + LangChain 默认 AI 主路”：
 
 - 工作区目录：`./.nodex/`
 - SQLite 数据库：`./.nodex/project.db`
@@ -74,10 +74,12 @@ Nodex 的目标不是做“通用聊天应用”，而是做一个：
 
 当前针对 `LangChain` 的默认落点也更明确：
 
-- 先把 LangChain 放在 external runner / scripts 层做最小试点
+- LangChain 是当前默认 AI 主路和正式核心能力方向
+- 当前已实现部分仍主要落在 external runner / scripts 层
 - 先复用现有 request / response contract、patch validate / apply 和本地审计链
 - 不要把 Rust 内核或 SQLite schema 直接改成 LangChain 依赖
-- 如果桌面默认 draft route 选择了某条 LangChain 路径，也应继续停留在 external runner / scripts 层，而不是把 provider SDK 直接塞进共享内核
+- 推进 LangChain 相关工作时，优先加速主路稳定性、可回归性和桌面默认路径收口，而不是再扩平行 AI 路径
+- 如果桌面默认 draft route 选择了某条 LangChain 路径，也应先继续复用现有 contract / 审计链，而不是直接把 provider SDK 散塞进共享内核
 
 如果任务真的需要触碰这些边界，应先暂停并更新相关文档，而不是直接实现替换。
 

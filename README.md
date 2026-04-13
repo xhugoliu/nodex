@@ -8,7 +8,7 @@ Nodex 不是聊天驱动的画布工具。它当前的核心是：
 - 结构化 patch 编辑
 - 本地工作区与 SQLite 存储
 - source / evidence 最小链路
-- external runner + LangChain 最小试点
+- external runner + LangChain 默认 AI 主路
 - 一版过渡性 Tauri 桌面壳
 
 ## Quickstart
@@ -27,7 +27,7 @@ cargo run -- export outline
 ## 当前状态
 
 - CLI 内核已可用：`node` / `patch` / `source` / `snapshot` / `export`
-- AI 最小闭环已可用：dry-run request、external runner、AI run 审计、patch replay
+- AI 主路已可用：Anthropic-compatible LangChain 作为当前默认推荐路径，继续复用 external runner、AI run 审计和 patch replay 边界
 - 桌面端已可验证主路径，但仍是过渡性工作台，不是最终产品形态
 - 当前短期重点是桌面主路径收口，不是继续扩入口或面板
 

@@ -64,6 +64,8 @@ nodex export
 
 ## 当前推荐 AI 流
 
+当前默认推荐 AI 主路是 `anthropic` provider 对应的 Anthropic-compatible LangChain 路径。
+
 ### 配置检查
 
 ```bash

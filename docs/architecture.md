@@ -33,7 +33,8 @@ Nodex 当前坚持：
 - `scripts/provider_smoke.py`
 - `scripts/langchain_*_runner.py`
 
-这层负责 provider / LangChain 的试点与调试，不进入 Rust core。
+这层当前承载 provider 调试与 LangChain 主路落地。
+LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前实现仍主要停留在 scripts / external runner 层，不直接进入 Rust core。
 
 ### 桌面端
 
@@ -45,7 +46,7 @@ Nodex 当前坚持：
 ## 当前边界
 
 - `Tauri` 是桌面壳，不替代共享内核
-- `LangChain` 当前只在 scripts / external runner 层
+- `LangChain` 当前以 scripts / external runner 形态承担默认 AI 主路
 - `React Flow` 只负责画布呈现和视图状态，不持有 canonical workspace state
 - 结构编辑仍应回到 patch validate / apply
 
@@ -53,7 +54,7 @@ Nodex 当前坚持：
 
 - CLI：工作区验证、核心能力回归、provider 调试
 - 桌面端：最小节点工作流验证
-- AI：external runner + 本地 request / response / metadata 审计
+- AI：Anthropic-compatible LangChain 默认主路 + external runner + 本地 request / response / metadata 审计
 
 ## 当前不做
 

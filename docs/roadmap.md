@@ -7,6 +7,7 @@
 - CLI 内核已站住
 - source import 已有最小落地
 - AI patch 已有 external runner 闭环
+- LangChain 已从“可选试点”切到“当前默认 AI 主路与核心能力方向”
 - 来源与证据已有最小语义
 - 桌面端已验证可复用共享内核，但仍是过渡性壳层
 
@@ -34,7 +35,7 @@
 
 - `ai expand` / `ai explore`
 - request / response contract
-- external runner
+- LangChain 主路 + external runner
 - AI run 审计
 
 ### 4. 来源与证据
@@ -52,7 +53,12 @@
 
 ## 当前优先级
 
-长期路线里，当前最重要的不是再开新阶段，而是把桌面主路径做顺、做稳、做得更可回归。具体切口看 [短期执行清单](./next-steps.md)。
+长期路线里，当前最重要的不是再开新阶段，而是两件事同时推进：
+
+- 把桌面主路径做顺、做稳、做得更可回归
+- 把 LangChain 主路从脚本层默认路径继续加速推向真正的一线核心能力
+
+具体切口看 [短期执行清单](./next-steps.md)。
 
 ## 暂缓
 
