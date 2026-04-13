@@ -20,10 +20,20 @@ LangChain 已经从“可选试点”切到“当前默认 AI runtime / orchestr
 
 ## 当前脚本
 
+- `python3 scripts/langchain_runner_common.py`
 - `python3 scripts/langchain_openai_runner.py`
 - `python3 scripts/langchain_anthropic_runner.py`
 
 其中 Anthropic-compatible 路径是当前默认推荐主路。
+两个 LangChain runner 现在共享一层 repo 内部的 output-handling helper，用来收口：
+
+- structured output normalize
+- plain JSON fallback
+- contract response completion
+- expand / explore patch normalization
+- runner metadata 中的 fallback / normalization 标记
+
+Anthropic-specific 的质量约束仍保留在 `langchain_anthropic_runner.py`，不把默认主路经验硬塞进所有 provider。
 
 ## 最小使用方式
 
@@ -46,3 +56,9 @@ python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-roo
 - 是否继续保留本地审计边界
 - 是否比当前最小 runner 更可控、更可解释或更稳定
 - 是否在不破坏当前边界的前提下，把更多共享编排能力从“脚本级默认路径”推进到“正式核心能力”
+
+## 下一轮更值得补的回归
+
+- `load_anthropic_context` / `load_openai_context` 的配置发现优先级
+- LangChain runner 的 plain-JSON fallback 和错误分类
+- `runner_compare.py` 在 `source-root` / `source-context` 上的 compare 回归，而不只是 fake-runner 基础设施

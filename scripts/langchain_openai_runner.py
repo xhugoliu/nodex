@@ -15,6 +15,11 @@ from ai_contract import (
     validate_request_contract,
     write_runner_metadata,
 )
+from langchain_runner_common import (
+    invoke_plain_json_fallback,
+    normalize_contract_response,
+    normalize_langchain_output,
+)
 from openai_context import load_openai_context
 
 
@@ -83,6 +88,8 @@ def main() -> int:
         "model": context.model,
         "provider_run_id": None,
         "retry_count": 0,
+        "used_plain_json_fallback": False,
+        "normalization_notes": [],
         "last_error_category": None,
         "last_error_message": None,
         "last_status_code": None,
@@ -102,7 +109,19 @@ def main() -> int:
             base_url=context.base_url,
             timeout=context.timeout_seconds,
             max_retries=args.max_retries,
+            metadata=metadata,
         )
+        contract_response = normalize_contract_response(
+            contract_response=contract_response,
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model=context.model,
+        )
+        metadata["normalization_notes"] = [
+            note
+            for note in contract_response.get("notes", [])
+            if isinstance(note, str) and note.startswith("runner_normalized:")
+        ]
         validate_contract_response(
             contract_response=contract_response,
             expected_kind=response_contract,
@@ -136,6 +155,7 @@ def invoke_langchain_openai(
     base_url: str,
     timeout: int,
     max_retries: int,
+    metadata: dict[str, Any],
 ) -> dict[str, Any]:
     chat_openai_class = load_langchain_openai_class()
 
@@ -148,22 +168,40 @@ def invoke_langchain_openai(
             timeout=timeout,
             max_retries=max_retries,
         )
-        structured_llm = build_structured_llm(llm)
-        output = structured_llm.invoke(
-            [
-                (
-                    "system",
-                    "\n\n".join(
-                        [
-                            request_payload["system_prompt"],
-                            request_payload["output_instructions"],
-                        ]
-                    ),
+        messages = [
+            (
+                "system",
+                "\n\n".join(
+                    [
+                        request_payload["system_prompt"],
+                        request_payload["output_instructions"],
+                    ]
                 ),
-                ("human", request_payload["user_prompt"]),
-            ]
-        )
-        return normalize_langchain_output(output)
+            ),
+            ("human", request_payload["user_prompt"]),
+        ]
+        structured_llm = build_structured_llm(llm)
+        try:
+            output = structured_llm.invoke(messages)
+            return normalize_langchain_output(
+                output,
+                runner_label="LangChain OpenAI runner",
+            )
+        except RunnerFailure as exc:
+            if "unsupported structured output type" not in exc.message:
+                raise
+            metadata["used_plain_json_fallback"] = True
+            return invoke_plain_json_fallback(
+                llm,
+                messages,
+                invalid_json_message=(
+                    "OpenAI-compatible model did not return valid JSON: {error}"
+                ),
+                no_text_message=(
+                    "OpenAI-compatible model returned no textual content that could be "
+                    "parsed as JSON"
+                ),
+            )
     except RunnerFailure:
         raise
     except Exception as exc:
@@ -232,20 +270,6 @@ def load_langchain_openai_class():
             "`python3 -m pip install -U langchain-openai` before using this pilot runner."
         ) from exc
     return ChatOpenAI
-
-
-def normalize_langchain_output(output: Any) -> dict[str, Any]:
-    if isinstance(output, dict):
-        return output
-    if hasattr(output, "model_dump"):
-        dumped = output.model_dump()
-        if isinstance(dumped, dict):
-            return dumped
-    raise RunnerFailure(
-        category="schema_error",
-        message=f"LangChain returned unsupported structured output type: {type(output).__name__}",
-        retryable=False,
-    )
 
 
 if __name__ == "__main__":

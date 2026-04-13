@@ -15,6 +15,7 @@
 ## 当前优先级
 
 - 守住 Anthropic-compatible LangChain 这条默认 AI 主路
+- 守住共享 LangChain runner helper，不让 OpenAI / Anthropic 的 contract shaping 和 fallback 行为继续分叉
 - 守住左栏 `Import Source` 入口
 - 守住右栏来源上下文、人话摘要和 cite / uncite 工作流
 - 守住 apply 后统一的 focus node 语义
@@ -41,8 +42,9 @@
 
 ## 下一轮最小切口
 
-- 把 `desktop_flow_smoke.py` 继续补到 imported root / source target 之外的主路径交接语义
-- 或把 source-root 路径继续推进到真实 provider 凭据下的手动 / 对照验证
+- 给 `load_anthropic_context` / `load_openai_context` 补配置发现优先级回归
+- 给 shared LangChain helper 补 plain-JSON fallback、错误分类和 metadata 回写回归
+- 把 source-root / source-context 的 compare 继续推进到更贴近真实 LangChain preset 的回归
 - 继续避免在主界面回填 run-id、artifact、compare、history 式入口
 
 ## 当前不优先

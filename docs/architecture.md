@@ -31,9 +31,12 @@ Nodex 当前坚持：
 - `scripts/provider_runner.py`
 - `scripts/provider_doctor.py`
 - `scripts/provider_smoke.py`
+- `scripts/langchain_runner_common.py`
 - `scripts/langchain_*_runner.py`
 
 这层当前承载 provider 调试与 LangChain 主路落地。
+LangChain runner 之间当前通过 repo 内共享 helper 收口 provider-agnostic 的 output normalize、plain JSON fallback 和 contract completion；
+Anthropic 默认主路仍保留自己的质量约束和默认路径经验，不把这些启发式直接下沉到 Rust core。
 LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前实现仍主要停留在 scripts / external runner 层，不直接进入 Rust core。
 
 ### 桌面端

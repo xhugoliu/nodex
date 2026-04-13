@@ -12,11 +12,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 
-from langchain_anthropic_runner import (
+from ai_contract import RunnerFailure, validate_contract_response
+from desktop_flow_smoke import build_ai_status
+from langchain_runner_common import (
     coerce_direct_evidence,
+    invoke_plain_json_fallback,
+    normalize_contract_response,
     normalize_expand_like_patch,
 )
-from desktop_flow_smoke import build_ai_status
 from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
 from source_context_scenario import fixture_set_cases
@@ -67,6 +70,14 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(result[0]["start_line"], 7)
         self.assertEqual(result[0]["end_line"], 9)
         self.assertTrue(result[0]["why_it_matters"])
+
+    def test_shared_langchain_drops_unresolvable_direct_evidence(self) -> None:
+        result = coerce_direct_evidence(
+            [{"source_name": "fixture.md", "why_it_matters": "unknown chunk"}],
+            {"cited_evidence": []},
+        )
+
+        self.assertEqual(result, [])
 
     def test_anthropic_runner_normalizes_plan_patch_quality(self) -> None:
         request_payload = {
@@ -141,6 +152,216 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
 
         self.assertEqual(normalized["patch"]["ops"][0]["kind"], "evidence")
+
+    def test_shared_langchain_fallback_parses_fenced_json_text(self) -> None:
+        class FakeLlm:
+            def invoke(self, messages):
+                self.messages = messages
+                return type(
+                    "FakeResponse",
+                    (),
+                    {"content": "```json\n{\"status\": \"ok\", \"patch\": {}}\n```"},
+                )()
+
+        llm = FakeLlm()
+        result = invoke_plain_json_fallback(llm, [("system", "hello")])
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["patch"], {})
+        self.assertEqual(llm.messages, [("system", "hello")])
+
+    def test_shared_langchain_fallback_raises_parse_error_for_invalid_json(self) -> None:
+        class FakeLlm:
+            def invoke(self, messages):
+                self.messages = messages
+                return type("FakeResponse", (), {"content": "not-json"})()
+
+        with self.assertRaises(RunnerFailure) as ctx:
+            invoke_plain_json_fallback(
+                FakeLlm(),
+                [("human", "hello")],
+                invalid_json_message="LangChain fallback failed: {error}",
+            )
+
+        self.assertEqual(ctx.exception.category, "parse_error")
+        self.assertIn("LangChain fallback failed:", ctx.exception.message)
+
+    def test_shared_langchain_normalize_contract_response_completes_openai_shape(self) -> None:
+        request_payload = {
+            "capability": "explore",
+            "explore_by": "question",
+            "target_node": {
+                "id": "imported-root",
+                "title": "Anthropic LangChain Regression",
+                "body": "Research notes, evidence gaps, and open follow-up questions.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+        }
+        contract_response = {
+            "explanation": {
+                "rationale_summary": "Ask the next clarifying question from imported evidence.",
+                "direct_evidence": [],
+                "inferred_suggestions": [],
+            },
+            "patch": {
+                "ops": [
+                    {
+                        "parent_id": "imported-root",
+                        "title": "Clarify imported evidence",
+                        "body": "Check the chunk selection before comparing runners.",
+                    }
+                ]
+            }
+        }
+
+        normalized = normalize_contract_response(
+            contract_response=contract_response,
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        self.assertEqual(normalized["kind"], "nodex_ai_patch_response")
+        self.assertEqual(normalized["version"], 2)
+        self.assertEqual(normalized["request_node_id"], "imported-root")
+        self.assertEqual(
+            normalized["summary"],
+            "Explore Anthropic LangChain Regression by question with 1 branches",
+        )
+        self.assertEqual(
+            normalized["generator"],
+            {
+                "provider": "langchain_openai",
+                "model": "gpt-5.4-mini",
+                "run_id": None,
+            },
+        )
+        self.assertEqual(normalized["explanation"]["direct_evidence"], [])
+        self.assertEqual(normalized["explanation"]["inferred_suggestions"], [])
+        self.assertIn("runner_normalized:inferred_patch_op_types=1", normalized["notes"])
+        self.assertEqual(normalized["patch"]["ops"][0]["type"], "add_node")
+        self.assertEqual(normalized["patch"]["ops"][0]["kind"], "question")
+        self.assertEqual(normalized["patch"]["ops"][0]["parent_id"], "imported-root")
+
+    def test_shared_langchain_normalize_contract_response_does_not_invent_explanation(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-3",
+                "title": "Imported Root",
+                "body": "Expand from imported source context.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+        }
+        normalized = normalize_contract_response(
+            contract_response={
+                "patch": {
+                    "ops": [
+                        {
+                            "parent_id": "node-3",
+                            "title": "Shared runner branch",
+                        }
+                    ]
+                }
+            },
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        with self.assertRaises(RunnerFailure) as ctx:
+            validate_contract_response(
+                contract_response=normalized,
+                expected_kind="nodex_ai_patch_response",
+                expected_version=2,
+                expected_patch_version=1,
+            )
+
+        self.assertEqual(ctx.exception.category, "schema_error")
+        self.assertIn("missing required keys: explanation", ctx.exception.message)
+
+    def test_shared_langchain_marks_scaffold_fallback_after_custom_normalizer(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-4",
+                "title": "Fallback Branches",
+                "body": "Test runner-authored scaffold visibility.",
+            },
+        }
+        normalized = normalize_expand_like_patch(
+            contract_response={
+                "notes": [],
+                "patch": {
+                    "ops": [
+                        {
+                            "type": "add_node",
+                            "parent_id": "node-4",
+                            "title": "Original Branch",
+                        }
+                    ]
+                },
+            },
+            request_payload=request_payload,
+            patch_ops_normalizer=lambda ops: [],
+        )
+
+        self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
+        self.assertGreater(len(normalized["patch"]["ops"]), 0)
+
+    def test_shared_langchain_preserves_non_add_patch_ops(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-5",
+                "title": "Preserve Attach Ops",
+                "body": "Keep valid patch semantics during shared normalization.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+        }
+        normalized = normalize_contract_response(
+            contract_response={
+                "explanation": {
+                    "rationale_summary": "Preserve source attachment semantics.",
+                    "direct_evidence": [],
+                    "inferred_suggestions": [],
+                },
+                "patch": {
+                    "ops": [
+                        {
+                            "type": "attach_source_chunk",
+                            "node_id": "node-5",
+                            "chunk_id": "chunk-1",
+                        },
+                        {
+                            "type": "attach_source",
+                            "node_id": "node-5",
+                            "source_id": "source-1",
+                        },
+                    ]
+                },
+            },
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        self.assertEqual(
+            [item["type"] for item in normalized["patch"]["ops"]],
+            ["attach_source_chunk", "attach_source"],
+        )
 
     def test_runner_compare_lists_presets(self) -> None:
         result = run_script("scripts/runner_compare.py", "--list-presets")

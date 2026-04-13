@@ -16,6 +16,13 @@ from ai_contract import (
     write_runner_metadata,
 )
 from anthropic_context import load_anthropic_context
+from langchain_runner_common import (
+    coerce_contract_response as common_coerce_contract_response,
+    coerce_direct_evidence,
+    invoke_plain_json_fallback,
+    normalize_expand_like_patch as common_normalize_expand_like_patch,
+    normalize_langchain_output,
+)
 
 
 DEFAULT_MAX_RETRIES = 2
@@ -84,6 +91,8 @@ def main() -> int:
         "model": context.model,
         "provider_run_id": None,
         "retry_count": 0,
+        "used_plain_json_fallback": False,
+        "normalization_notes": [],
         "last_error_category": None,
         "last_error_message": None,
         "last_status_code": None,
@@ -103,6 +112,7 @@ def main() -> int:
             base_url=context.base_url,
             timeout=context.timeout_seconds,
             max_retries=args.max_retries,
+            metadata=metadata,
         )
         contract_response = coerce_contract_response(
             contract_response=contract_response,
@@ -113,6 +123,11 @@ def main() -> int:
             contract_response=contract_response,
             request_payload=request_payload,
         )
+        metadata["normalization_notes"] = [
+            note
+            for note in contract_response.get("notes", [])
+            if isinstance(note, str) and note.startswith("runner_normalized:")
+        ]
         validate_contract_response(
             contract_response=contract_response,
             expected_kind=response_contract,
@@ -146,6 +161,7 @@ def invoke_langchain_anthropic(
     base_url: str,
     timeout: int,
     max_retries: int,
+    metadata: dict[str, Any],
 ) -> dict[str, Any]:
     chat_anthropic_class = load_langchain_anthropic_class()
 
@@ -163,13 +179,25 @@ def invoke_langchain_anthropic(
         try:
             structured_llm = llm.with_structured_output(build_anthropic_response_schema())
             output = structured_llm.invoke(messages)
-            return normalize_langchain_output(output)
+            return normalize_langchain_output(
+                output,
+                runner_label="LangChain Anthropic runner",
+            )
         except RunnerFailure as exc:
             if "unsupported structured output type" not in exc.message:
                 raise
-            return invoke_plain_json_fallback(llm, messages)
-        except Exception:
-            return invoke_plain_json_fallback(llm, messages)
+            metadata["used_plain_json_fallback"] = True
+            return invoke_plain_json_fallback(
+                llm,
+                messages,
+                invalid_json_message=(
+                    "Anthropic-compatible model did not return valid JSON: {error}"
+                ),
+                no_text_message=(
+                    "Anthropic-compatible model returned no textual content that could "
+                    "be parsed as JSON"
+                ),
+            )
     except RunnerFailure:
         raise
     except Exception as exc:
@@ -216,53 +244,6 @@ def build_langchain_messages(request_payload: dict[str, Any]) -> list[tuple[str,
         ),
         ("human", request_payload["user_prompt"]),
     ]
-
-
-def invoke_plain_json_fallback(llm, messages) -> dict[str, Any]:
-    response = llm.invoke(messages)
-    text = extract_response_text(response)
-    try:
-        return json.loads(strip_code_fence(text))
-    except json.JSONDecodeError as exc:
-        raise RunnerFailure(
-            category="parse_error",
-            message=f"Anthropic-compatible model did not return valid JSON: {exc}",
-            retryable=False,
-        ) from exc
-
-
-def extract_response_text(response: Any) -> str:
-    content = getattr(response, "content", response)
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for item in content:
-            if isinstance(item, str):
-                parts.append(item)
-                continue
-            if isinstance(item, dict) and item.get("type") == "text":
-                text = item.get("text")
-                if isinstance(text, str):
-                    parts.append(text)
-        if parts:
-            return "\n".join(parts)
-    raise RunnerFailure(
-        category="parse_error",
-        message=(
-            "Anthropic-compatible model returned no textual content that could be parsed as JSON"
-        ),
-        retryable=False,
-    )
-
-
-def strip_code_fence(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```") and stripped.endswith("```"):
-        lines = stripped.splitlines()
-        if len(lines) >= 3:
-            return "\n".join(lines[1:-1]).strip()
-    return stripped
 
 
 def build_anthropic_quality_instructions(request_payload: dict[str, Any]) -> str:
@@ -316,148 +297,12 @@ def coerce_contract_response(
     request_payload: dict[str, Any],
     model: str,
 ) -> dict[str, Any]:
-    patch = contract_response.get("patch")
-    if not isinstance(patch, dict):
-        patch = {}
-        contract_response["patch"] = patch
-    patch.setdefault("version", request_payload["contract"]["patch_version"])
-    patch.setdefault("ops", [])
-    if isinstance(patch.get("ops"), list):
-        patch["ops"] = [coerce_patch_op(item) for item in patch["ops"]]
-
-    contract_response.setdefault("version", request_payload["contract"]["version"])
-    contract_response.setdefault("kind", request_payload["contract"]["response_kind"])
-    contract_response.setdefault("capability", request_payload["capability"])
-    contract_response.setdefault("request_node_id", request_payload["target_node"]["id"])
-    contract_response.setdefault("status", "ok")
-    contract_response.setdefault("summary", patch.get("summary"))
-    contract_response.setdefault(
-        "generator",
-        {
-            "provider": "langchain_anthropic_compat",
-            "model": model,
-            "run_id": None,
-        },
+    return common_coerce_contract_response(
+        contract_response=contract_response,
+        request_payload=request_payload,
+        provider="langchain_anthropic_compat",
+        model=model,
     )
-    contract_response.setdefault("notes", [])
-
-    explanation = contract_response.get("explanation")
-    if isinstance(explanation, dict):
-        explanation["direct_evidence"] = coerce_direct_evidence(
-            explanation.get("direct_evidence"),
-            request_payload,
-        )
-        explanation.setdefault("inferred_suggestions", [])
-
-    return contract_response
-
-
-def coerce_direct_evidence(
-    value: Any,
-    request_payload: dict[str, Any],
-) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-
-    lookup = build_evidence_lookup(request_payload)
-    coerced = []
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        source_id = item.get("source_id")
-        chunk_id = item.get("chunk_id")
-        fallback = lookup.get((source_id, chunk_id)) or lookup.get(chunk_id) or {}
-        source_id = source_id or fallback.get("source_id") or "unknown-source"
-        source_name = item.get("source_name") or fallback.get("source_name") or source_id
-        label = item.get("label", fallback.get("label"))
-        start_line = coerce_line_number(item.get("start_line"), fallback.get("start_line"))
-        end_line = coerce_line_number(item.get("end_line"), fallback.get("end_line"), start_line)
-        why_it_matters = (
-            item.get("why_it_matters")
-            or "This cited chunk supports the proposed patch."
-        )
-        chunk_id = chunk_id or fallback.get("chunk_id") or "unknown-chunk"
-        coerced.append(
-            {
-                "source_id": source_id,
-                "source_name": source_name,
-                "chunk_id": chunk_id,
-                "label": label,
-                "start_line": start_line,
-                "end_line": end_line,
-                "why_it_matters": why_it_matters,
-            }
-        )
-    return coerced
-
-
-def build_evidence_lookup(request_payload: dict[str, Any]) -> dict[Any, dict[str, Any]]:
-    lookup: dict[Any, dict[str, Any]] = {}
-    for source in request_payload.get("cited_evidence") or []:
-        if not isinstance(source, dict):
-            continue
-        source_id = source.get("source_id")
-        source_name = source.get("original_name")
-        for chunk in source.get("chunks") or []:
-            if not isinstance(chunk, dict):
-                continue
-            payload = {
-                "source_id": source_id,
-                "source_name": source_name,
-                "chunk_id": chunk.get("chunk_id"),
-                "label": chunk.get("label"),
-                "start_line": chunk.get("start_line"),
-                "end_line": chunk.get("end_line"),
-            }
-            lookup[(source_id, chunk.get("chunk_id"))] = payload
-            if chunk.get("chunk_id"):
-                lookup[chunk.get("chunk_id")] = payload
-    return lookup
-
-
-def coerce_line_number(
-    value: Any,
-    fallback: Any,
-    secondary_fallback: int = 0,
-) -> int:
-    if isinstance(value, int):
-        return value
-    if isinstance(fallback, int):
-        return fallback
-    return secondary_fallback
-
-
-def coerce_patch_op(item: Any) -> Any:
-    if not isinstance(item, dict):
-        return item
-    if item.get("type"):
-        return item
-
-    inferred_type = infer_patch_op_type(item)
-    if inferred_type:
-        item = dict(item)
-        item["type"] = inferred_type
-    return item
-
-
-def infer_patch_op_type(item: dict[str, Any]) -> Optional[str]:
-    if "parent_id" in item and "title" in item:
-        return "add_node"
-    if "id" in item and "parent_id" in item:
-        return "move_node"
-    if "id" in item and any(key in item for key in ("title", "body", "kind")):
-        return "update_node"
-    if "id" in item:
-        return "delete_node"
-    if "node_id" in item and "source_id" in item:
-        return "attach_source"
-    if "node_id" in item and "chunk_id" in item and any(
-        key in item for key in ("citation_kind", "rationale")
-    ):
-        return "cite_source_chunk"
-    if "node_id" in item and "chunk_id" in item:
-        return "attach_source_chunk"
-    return None
 
 
 def normalize_expand_like_patch(
@@ -465,111 +310,14 @@ def normalize_expand_like_patch(
     contract_response: dict[str, Any],
     request_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    capability = request_payload.get("capability")
-    if capability not in {"expand", "explore"}:
-        return contract_response
-
-    patch = contract_response.get("patch")
-    if not isinstance(patch, dict):
-        return contract_response
-
-    target_node = request_payload.get("target_node") or {}
-    target_id = target_node.get("id") or "root"
-    normalized_ops = []
-    raw_ops = patch.get("ops")
-    if isinstance(raw_ops, list):
-        for item in raw_ops:
-            normalized = normalize_expand_like_op(item=item, target_id=target_id)
-            if normalized is not None:
-                normalized_ops.append(normalized)
-
-    if not normalized_ops:
-        normalized_ops = fallback_scaffold_ops(request_payload)
-
-    patch["ops"] = normalize_patch_ops_for_quality(
-        normalized_ops,
+    return common_normalize_expand_like_patch(
+        contract_response=contract_response,
         request_payload=request_payload,
+        patch_ops_normalizer=lambda ops: normalize_patch_ops_for_quality(
+            ops,
+            request_payload=request_payload,
+        ),
     )
-    patch["summary"] = normalize_patch_summary(
-        patch.get("summary"),
-        request_payload=request_payload,
-        patch_ops=patch["ops"],
-    )
-    return contract_response
-
-
-def normalize_expand_like_op(*, item: Any, target_id: str) -> Optional[dict[str, Any]]:
-    if not isinstance(item, dict):
-        return None
-
-    op_type = item.get("type")
-    if op_type == "add_node":
-        normalized = dict(item)
-        normalized.setdefault("parent_id", target_id)
-        return normalized
-
-    if op_type == "update_node":
-        op_id = item.get("id")
-        if op_id == target_id:
-            return dict(item)
-        title = item.get("title") or humanize_node_id(op_id) or "New Branch"
-        return {
-            "type": "add_node",
-            "parent_id": target_id,
-            "title": title,
-            "kind": item.get("kind"),
-            "body": item.get("body"),
-        }
-
-    return None
-
-
-def fallback_scaffold_ops(request_payload: dict[str, Any]) -> list[dict[str, Any]]:
-    target_node = request_payload.get("target_node") or {}
-    target_id = target_node.get("id") or "root"
-    capability = request_payload.get("capability")
-    explore_by = request_payload.get("explore_by")
-
-    if capability == "explore":
-        title_sets = {
-            "risk": ["Risk Triggers", "Failure Modes", "Mitigations"],
-            "question": ["Clarifying Questions", "Unknowns", "Tests To Run"],
-            "action": ["Immediate Actions", "Dependencies", "Execution Order"],
-            "evidence": ["Direct Support", "Evidence Gaps", "Counterpoints"],
-        }
-        titles = title_sets.get(explore_by, ["Important Angles", "Open Questions", "Next Moves"])
-    else:
-        titles = ["Core Concepts", "Important Angles", "Next Steps"]
-
-    return [
-        {
-            "type": "add_node",
-            "parent_id": target_id,
-            "title": title,
-            "kind": fallback_kind_for_request(request_payload),
-            "body": None,
-        }
-        for title in titles
-    ]
-
-
-def build_fallback_summary(request_payload: dict[str, Any]) -> str:
-    capability = request_payload.get("capability") or "expand"
-    target_node = request_payload.get("target_node") or {}
-    target_title = target_node.get("title") or target_node.get("id") or "target node"
-    if capability == "explore":
-        explore_by = request_payload.get("explore_by") or "one angle"
-        return f"Explore {target_title} by {explore_by}"
-    return f"Expand {target_title}"
-
-
-def humanize_node_id(value: Any) -> Optional[str]:
-    if not isinstance(value, str) or not value.strip():
-        return None
-    pieces = [piece for piece in value.replace("_", "-").split("-") if piece]
-    if not pieces:
-        return None
-    return " ".join(piece.capitalize() for piece in pieces)
 
 
 def normalize_patch_ops_for_quality(
@@ -694,72 +442,6 @@ def normalize_branch_kind(
     if isinstance(raw_kind, str) and raw_kind.strip():
         return raw_kind
     return fallback_kind_for_request(request_payload)
-
-
-def fallback_kind_for_request(request_payload: dict[str, Any]) -> str:
-    explore_by = request_payload.get("explore_by")
-    if explore_by == "question":
-        return "question"
-    if explore_by == "action":
-        return "action"
-    if explore_by == "evidence":
-        return "evidence"
-
-    target_node = request_payload.get("target_node") or {}
-    combined = " ".join(
-        [
-            str(target_node.get("title") or "").lower(),
-            str(target_node.get("body") or "").lower(),
-        ]
-    )
-    if any(token in combined for token in ("milestone", "step", "plan", "deliver", "task")):
-        return "action"
-    if any(token in combined for token in ("finding", "research", "evidence", "study")):
-        return "evidence"
-    if any(token in combined for token in ("question", "unknown", "uncertaint")):
-        return "question"
-    return "topic"
-
-
-def normalize_patch_summary(
-    value: Any,
-    *,
-    request_payload: dict[str, Any],
-    patch_ops: list[dict[str, Any]],
-) -> str:
-    target_node = request_payload.get("target_node") or {}
-    target_title = target_node.get("title") or target_node.get("id") or "target node"
-    capability = request_payload.get("capability") or "expand"
-    count = len(patch_ops)
-
-    if isinstance(value, str) and value.strip():
-        summary = " ".join(value.strip().split())
-        if len(summary) > 96:
-            summary = summary[:96].rstrip(" ,;:-")
-    else:
-        summary = build_fallback_summary(request_payload)
-
-    if capability == "explore":
-        explore_by = request_payload.get("explore_by") or "one angle"
-        return f"Explore {target_title} by {explore_by} with {count} branches"
-    return f"Expand {target_title} with {count} branches"
-
-
-def normalize_langchain_output(output: Any) -> dict[str, Any]:
-    if isinstance(output, dict):
-        return output
-    if hasattr(output, "model_dump"):
-        dumped = output.model_dump()
-        if isinstance(dumped, dict):
-            return dumped
-    raise RunnerFailure(
-        category="schema_error",
-        message=(
-            "LangChain Anthropic runner returned unsupported structured output type: "
-            f"{type(output).__name__}"
-        ),
-        retryable=False,
-    )
 
 
 if __name__ == "__main__":
