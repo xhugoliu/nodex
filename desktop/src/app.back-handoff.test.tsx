@@ -10,6 +10,7 @@ import type {
   NodeWorkspaceContext,
   PatchDocument,
   SourceDetail,
+  SourceImportOutput,
   WorkspaceOverview,
 } from "./types";
 
@@ -309,6 +310,79 @@ function makeOverview(): WorkspaceOverview {
     sources: [],
     snapshots: [],
     patch_history: [],
+  };
+}
+
+function makeImportedOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "imported-root",
+            parent_id: "root",
+            title: "Imported Source Root",
+            body: "Imported body",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeImportedNodeContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "imported-root",
+        parent_id: "root",
+        title: "Imported Source Root",
+        body: "Imported body",
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      parent: { id: "root", title: "Root" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeSourceImportOutput(): SourceImportOutput {
+  return {
+    report: {
+      source_id: "source-2",
+      original_name: "imported.md",
+      stored_name: "imported.md",
+      root_node_id: "imported-root",
+      root_title: "Imported Source Root",
+      node_count: 1,
+      chunk_count: 1,
+    },
+    overview: makeImportedOverview(),
   };
 }
 
@@ -615,6 +689,128 @@ test("App applies workspace-loaded focus_node_id across tree, canvas, and side p
         call.args.node_id === "node-1",
     ),
     "preferred node id should drive context loading",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App focuses the imported root across tree, canvas, and side pane after sidebar import", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (args.node_id === "imported-root"
+          ? makeImportedNodeContext()
+          : makeNodeContext()) as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "imported-root");
+  assert.equal(requireMainPaneProps().selectedNodeId, "imported-root");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "imported-root",
+  );
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "import_source" &&
+        call.args.source_path === "/tmp/imported.md",
+    ),
+    "sidebar import should call import_source with the chosen path",
+  );
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_node_workspace_context" &&
+        call.args.node_id === "imported-root",
+    ),
+    "imported root should drive the follow-up context load",
   );
 
   await act(async () => {
