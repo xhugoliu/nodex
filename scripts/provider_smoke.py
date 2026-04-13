@@ -22,7 +22,9 @@ from source_context_scenario import (
     DEFAULT_TARGET_LABEL,
     fixture_set_cases,
     fixture_set_names,
+    prepare_source_root_scenario,
     prepare_source_context_scenario,
+    verify_source_root_workspace_state,
     verify_source_context_workspace_state,
 )
 
@@ -64,7 +66,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--scenario",
-        choices=("minimal", "source-context"),
+        choices=("minimal", "source-context", "source-root"),
         default="minimal",
         help="Which workspace setup scenario to run before the AI draft.",
     )
@@ -249,6 +251,13 @@ def run_smoke(
             fixture_path=fixture_path,
             target_label=target_label or DEFAULT_TARGET_LABEL,
             citation_rationale=citation_rationale or DEFAULT_CITATION_RATIONALE,
+        )
+        effective_node_id = scenario_payload["target_node"]["id"]
+    elif scenario == "source-root":
+        scenario_payload = prepare_source_root_scenario(
+            manifest_path=manifest_path,
+            workspace_dir=workspace_dir,
+            fixture_path=fixture_path,
         )
         effective_node_id = scenario_payload["target_node"]["id"]
     args = [
@@ -446,6 +455,14 @@ def build_smoke_verification(
             run_id=run_id,
             node_id=node_id,
             apply=apply,
+        )
+    if scenario == "source-root" and scenario_payload is not None:
+        verification["scenario"] = verify_source_root_workspace_state(
+            manifest_path=manifest_path,
+            workspace_dir=workspace_dir,
+            scenario_payload=scenario_payload,
+            created_nodes=report_created_nodes(run_payload) if apply else None,
+            patch_ops=patch_ops(run_payload) if apply else None,
         )
     if scenario == "source-context" and scenario_payload is not None:
         verification["scenario"] = verify_source_context_workspace_state(

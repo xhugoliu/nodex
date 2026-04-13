@@ -52,6 +52,56 @@ class ScenarioFailure(Exception):
         self.detail = detail
 
 
+def prepare_source_root_scenario(
+    *,
+    manifest_path: Path,
+    workspace_dir: Path,
+    fixture_path: Optional[Path] = None,
+) -> dict[str, Any]:
+    fixture_path = (fixture_path or DEFAULT_FIXTURE_PATH).resolve()
+    if not fixture_path.exists():
+        raise ScenarioFailure(f"fixture was not found: {fixture_path}")
+
+    import_step = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["source", "import", str(fixture_path)],
+        expect_json=False,
+    )
+    imported_root = parse_imported_root_from_stdout(import_step["stdout"])
+    if imported_root is None:
+        raise ScenarioFailure("source import output did not include an imported root node")
+    source_list = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["source", "list", "--format", "json"],
+        expect_json=True,
+    )
+    if not isinstance(source_list, list) or not source_list:
+        raise ScenarioFailure("source import did not produce any source records")
+    source_id = source_list[0]["id"]
+
+    imported_root_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["node", "show", imported_root["id"], "--format", "json"],
+        expect_json=True,
+    )
+
+    return {
+        "scenario": "source-root",
+        "fixture_path": str(fixture_path),
+        "source_id": source_id,
+        "imported_root_node": imported_root,
+        "target_node": imported_root,
+        "steps": {
+            "source_import": import_step,
+            "source_list": source_list,
+            "imported_root_show": imported_root_detail,
+        },
+    }
+
+
 def prepare_source_context_scenario(
     *,
     manifest_path: Path,
@@ -149,6 +199,89 @@ def prepare_source_context_scenario(
             "cite_chunk": cite_step,
             "node_show": node_detail,
         },
+    }
+
+
+def verify_source_root_workspace_state(
+    *,
+    manifest_path: Path,
+    workspace_dir: Path,
+    scenario_payload: dict[str, Any],
+    created_nodes: Optional[list[dict[str, Any]]] = None,
+    patch_ops: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    imported_root = scenario_payload["imported_root_node"]
+    imported_root_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["node", "show", imported_root["id"], "--format", "json"],
+        expect_json=True,
+    )
+
+    imported_root_under_workspace_root = (
+        (imported_root_detail.get("parent") or {}).get("id") == "root"
+    )
+    imported_root_source_link_retained = any(
+        (detail.get("source") or {}).get("id") == scenario_payload["source_id"]
+        for detail in (imported_root_detail.get("sources") or [])
+        if isinstance(detail, dict)
+    )
+
+    created_node_checks = []
+    created_nodes_present = None
+    created_nodes_match_patch = None
+    if created_nodes is not None:
+        child_ids = {
+            item.get("id")
+            for item in imported_root_detail.get("children") or []
+            if isinstance(item, dict) and item.get("id")
+        }
+        expected_created_nodes = expected_created_node_specs(created_nodes, patch_ops)
+        created_nodes_present = True
+        created_nodes_match_patch = True
+        for expected in expected_created_nodes:
+            created_id = expected.get("id")
+            is_child = bool(created_id) and created_id in child_ids
+            created_nodes_present = created_nodes_present and is_child
+            matches_patch = False
+            if created_id and is_child:
+                detail = run_nodex_command(
+                    manifest_path=manifest_path,
+                    workspace_dir=workspace_dir,
+                    args=["node", "show", created_id, "--format", "json"],
+                    expect_json=True,
+                )
+                node = detail.get("node") or {}
+                parent = detail.get("parent") or {}
+                matches_patch = (
+                    parent.get("id") == imported_root["id"]
+                    and node.get("title") == expected.get("expected_title")
+                    and node.get("kind") == expected.get("expected_kind")
+                    and node.get("body") == expected.get("expected_body")
+                )
+            created_nodes_match_patch = created_nodes_match_patch and matches_patch
+            created_node_checks.append(
+                {
+                    "id": created_id,
+                    "reported_title": expected.get("reported_title"),
+                    "expected_title": expected.get("expected_title"),
+                    "present_under_imported_root": is_child,
+                    "matches_patch": matches_patch,
+                }
+            )
+
+    ok = imported_root_under_workspace_root and imported_root_source_link_retained
+    if created_nodes is not None:
+        ok = ok and bool(created_nodes_present) and bool(created_nodes_match_patch)
+
+    return {
+        "imported_root_node_id": imported_root["id"],
+        "imported_root_under_workspace_root": imported_root_under_workspace_root,
+        "imported_root_source_link_retained": imported_root_source_link_retained,
+        "created_nodes_present": created_nodes_present,
+        "created_nodes_match_patch": created_nodes_match_patch,
+        "created_node_checks": created_node_checks,
+        "ok": ok,
     }
 
 

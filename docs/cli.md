@@ -84,6 +84,13 @@ cargo run -- ai explore <node-id> --by risk --dry-run
 cargo run -- ai run-external <node-id> "python3 scripts/provider_runner.py --provider anthropic --use-default-args" --dry-run
 ```
 
+### provider smoke
+
+```bash
+python3 scripts/provider_smoke.py --provider anthropic --scenario source-root --json
+python3 scripts/provider_smoke.py --provider anthropic --scenario source-context --json
+```
+
 ### 审计与回放
 
 ```bash
