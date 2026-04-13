@@ -31,14 +31,15 @@
   守主流程闭环、`next_focus_candidate`、`ai_status`
 - `cd desktop && npm run test:logic`
   守 helper seam、右栏 surface 和 handoff 可见态
+  当前也已覆盖 mounted App 级 `back` handoff 和导入落点后的跨 pane 交接
 
 ## 如果继续推进
 
 优先顺序：
 
-1. mounted App 级 back 点击验证
-2. 导入落点后的画布 / 右栏交接回归
-3. 真实材料路径 `source import -> AI expand -> review -> apply`
+1. 把 `desktop_flow_smoke.py` 继续补到更多主路径交接语义
+2. 真实材料路径 `source import -> AI expand -> review -> apply`
+3. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
 ## 当前不做
 
