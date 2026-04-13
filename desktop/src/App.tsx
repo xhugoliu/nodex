@@ -12,6 +12,8 @@ import {
   inspectPatchDraft,
   renderPatchReport,
   renderAiDraftFailure,
+  resolveOverviewFocusNodeId,
+  shouldClearTransientReviewState,
   type ConsoleTone,
 } from "./app-helpers";
 import {
@@ -334,6 +336,13 @@ export default function App() {
     setConsoleEntry({ message, tone });
   }
 
+  function resetTransientReviewState() {
+    setPatchEditor("");
+    setPatchDraftOrigin(null);
+    setReviewDraft(null);
+    setApplyResult(null);
+  }
+
   function ensureTauri(): boolean {
     if (hasTauriRuntime()) {
       return true;
@@ -389,11 +398,13 @@ export default function App() {
       findNodeById(overview.tree, selectedNodeId)
     ) {
       const reloaded = await fetchNodeContext(selectedNodeId, overview.root_dir, {
+        clearTransientReviewState: false,
         silentError: true,
       });
       if (reloaded) {
         if (selectedSourceId) {
           await fetchSourceDetail(selectedSourceId, overview.root_dir, {
+            clearTransientReviewState: false,
             silentError: true,
           });
         }
@@ -405,28 +416,28 @@ export default function App() {
       return;
     }
 
-    if (
-      options.preferredNodeId &&
-      findNodeById(overview.tree, options.preferredNodeId)
-    ) {
+    const nextNodeId = resolveOverviewFocusNodeId(
+      overview.tree,
+      options.preferredNodeId,
+    );
+    if (nextNodeId) {
       const reloaded = await fetchNodeContext(
-        options.preferredNodeId,
+        nextNodeId,
         overview.root_dir,
         {
+          clearTransientReviewState: shouldClearTransientReviewState(
+            {
+              nodeId: selectedNodeId,
+              sourceId: selectedSourceId,
+            },
+            {
+              nodeId: nextNodeId,
+              sourceId: null,
+            },
+          ),
           silentError: true,
         },
       );
-      if (reloaded) {
-        return;
-      }
-    }
-
-    const fallbackNodeId =
-      overview.tree.node.id || findNodeById(overview.tree, "root")?.node.id || null;
-    if (fallbackNodeId) {
-      const reloaded = await fetchNodeContext(fallbackNodeId, overview.root_dir, {
-        silentError: true,
-      });
       if (reloaded) {
         return;
       }
@@ -550,7 +561,10 @@ export default function App() {
   async function fetchNodeContext(
     nodeId: string,
     path = workspacePath,
-    options: { silentError?: boolean } = {},
+    options: {
+      clearTransientReviewState?: boolean;
+      silentError?: boolean;
+    } = {},
   ) {
     if (!ensureWorkspace(path)) {
       return false;
@@ -564,6 +578,21 @@ export default function App() {
           node_id: nodeId,
         },
       );
+      const shouldResetReviewState =
+        options.clearTransientReviewState ??
+        shouldClearTransientReviewState(
+          {
+            nodeId: selectedNodeId,
+            sourceId: selectedSourceId,
+          },
+          {
+            nodeId,
+            sourceId: null,
+          },
+        );
+      if (shouldResetReviewState) {
+        resetTransientReviewState();
+      }
       setSelectedNodeId(nodeId);
       setSelectedNodeContext(context);
       setSelectedSourceId(null);
@@ -581,7 +610,10 @@ export default function App() {
   async function fetchSourceDetail(
     sourceId: string,
     path = workspacePath,
-    options: { silentError?: boolean } = {},
+    options: {
+      clearTransientReviewState?: boolean;
+      silentError?: boolean;
+    } = {},
   ) {
     if (!ensureWorkspace(path)) {
       return false;
@@ -592,9 +624,23 @@ export default function App() {
         start_path: path,
         source_id: sourceId,
       });
+      const shouldResetReviewState =
+        options.clearTransientReviewState ??
+        shouldClearTransientReviewState(
+          {
+            nodeId: selectedNodeId,
+            sourceId: selectedSourceId,
+          },
+          {
+            nodeId: selectedNodeId,
+            sourceId,
+          },
+        );
+      if (shouldResetReviewState) {
+        resetTransientReviewState();
+      }
       setSelectedSourceId(sourceId);
       setSelectedSourceDetail(detail);
-      setApplyResult(null);
       setSelectionPanelTab("context");
       return true;
     } catch (error) {

@@ -175,6 +175,11 @@ export interface SelectionContext {
   sourceId: string | null;
 }
 
+export interface OverviewFocusDecision {
+  nextNodeId: string | null;
+  shouldClearTransientReviewState: boolean;
+}
+
 export function resolveOverviewFocusNodeId(
   tree: TreeNode,
   preferredNodeId?: string | null,
@@ -186,11 +191,50 @@ export function resolveOverviewFocusNodeId(
   return tree.node.id || findNodeById(tree, "root")?.node.id || null;
 }
 
-export function shouldClearReviewApplyState(
+export function shouldClearTransientReviewState(
   previous: SelectionContext,
   next: SelectionContext,
 ): boolean {
   return previous.nodeId !== next.nodeId || previous.sourceId !== next.sourceId;
+}
+
+export function shouldClearReviewApplyState(
+  previous: SelectionContext,
+  next: SelectionContext,
+): boolean {
+  return shouldClearTransientReviewState(previous, next);
+}
+
+export function deriveOverviewFocusDecision(
+  tree: TreeNode,
+  current: SelectionContext,
+  preferredNodeId?: string | null,
+): OverviewFocusDecision {
+  const hasPreferredNode =
+    typeof preferredNodeId === "string" &&
+    preferredNodeId.length > 0 &&
+    Boolean(findNodeById(tree, preferredNodeId));
+  const hasCurrentNode =
+    typeof current.nodeId === "string" &&
+    current.nodeId.length > 0 &&
+    Boolean(findNodeById(tree, current.nodeId));
+  const nextNodeId = hasPreferredNode
+    ? preferredNodeId!
+    : hasCurrentNode
+      ? current.nodeId
+      : resolveOverviewFocusNodeId(tree);
+  const nextSelection: SelectionContext = {
+    nodeId: nextNodeId,
+    sourceId: null,
+  };
+
+  return {
+    nextNodeId,
+    shouldClearTransientReviewState: shouldClearTransientReviewState(
+      current,
+      nextSelection,
+    ),
+  };
 }
 
 export function listParentCandidates(

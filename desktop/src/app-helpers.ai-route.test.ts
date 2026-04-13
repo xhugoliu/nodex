@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildAiDraftNextSteps,
+  deriveOverviewFocusDecision,
   renderAiDraftFailure,
   resolveOverviewFocusNodeId,
-  shouldClearReviewApplyState,
+  shouldClearTransientReviewState,
   type Translator,
 } from "./app-helpers";
 import type { DesktopAiStatus, TreeNode } from "./types";
@@ -106,36 +107,37 @@ test("rate limit status error maps to retry guidance and is rendered in failure 
   assert.match(message, /messages\.aiDraftNextRateLimit/);
 });
 
-test("resolveOverviewFocusNodeId prefers provided node when it exists", () => {
-  const nodeId = resolveOverviewFocusNodeId(makeTree(), "child-1");
-  assert.equal(nodeId, "child-1");
-});
-
-test("resolveOverviewFocusNodeId falls back to root when preferred node is missing", () => {
-  const nodeId = resolveOverviewFocusNodeId(makeTree(), "missing");
-  assert.equal(nodeId, "root");
-});
-
-test("shouldClearReviewApplyState clears state on node switch", () => {
-  const shouldClear = shouldClearReviewApplyState(
-    { nodeId: "node-a", sourceId: "source-1" },
-    { nodeId: "node-b", sourceId: "source-1" },
+test("source import with preferred node hit resolves focus and clears transient review state", () => {
+  const decision = deriveOverviewFocusDecision(
+    makeTree(),
+    { nodeId: "root", sourceId: null },
+    "child-1",
   );
-  assert.equal(shouldClear, true);
+
+  assert.equal(decision.nextNodeId, "child-1");
+  assert.equal(decision.shouldClearTransientReviewState, true);
 });
 
-test("shouldClearReviewApplyState clears state on source switch", () => {
-  const shouldClear = shouldClearReviewApplyState(
+test("same-node overview refresh keeps transient review state", () => {
+  const decision = deriveOverviewFocusDecision(
+    makeTree(),
+    { nodeId: "child-1", sourceId: null },
+    null,
+  );
+
+  assert.equal(decision.nextNodeId, "child-1");
+  assert.equal(decision.shouldClearTransientReviewState, false);
+});
+
+test("switching source detail clears transient review state", () => {
+  const shouldClear = shouldClearTransientReviewState(
     { nodeId: "node-a", sourceId: "source-1" },
     { nodeId: "node-a", sourceId: "source-2" },
   );
   assert.equal(shouldClear, true);
 });
 
-test("shouldClearReviewApplyState keeps state on same-node refresh", () => {
-  const shouldClear = shouldClearReviewApplyState(
-    { nodeId: "node-a", sourceId: "source-1" },
-    { nodeId: "node-a", sourceId: "source-1" },
-  );
-  assert.equal(shouldClear, false);
+test("resolveOverviewFocusNodeId still falls back to root when preferred node is missing", () => {
+  const nodeId = resolveOverviewFocusNodeId(makeTree(), "missing");
+  assert.equal(nodeId, "root");
 });
