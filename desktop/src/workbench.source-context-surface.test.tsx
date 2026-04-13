@@ -170,3 +170,38 @@ test("SourceContextSurface hides citation actions and shows empty continue state
   assert.doesNotMatch(html, /detail\.draftCite/);
   assert.doesNotMatch(html, /detail\.draftUncite/);
 });
+
+test("SourceContextSurface keeps continue entries focused by hiding duplicate evidence nodes already listed as related nodes", () => {
+  const detail = makeSourceDetail();
+  detail.chunks = [
+    {
+      chunk: {
+        id: "chunk-shared",
+        source_id: "source-1",
+        ordinal: 0,
+        label: "Shared next step",
+        text: "A source chunk that points to the same follow-up node in both continue groups.",
+        start_line: 3,
+        end_line: 6,
+      },
+      linked_nodes: [{ id: "node-shared-1", title: "Shared next step" }],
+      evidence_nodes: [],
+      evidence_links: [
+        {
+          node: { id: "node-shared-1", title: "Shared next step" },
+          citation_kind: "direct",
+          rationale: "This is the same node already suggested as a direct continue path.",
+        },
+      ],
+    },
+  ];
+
+  const html = renderSurface({ detail });
+
+  assert.match(html, /detail\.sourceContinueLinkedNodes/);
+  assert.doesNotMatch(html, /detail\.sourceContinueEvidenceNodes/);
+  assert.match(
+    html,
+    /detail\.sourceContextStatContinue \{&quot;count&quot;:1\}/,
+  );
+});

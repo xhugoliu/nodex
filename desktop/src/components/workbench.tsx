@@ -1117,17 +1117,20 @@ function collectSourceQuickEntryNodes(chunks: SourceChunkDetail[]): {
   linkedNodes: Array<{ id: string; title: string }>;
   evidenceNodes: Array<{ id: string; title: string }>;
 } {
+  const linkedNodes = dedupeNodeSummaries(
+    chunks.flatMap((chunkDetail) => chunkDetail.linked_nodes),
+  );
+  const linkedNodeIds = new Set(linkedNodes.map((node) => node.id));
+
   return {
-    linkedNodes: dedupeNodeSummaries(
-      chunks.flatMap((chunkDetail) => chunkDetail.linked_nodes),
-    ),
+    linkedNodes,
     evidenceNodes: dedupeNodeSummaries(
       chunks.flatMap((chunkDetail) =>
         chunkDetail.evidence_links?.length
           ? chunkDetail.evidence_links.map((link) => link.node)
           : chunkDetail.evidence_nodes,
       ),
-    ),
+    ).filter((node) => !linkedNodeIds.has(node.id)),
   };
 }
 
