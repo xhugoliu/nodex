@@ -1,4 +1,3 @@
-import "@xyflow/react/dist/style.css";
 import { startTransition, useDeferredValue, useEffect, useState } from "react";
 
 import { listen } from "@tauri-apps/api/event";
@@ -63,6 +62,21 @@ interface CanvasViewState {
   collapsedNodeIds: string[];
 }
 
+export interface AppBindings {
+  listen: typeof listen;
+  hasTauriRuntime: typeof hasTauriRuntime;
+  invokeCommand: typeof invokeCommand;
+  openPath: typeof openPath;
+  TreePane: typeof TreePane;
+  WorkbenchMainPane: typeof WorkbenchMainPane;
+  WorkbenchSidePane: typeof WorkbenchSidePane;
+  WorkspaceStartPane: typeof WorkspaceStartPane;
+}
+
+export interface AppProps {
+  bindings?: Partial<AppBindings>;
+}
+
 const CANVAS_VIEW_STORAGE_KEY = "nodex.desktop.canvas-view";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "nodex.desktop.sidebar-collapsed";
 const DEFAULT_CANVAS_VIEW_STATE: CanvasViewState = {
@@ -74,6 +88,17 @@ const DEFAULT_CANVAS_VIEW_STATE: CanvasViewState = {
   followSelection: true,
   focusMode: "all",
   collapsedNodeIds: [],
+};
+
+const defaultAppBindings: AppBindings = {
+  listen,
+  hasTauriRuntime,
+  invokeCommand,
+  openPath,
+  TreePane,
+  WorkbenchMainPane,
+  WorkbenchSidePane,
+  WorkspaceStartPane,
 };
 
 function canvasViewStorageKey(workspacePath: string) {
@@ -159,7 +184,21 @@ interface LanguageMenuEvent {
   preference: LanguagePreference;
 }
 
-export default function App() {
+export default function App(props: AppProps = {}) {
+  const bindings: AppBindings = {
+    ...defaultAppBindings,
+    ...props.bindings,
+  };
+  const {
+    listen: listenEvent,
+    hasTauriRuntime: hasTauriRuntimeFn,
+    invokeCommand: invokeCommandFn,
+    openPath: openPathFn,
+    TreePane: TreePaneComponent,
+    WorkbenchMainPane: WorkbenchMainPaneComponent,
+    WorkbenchSidePane: WorkbenchSidePaneComponent,
+    WorkspaceStartPane: WorkspaceStartPaneComponent,
+  } = bindings;
   const [languagePreference, setLanguagePreference] =
     useState<LanguagePreference>(loadLanguagePreference);
   const [systemLocale, setSystemLocale] = useState<Locale>(resolveSystemLocale);
@@ -228,14 +267,14 @@ export default function App() {
   }, [locale]);
 
   useEffect(() => {
-    if (!hasTauriRuntime()) {
+    if (!hasTauriRuntimeFn()) {
       return;
     }
 
-    void invokeCommand("set_menu_locale", { locale }).catch(() => {
+    void invokeCommandFn("set_menu_locale", { locale }).catch(() => {
       // Best-effort only.
     });
-  }, [locale]);
+  }, [hasTauriRuntimeFn, invokeCommandFn, locale]);
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -249,12 +288,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!hasTauriRuntime() || !workspaceOverview) {
+    if (!hasTauriRuntimeFn() || !workspaceOverview) {
       return;
     }
 
     void refreshDesktopAiStatus({ silentError: true });
-  }, [workspaceOverview?.root_dir]);
+  }, [hasTauriRuntimeFn, workspaceOverview?.root_dir]);
 
   useEffect(() => {
     if (!selectedNodeContext) {
@@ -270,7 +309,7 @@ export default function App() {
   }, [selectedNodeContext]);
 
   useEffect(() => {
-    if (!hasTauriRuntime()) {
+    if (!hasTauriRuntimeFn()) {
       return;
     }
 
@@ -278,7 +317,7 @@ export default function App() {
 
     const bind = async () => {
       unlisteners.push(
-        await listen<WorkspaceLoadedEvent>(
+        await listenEvent<WorkspaceLoadedEvent>(
           "desktop://workspace-loaded",
           (event) => {
             void applyOverview(event.payload.overview, {
@@ -290,13 +329,13 @@ export default function App() {
       );
 
       unlisteners.push(
-        await listen<ConsoleEventPayload>("desktop://console", (event) => {
+        await listenEvent<ConsoleEventPayload>("desktop://console", (event) => {
           setConsoleMessage(event.payload.message, event.payload.tone);
         }),
       );
 
       unlisteners.push(
-        await listen<PatchEditorEventPayload>("desktop://patch-editor", (event) => {
+        await listenEvent<PatchEditorEventPayload>("desktop://patch-editor", (event) => {
           openReviewDraftState({
             patchEditorText: event.payload.patch_json,
             patchDraftOrigin: null,
@@ -307,7 +346,7 @@ export default function App() {
       );
 
       unlisteners.push(
-        await listen<LanguageMenuEvent>("desktop://language", (event) => {
+        await listenEvent<LanguageMenuEvent>("desktop://language", (event) => {
           setLanguagePreference(event.payload.preference);
         }),
       );
@@ -320,7 +359,7 @@ export default function App() {
         unlisten();
       }
     };
-  }, []);
+  }, [hasTauriRuntimeFn, listenEvent]);
 
   const consoleMessage = consoleEntry?.message ?? t("console.empty");
   const consoleTone = consoleEntry?.tone ?? null;
@@ -388,7 +427,7 @@ export default function App() {
   }
 
   function ensureTauri(): boolean {
-    if (hasTauriRuntime()) {
+    if (hasTauriRuntimeFn()) {
       return true;
     }
 
@@ -497,13 +536,13 @@ export default function App() {
   }
 
   async function openWorkspaceCommand(path: string) {
-    return invokeCommand<WorkspaceOverview>("open_workspace", {
+    return invokeCommandFn<WorkspaceOverview>("open_workspace", {
       start_path: path,
     });
   }
 
   async function openOrInitWorkspaceCommand(path: string) {
-    return invokeCommand<WorkspaceOverview>("open_or_init_workspace", {
+    return invokeCommandFn<WorkspaceOverview>("open_or_init_workspace", {
       root_path: path,
     });
   }
@@ -514,7 +553,7 @@ export default function App() {
     }
 
     try {
-      const selectedPath = await openPath({
+      const selectedPath = await openPathFn({
         directory: true,
         title: t("workspace.chooseFolder"),
       });
@@ -537,13 +576,13 @@ export default function App() {
     silentError?: boolean;
     clearDraftError?: boolean;
   } = {}) {
-    if (!hasTauriRuntime()) {
+    if (!hasTauriRuntimeFn()) {
       return null;
     }
 
     setIsDesktopAiStatusLoading(true);
     try {
-      const status = await invokeCommand<DesktopAiStatus>("get_desktop_ai_status", {});
+      const status = await invokeCommandFn<DesktopAiStatus>("get_desktop_ai_status", {});
       setDesktopAiStatus(status);
       if (options.clearDraftError) {
         setLastAiDraftError(null);
@@ -566,7 +605,7 @@ export default function App() {
     }
 
     try {
-      const selectedPath = await openPath({
+      const selectedPath = await openPathFn({
         directory: false,
         title: t("workspace.chooseSourceFile"),
         filters: [
@@ -580,7 +619,7 @@ export default function App() {
         return;
       }
 
-      const output = await invokeCommand<SourceImportOutput>("import_source", {
+      const output = await invokeCommandFn<SourceImportOutput>("import_source", {
         start_path: path,
         source_path: selectedPath,
       });
@@ -613,7 +652,7 @@ export default function App() {
     }
 
     try {
-      const context = await invokeCommand<NodeWorkspaceContext>(
+      const context = await invokeCommandFn<NodeWorkspaceContext>(
         "get_node_workspace_context",
         {
           start_path: path,
@@ -666,7 +705,7 @@ export default function App() {
     }
 
     try {
-      const detail = await invokeCommand<SourceDetail>("get_source_detail", {
+      const detail = await invokeCommandFn<SourceDetail>("get_source_detail", {
         start_path: path,
         source_id: sourceId,
       });
@@ -759,7 +798,7 @@ export default function App() {
     }
 
     try {
-      const report = await invokeCommand<ApplyPatchReport>("preview_patch", {
+      const report = await invokeCommandFn<ApplyPatchReport>("preview_patch", {
         start_path: workspacePath,
         patch_json: patchJson,
       });
@@ -791,7 +830,7 @@ export default function App() {
         args.ai_run_id = patchDraftOrigin.run_id;
       }
 
-      const output = await invokeCommand<ApplyReviewedPatchOutput>(
+      const output = await invokeCommandFn<ApplyReviewedPatchOutput>(
         "apply_reviewed_patch",
         args,
       );
@@ -841,7 +880,7 @@ export default function App() {
     }
 
     try {
-      const patch = await invokeCommand<PatchDocument>("draft_add_node_patch", {
+      const patch = await invokeCommandFn<PatchDocument>("draft_add_node_patch", {
         title,
         parent_id: selectedNodeId,
         kind: "topic",
@@ -869,7 +908,7 @@ export default function App() {
 
     try {
       setLastAiDraftError(null);
-      const result = await invokeCommand<DraftReviewPayload>("draft_node_expand", {
+      const result = await invokeCommandFn<DraftReviewPayload>("draft_node_expand", {
         start_path: workspacePath,
         node_id: selectedNodeId,
       });
@@ -900,7 +939,7 @@ export default function App() {
 
     try {
       setLastAiDraftError(null);
-      const result = await invokeCommand<DraftReviewPayload>("draft_node_explore", {
+      const result = await invokeCommandFn<DraftReviewPayload>("draft_node_explore", {
         start_path: workspacePath,
         node_id: selectedNodeId,
         by,
@@ -940,7 +979,7 @@ export default function App() {
     }
 
     try {
-      const patch = await invokeCommand<PatchDocument>("draft_update_node_patch", {
+      const patch = await invokeCommandFn<PatchDocument>("draft_update_node_patch", {
         node_id: selectedNodeId,
         title: nextTitle,
         kind: null,
@@ -966,7 +1005,7 @@ export default function App() {
     }
 
     try {
-      const patch = await invokeCommand<PatchDocument>("draft_cite_source_chunk_patch", {
+      const patch = await invokeCommandFn<PatchDocument>("draft_cite_source_chunk_patch", {
         node_id: selectedNodeId,
         chunk_id: chunkId,
       });
@@ -990,7 +1029,7 @@ export default function App() {
     }
 
     try {
-      const patch = await invokeCommand<PatchDocument>("draft_uncite_source_chunk_patch", {
+      const patch = await invokeCommandFn<PatchDocument>("draft_uncite_source_chunk_patch", {
         node_id: selectedNodeId,
         chunk_id: chunkId,
       });
@@ -1020,7 +1059,7 @@ export default function App() {
                 : "xl:grid-cols-[264px_minmax(0,1.42fr)_320px] 2xl:grid-cols-[272px_minmax(0,1.5fr)_336px]",
             ].join(" ")}
           >
-            <TreePane
+            <TreePaneComponent
               isCollapsed={isSidebarCollapsed}
               workspaceOverview={workspaceOverview}
               treeSummary={treeSummary}
@@ -1041,7 +1080,7 @@ export default function App() {
               }}
             />
 
-            <WorkbenchMainPane
+            <WorkbenchMainPaneComponent
               tree={workspaceOverview.tree}
               selectedNodeId={selectedNodeId}
               canvasViewport={canvasViewState.viewport}
@@ -1095,7 +1134,7 @@ export default function App() {
               }}
             />
 
-            <WorkbenchSidePane
+            <WorkbenchSidePaneComponent
               selectionTab={selectionPanelTab}
               aiDraftStatus={desktopAiStatus}
               aiDraftStatusLoading={isDesktopAiStatusLoading}
@@ -1147,7 +1186,7 @@ export default function App() {
         </main>
       ) : (
         <main className="flex min-h-0 flex-1">
-          <WorkspaceStartPane
+          <WorkspaceStartPaneComponent
             message={consoleMessage}
             tone={consoleTone}
             showStatus={Boolean(consoleEntry)}
