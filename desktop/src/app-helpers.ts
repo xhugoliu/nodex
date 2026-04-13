@@ -170,6 +170,29 @@ export function findNodeById(tree: TreeNode, nodeId: string): TreeNode | null {
   return null;
 }
 
+export interface SelectionContext {
+  nodeId: string | null;
+  sourceId: string | null;
+}
+
+export function resolveOverviewFocusNodeId(
+  tree: TreeNode,
+  preferredNodeId?: string | null,
+): string | null {
+  if (preferredNodeId && findNodeById(tree, preferredNodeId)) {
+    return preferredNodeId;
+  }
+
+  return tree.node.id || findNodeById(tree, "root")?.node.id || null;
+}
+
+export function shouldClearReviewApplyState(
+  previous: SelectionContext,
+  next: SelectionContext,
+): boolean {
+  return previous.nodeId !== next.nodeId || previous.sourceId !== next.sourceId;
+}
+
 export function listParentCandidates(
   tree: TreeNode,
   excludedNodeId: string | null,
