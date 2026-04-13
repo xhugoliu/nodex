@@ -675,6 +675,35 @@ export default function App() {
     }
   }
 
+  function returnToNodeContext(options: {
+    clearTransientReviewState?: boolean;
+    preservePanelTab?: boolean;
+  } = {}) {
+    const selectionDecision = deriveContextSelectionDecision(
+      {
+        nodeId: selectedNodeId,
+        sourceId: selectedSourceId,
+      },
+      {
+        nodeId: selectedNodeId,
+        sourceId: null,
+      },
+      {
+        clearTransientReviewState: options.clearTransientReviewState,
+        preservePanelTab: options.preservePanelTab,
+        currentSelectionPanelTab: selectionPanelTab,
+      },
+    );
+
+    if (selectionDecision.shouldClearTransientReviewState) {
+      resetTransientReviewState();
+    }
+
+    setSelectedSourceId(null);
+    setSelectedSourceDetail(null);
+    setSelectionPanelTab(selectionDecision.nextSelectionPanelTab);
+  }
+
   async function refreshWorkspace() {
     if (!ensureWorkspace()) {
       return;
@@ -1072,8 +1101,7 @@ export default function App() {
                 void fetchNodeContext(nodeId);
               }}
               onBackToNodeContext={() => {
-                setSelectedSourceId(null);
-                setSelectedSourceDetail(null);
+                returnToNodeContext();
               }}
               onDraftCiteChunk={(chunkId) => {
                 void draftCiteChunkPatch(chunkId);

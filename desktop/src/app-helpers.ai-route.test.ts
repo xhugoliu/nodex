@@ -166,6 +166,20 @@ test("deriveContextSelectionDecision clears review/apply state when opening a di
   assert.equal(decision.shouldClearTransientReviewState, true);
 });
 
+test("deriveContextSelectionDecision clears review/apply state when closing the current source detail", () => {
+  const decision = deriveContextSelectionDecision(
+    { nodeId: "node-a", sourceId: "source-1" },
+    { nodeId: "node-a", sourceId: null },
+    {
+      currentSelectionPanelTab: "review",
+      preservePanelTab: true,
+    },
+  );
+
+  assert.equal(decision.nextSelectionPanelTab, "context");
+  assert.equal(decision.shouldClearTransientReviewState, true);
+});
+
 test("deriveContextSelectionDecision falls back to Context when panel preservation is not requested", () => {
   const decision = deriveContextSelectionDecision(
     { nodeId: "node-a", sourceId: null },
