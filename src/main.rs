@@ -1106,6 +1106,14 @@ fn print_ai_run_compare_output(output: &AiRunCompareOutput) {
     println!("same model: {}", output.comparison.same_model);
     println!("same status: {}", output.comparison.same_status);
     println!(
+        "same plain json fallback: {}",
+        output.comparison.same_used_plain_json_fallback
+    );
+    println!(
+        "same normalization notes: {}",
+        output.comparison.same_normalization_notes
+    );
+    println!(
         "same rationale summary: {}",
         output.comparison.same_rationale_summary
     );

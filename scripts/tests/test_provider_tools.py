@@ -1034,6 +1034,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
             payload["runner_metrics"]["right"]["normalization_note_count"],
             0,
         )
+        comparison = payload["comparisons"][0]["comparison"]
+        self.assertFalse(comparison["same_used_plain_json_fallback"])
+        self.assertFalse(comparison["same_normalization_notes"])
 
     def test_runner_compare_can_compare_two_fake_runners(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

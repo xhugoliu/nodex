@@ -108,6 +108,11 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - `used_plain_json_fallback`
 - `normalization_notes`
 
+当前 `ai compare` / `scripts/runner_compare.py` 也会直接汇总：
+
+- fallback flag 是否一致
+- normalization notes 是否一致
+
 ## 当前桌面回归入口
 
 如果目标是守住桌面主路径，不是看单条 CLI 命令，优先跑：

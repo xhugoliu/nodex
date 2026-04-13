@@ -66,8 +66,9 @@ python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-roo
 - OpenAI / Anthropic runner-entry 的 plain-JSON fallback metadata
 - OpenAI invoke 路径的 no-broad-fallback 错误分类约束
 - smoke / compare summary 对 fallback / normalization metadata 的透传
+- `ai compare` 对 fallback / normalization metadata 一致性的直接摘要
 
 下一轮更值得补的仍然是：
 
 - `runner_compare.py` 在 `source-root` / `source-context` 上更贴近真实 LangChain preset 的 compare 回归
-- compare 输出对 normalization metadata 差异的直接摘要，而不只是 run-level metrics
+- compare 输出继续往真实 LangChain preset 的失败 / 差异归因收口，而不只停在 metadata 层

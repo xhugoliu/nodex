@@ -518,6 +518,8 @@ def print_text_report(result: dict) -> None:
             print(f"  error: {item['error']}")
             continue
         summary = item["comparison"]
+        print(f"  same fallback flag: {summary['same_used_plain_json_fallback']}")
+        print(f"  same normalization notes: {summary['same_normalization_notes']}")
         print(f"  same rationale: {summary['same_rationale_summary']}")
         print(f"  same patch summary: {summary['same_patch_summary']}")
         print(f"  same patch preview: {summary['same_patch_preview']}")
@@ -634,7 +636,9 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
         if any(
             item.get("status") == "ok"
             and (
-                not item["comparison"]["same_rationale_summary"]
+                not item["comparison"]["same_used_plain_json_fallback"]
+                or not item["comparison"]["same_normalization_notes"]
+                or not item["comparison"]["same_rationale_summary"]
                 or not item["comparison"]["same_patch_preview"]
                 or not item["comparison"]["same_response_notes"]
             )

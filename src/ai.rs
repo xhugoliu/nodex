@@ -188,6 +188,8 @@ pub struct AiRunCompareSummary {
     pub same_provider: bool,
     pub same_model: bool,
     pub same_status: bool,
+    pub same_used_plain_json_fallback: bool,
+    pub same_normalization_notes: bool,
     pub same_rationale_summary: bool,
     pub same_patch_summary: bool,
     pub same_patch_preview: bool,
@@ -612,6 +614,10 @@ impl Workspace {
                 same_provider: left.record.provider == right.record.provider,
                 same_model: left.record.model == right.record.model,
                 same_status: left.record.status == right.record.status,
+                same_used_plain_json_fallback: left.record.used_plain_json_fallback
+                    == right.record.used_plain_json_fallback,
+                same_normalization_notes: left.record.normalization_notes
+                    == right.record.normalization_notes,
                 same_rationale_summary: left_rationale == right_rationale,
                 same_patch_summary: left_patch_summary == right_patch_summary,
                 same_patch_preview: left.patch_preview == right.patch_preview,
@@ -2011,6 +2017,11 @@ response = {
     },
     "notes": ["left-note"]
 }
+meta = {
+    "used_plain_json_fallback": True,
+    "normalization_notes": ["runner_normalized:left"]
+}
+Path(os.environ["NODEX_AI_META"]).write_text(json.dumps(meta, indent=2))
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
 "#,
         )?;
@@ -2054,6 +2065,11 @@ response = {
     },
     "notes": ["right-note"]
 }
+meta = {
+    "used_plain_json_fallback": False,
+    "normalization_notes": ["runner_normalized:right"]
+}
+Path(os.environ["NODEX_AI_META"]).write_text(json.dumps(meta, indent=2))
 Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
 "#,
         )?;
@@ -2065,6 +2081,8 @@ Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
 
         assert!(compare.comparison.same_node_id);
         assert!(compare.comparison.same_capability);
+        assert!(!compare.comparison.same_used_plain_json_fallback);
+        assert!(!compare.comparison.same_normalization_notes);
         assert!(!compare.comparison.same_rationale_summary);
         assert!(!compare.comparison.same_patch_summary);
         assert!(!compare.comparison.same_patch_preview);
