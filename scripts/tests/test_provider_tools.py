@@ -735,11 +735,19 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["mode"], "dry_run")
         checks = payload["desktop_flow"]["checks"]
+        self.assertTrue(checks["imported_root_node_available"])
         self.assertTrue(checks["source_context_target_selected"])
+        self.assertTrue(checks["target_node_under_imported_root"])
         self.assertTrue(checks["draft_generated"])
         self.assertTrue(checks["review_payload_available"])
         self.assertTrue(checks["dry_run_verified"])
         self.assertTrue(checks["next_focus_candidate_ready"])
+        imported_root = payload["desktop_flow"]["imported_root_node"]
+        self.assertTrue(imported_root["id"])
+        self.assertEqual(
+            imported_root["title"],
+            "Anthropic LangChain Regression",
+        )
         self.assertEqual(payload["desktop_flow"]["predicted_node_count"], 1)
         self.assertEqual(payload["desktop_flow"]["created_node_count"], 0)
         self.assertEqual(
@@ -823,9 +831,17 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["mode"], "apply")
         checks = payload["desktop_flow"]["checks"]
+        self.assertTrue(checks["imported_root_node_available"])
+        self.assertTrue(checks["target_node_under_imported_root"])
         self.assertTrue(checks["patch_applied"])
         self.assertTrue(checks["created_node_verified"])
         self.assertTrue(checks["next_focus_candidate_ready"])
+        imported_root = payload["desktop_flow"]["imported_root_node"]
+        self.assertTrue(imported_root["id"])
+        self.assertEqual(
+            imported_root["title"],
+            "Anthropic LangChain Regression",
+        )
         self.assertEqual(payload["desktop_flow"]["predicted_node_count"], 1)
         self.assertEqual(payload["desktop_flow"]["created_node_count"], 1)
         candidate = payload["desktop_flow"]["next_focus_candidate"]

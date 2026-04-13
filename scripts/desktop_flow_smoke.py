@@ -236,6 +236,7 @@ def run_desktop_flow_smoke(
 
 def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:
     scenario_context = smoke_result.get("scenario_context") or {}
+    imported_root_node = scenario_context.get("imported_root_node") or {}
     target_node = scenario_context.get("target_node") or {}
     evidence = scenario_context.get("evidence") or {}
     run_payload = smoke_result.get("run_external_json") or {}
@@ -260,9 +261,15 @@ def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:
 
     checks = {
         "workspace_initialized": bool(smoke_result.get("steps", {}).get("init")),
+        "imported_root_node_available": bool(imported_root_node.get("id"))
+        and imported_root_node.get("id") != "root",
         "source_context_target_selected": bool(target_node.get("id"))
         and target_node.get("id") != "root"
         and bool(evidence.get("chunk_id")),
+        "target_node_under_imported_root": scenario_verification.get(
+            "target_node_under_imported_root"
+        )
+        is True,
         "source_context_verified": scenario_verification.get(
             "target_evidence_retained"
         )
@@ -292,6 +299,7 @@ def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:
     return {
         "ok": all(value is True for value in checks.values()),
         "checks": checks,
+        "imported_root_node": imported_root_node,
         "target_node": target_node,
         "evidence_chunk_label": evidence.get("chunk_label"),
         "add_node_op_count": len(add_node_ops),

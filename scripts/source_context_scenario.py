@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any, Optional
@@ -69,6 +70,9 @@ def prepare_source_context_scenario(
         args=["source", "import", str(fixture_path)],
         expect_json=False,
     )
+    imported_root = parse_imported_root_from_stdout(import_step["stdout"])
+    if imported_root is None:
+        raise ScenarioFailure("source import output did not include an imported root node")
     source_list = run_nodex_command(
         manifest_path=manifest_path,
         workspace_dir=workspace_dir,
@@ -83,6 +87,12 @@ def prepare_source_context_scenario(
         manifest_path=manifest_path,
         workspace_dir=workspace_dir,
         args=["source", "show", source_id, "--format", "json"],
+        expect_json=True,
+    )
+    imported_root_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["node", "show", imported_root["id"], "--format", "json"],
         expect_json=True,
     )
     target_context = select_target_context(source_detail, target_label)
@@ -120,6 +130,7 @@ def prepare_source_context_scenario(
         "scenario": "source-context",
         "fixture_path": str(fixture_path),
         "source_id": source_id,
+        "imported_root_node": imported_root,
         "target_node": {
             "id": node_id,
             "title": target_context["node_title"],
@@ -134,6 +145,7 @@ def prepare_source_context_scenario(
             "source_import": import_step,
             "source_list": source_list,
             "source_show": source_detail,
+            "imported_root_show": imported_root_detail,
             "cite_chunk": cite_step,
             "node_show": node_detail,
         },
@@ -150,6 +162,7 @@ def verify_source_context_workspace_state(
 ) -> dict[str, Any]:
     target_node = scenario_payload["target_node"]
     evidence = scenario_payload["evidence"]
+    imported_root = scenario_payload.get("imported_root_node") or {}
     target_detail = run_nodex_command(
         manifest_path=manifest_path,
         workspace_dir=workspace_dir,
@@ -175,6 +188,10 @@ def verify_source_context_workspace_state(
         expected_node_id=target_node["id"],
         expected_citation_kind=evidence["citation_kind"],
         expected_rationale=evidence["rationale"],
+    )
+    target_node_under_imported_root = (
+        bool(imported_root.get("id"))
+        and (target_detail.get("parent") or {}).get("id") == imported_root.get("id")
     )
 
     created_node_checks = []
@@ -221,13 +238,19 @@ def verify_source_context_workspace_state(
                 }
             )
 
-    ok = target_evidence_retained and source_evidence_link_retained
+    ok = (
+        target_evidence_retained
+        and source_evidence_link_retained
+        and target_node_under_imported_root
+    )
     if created_nodes is not None:
         ok = ok and bool(created_nodes_present) and bool(created_nodes_match_patch)
 
     return {
+        "imported_root_node_id": imported_root.get("id"),
         "target_node_id": target_node["id"],
         "expected_chunk_id": evidence["chunk_id"],
+        "target_node_under_imported_root": target_node_under_imported_root,
         "target_evidence_retained": target_evidence_retained,
         "source_evidence_link_retained": source_evidence_link_retained,
         "created_nodes_present": created_nodes_present,
@@ -285,6 +308,20 @@ def target_has_expected_evidence(
                 continue
             return True
     return False
+
+
+def parse_imported_root_from_stdout(stdout: str) -> Optional[dict[str, str]]:
+    match = re.search(
+        r"generated root node:\s*(?P<title>.+?)\s*\[(?P<id>[^\]]+)\]",
+        stdout,
+    )
+    if not match:
+        return None
+
+    return {
+        "id": match.group("id").strip(),
+        "title": match.group("title").strip(),
+    }
 
 
 def source_has_expected_evidence_link(

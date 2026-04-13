@@ -102,6 +102,14 @@ python3 scripts/desktop_flow_smoke.py --json
 cd desktop && npm run test:logic
 ```
 
+`desktop_flow_smoke.py --json` 当前重点输出：
+
+- `desktop_flow.imported_root_node`
+- `desktop_flow.target_node`
+- `desktop_flow.next_focus_candidate`
+- `desktop_flow.checks`
+- `ai_status`
+
 ## 工作区发现
 
 Nodex 会从当前目录向上查找 `.nodex/project.db`。
