@@ -292,10 +292,11 @@ export default function App() {
 
       unlisteners.push(
         await listen<PatchEditorEventPayload>("desktop://patch-editor", (event) => {
-          setPatchEditor(event.payload.patch_json);
-          setPatchDraftOrigin(null);
-          setReviewDraft(null);
-          setSelectionPanelTab("review");
+          openReviewDraftState({
+            patchEditorText: event.payload.patch_json,
+            patchDraftOrigin: null,
+            reviewDraft: null,
+          });
           setConsoleMessage(event.payload.message, event.payload.tone);
         }),
       );
@@ -341,6 +342,18 @@ export default function App() {
     setPatchDraftOrigin(null);
     setReviewDraft(null);
     setApplyResult(null);
+  }
+
+  function openReviewDraftState(options: {
+    patchEditorText: string;
+    patchDraftOrigin: PatchDraftOrigin | null;
+    reviewDraft: DraftReviewPayload | null;
+  }) {
+    setPatchEditor(options.patchEditorText);
+    setPatchDraftOrigin(options.patchDraftOrigin);
+    setReviewDraft(options.reviewDraft);
+    setApplyResult(null);
+    setSelectionPanelTab("review");
   }
 
   function ensureTauri(): boolean {
@@ -729,6 +742,7 @@ export default function App() {
         null;
       if (nextNodeId) {
         await fetchNodeContext(nextNodeId, output.overview.root_dir, {
+          clearTransientReviewState: false,
           silentError: true,
         });
       }
@@ -761,11 +775,11 @@ export default function App() {
         body: null,
         position: null,
       });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setReviewDraft(null);
-      setApplyResult(null);
-      setSelectionPanelTab("review");
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(patch, null, 2),
+        patchDraftOrigin: null,
+        reviewDraft: null,
+      });
       setConsoleMessage(
         t("messages.draftedAddChild", { nodeId: selectedNodeId! }),
         "success",
@@ -786,14 +800,15 @@ export default function App() {
         start_path: workspacePath,
         node_id: selectedNodeId,
       });
-      setPatchEditor(JSON.stringify(result.patch, null, 2));
-      setPatchDraftOrigin(aiRunRecordToDraftOrigin(result.run));
-      setReviewDraft(result);
-      setApplyResult(null);
-      setSelectionPanelTab("review");
+      const draftOrigin = aiRunRecordToDraftOrigin(result.run);
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(result.patch, null, 2),
+        patchDraftOrigin: draftOrigin,
+        reviewDraft: result,
+      });
       void refreshDesktopAiStatus({ silentError: true, clearDraftError: true });
       setConsoleMessage(
-        renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
+        renderPatchReport(result.report, true, t, draftOrigin),
         "success",
       );
     } catch (error) {
@@ -817,14 +832,15 @@ export default function App() {
         node_id: selectedNodeId,
         by,
       });
-      setPatchEditor(JSON.stringify(result.patch, null, 2));
-      setPatchDraftOrigin(aiRunRecordToDraftOrigin(result.run));
-      setReviewDraft(result);
-      setApplyResult(null);
-      setSelectionPanelTab("review");
+      const draftOrigin = aiRunRecordToDraftOrigin(result.run);
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(result.patch, null, 2),
+        patchDraftOrigin: draftOrigin,
+        reviewDraft: result,
+      });
       void refreshDesktopAiStatus({ silentError: true, clearDraftError: true });
       setConsoleMessage(
-        renderPatchReport(result.report, true, t, aiRunRecordToDraftOrigin(result.run)),
+        renderPatchReport(result.report, true, t, draftOrigin),
         "success",
       );
     } catch (error) {
@@ -857,11 +873,11 @@ export default function App() {
         kind: null,
         body: nextBody,
       });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setReviewDraft(null);
-      setApplyResult(null);
-      setSelectionPanelTab("review");
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(patch, null, 2),
+        patchDraftOrigin: null,
+        reviewDraft: null,
+      });
       setConsoleMessage(
         t("messages.draftedUpdate", { nodeId: selectedNodeId! }),
         "success",
@@ -881,11 +897,11 @@ export default function App() {
         node_id: selectedNodeId,
         chunk_id: chunkId,
       });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setReviewDraft(null);
-      setApplyResult(null);
-      setSelectionPanelTab("review");
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(patch, null, 2),
+        patchDraftOrigin: null,
+        reviewDraft: null,
+      });
       setConsoleMessage(
         t("messages.draftedCitation", { nodeId: selectedNodeId! }),
         "success",
@@ -905,11 +921,11 @@ export default function App() {
         node_id: selectedNodeId,
         chunk_id: chunkId,
       });
-      setPatchEditor(JSON.stringify(patch, null, 2));
-      setPatchDraftOrigin(null);
-      setReviewDraft(null);
-      setApplyResult(null);
-      setSelectionPanelTab("review");
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(patch, null, 2),
+        patchDraftOrigin: null,
+        reviewDraft: null,
+      });
       setConsoleMessage(
         t("messages.draftedUncitation", { nodeId: selectedNodeId! }),
         "success",

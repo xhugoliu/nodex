@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from provider_registry import (
     get_provider_entry,
@@ -532,7 +532,7 @@ def run_nodex_json_command(
     manifest_path: Path,
     workspace_dir: Path,
     args: list[str],
-) -> dict | list:
+) -> Union[dict, list]:
     output = run_command(
         ["cargo", "run", "--manifest-path", str(manifest_path), "--", *args],
         cwd=workspace_dir,

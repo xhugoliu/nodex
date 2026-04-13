@@ -273,6 +273,10 @@ def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:
         and len(preview) > 0
         and quality.get("rationale_present") is True,
         "run_recorded": ai_run_verification.get("ok") is True,
+        "next_focus_candidate_targets_selected_node": next_focus_candidate.get(
+            "parent_id"
+        )
+        == target_node.get("id"),
     }
 
     if apply:
@@ -432,6 +436,10 @@ def build_next_focus_candidate(
     add_node_ops: list[dict],
 ) -> dict:
     if apply:
+        parent_id = None
+        for op in add_node_ops:
+            parent_id = op.get("parent_id")
+            break
         for node in created_nodes:
             if not isinstance(node, dict):
                 continue
@@ -440,6 +448,7 @@ def build_next_focus_candidate(
                     "source": "created_node",
                     "id": node.get("id"),
                     "title": node.get("title"),
+                    "parent_id": parent_id,
                 }
         return {}
 
