@@ -1,49 +1,43 @@
 # Docs
 
-`docs/` 用来承接 Nodex 的长期文档，而不是继续把所有内容都堆在根 `README.md` 里。
+`docs/` 只保留长期有效的信息，不记录对话过程或执行日志。
 
 ## 文档分工
 
 - `README.md`
-  只保留入口信息、当前状态摘要和文档索引，不承载长篇说明。
+  入口、当前状态、文档索引。
+- `docs/product.md`
+  这个项目想成为什么，不想成为什么。
 - `docs/cli.md`
-  当前 CLI 行为与调试入口的真实来源；命令变更优先同步这里。
+  当前 CLI 的推荐入口和最常用流。
 - `docs/patch-model.md`
-  patch 结构、校验语义和生命周期来源。
+  canonical patch 的最小约束。
 - `docs/data-model.md`
-  `.nodex/` 目录、SQLite schema、snapshot / AI run 持久化语义来源。
+  `.nodex/`、SQLite 和 AI 工件的持久化边界。
 - `docs/architecture.md`
-  当前模块边界、壳层关系和推荐演化方向来源。
-- `docs/roadmap.md`
-  长期阶段目标与阶段判断；不要把短期执行细节无限堆回这里。
+  共享内核、脚本层、桌面壳之间的边界。
 - `docs/next-steps.md`
-  当前短期优先级、主路径和最小执行切口；不记录按轮次累积的完成项。
+  当前最值得继续推进的切口。
 - `docs/desktop-v2.md`
-  下一版桌面端的信息架构、主路径、复用边界和实施顺序来源。
+  桌面端的信息架构与主路径约束。
+- `docs/roadmap.md`
+  长期阶段，不写短期执行细节。
 - `docs/langchain-pilot.md`
-  LangChain 最小试点的当前边界、安装方式和推荐运行路径来源。
-- `AGENTS.md`
-  仓库级协作约束、文档同步要求和反哺规则。
+  LangChain 试点边界。
 
-## 反哺规则
+## 阅读顺序
 
-- 新经验如果会推翻旧说法，直接替换旧说法，不追加互相矛盾的补丁说明。
-- 优先保留“推荐路径”“已验证路径”“统一入口”，删除失效入口、旧脚本名和一次性试错记录。
-- 文档不要写成排障流水账；长命令优先收敛到脚本或统一入口，文档只保留入口、约束和判断标准。
-- 时效性强的信息优先写绝对信息，例如固定路径、明确命令、具体 schema version，不写“现在”“最近”这类相对表述。
-- 每次修改文档时，顺手检查相邻文档是否出现重复段落、旧能力边界或已经不再推荐的路径。
+1. `README.md`
+2. `docs/product.md`
+3. `docs/cli.md`
+4. `docs/patch-model.md`
+5. `docs/data-model.md`
+6. `docs/architecture.md`
+7. `AGENTS.md`
 
-当前建议的阅读顺序：
+## 更新规则
 
-1. [产品定位](./product.md)
-2. [CLI 使用说明](./cli.md)
-3. [Patch 模型](./patch-model.md)
-4. [数据模型](./data-model.md)
-5. [架构说明](./architecture.md)
-6. [长期路线图](./roadmap.md)
-7. [短期执行清单](./next-steps.md)
-8. [Desktop V2 蓝图](./desktop-v2.md)
-9. [LangChain 最小试点](./langchain-pilot.md)
-10. [Agent 协作约束](../AGENTS.md)
-
-除 [CLI 使用说明](./cli.md) 外，这里的大多数文档描述的是产品方向、模型和路线，不等于已经落地的功能。
+- 旧说法失效时直接替换，不叠补丁。
+- 推荐路径只保留一个，次优路径少写。
+- 命令细节优先收敛到 `--help`、脚本或统一入口。
+- 短期优先级写在 `docs/next-steps.md`，不要回灌到其他文档。
