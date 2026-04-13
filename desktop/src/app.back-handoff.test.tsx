@@ -13,6 +13,8 @@ import type {
   WorkspaceOverview,
 } from "./types";
 
+type TreePaneProps = Parameters<AppBindings["TreePane"]>[0];
+type MainPaneProps = Parameters<AppBindings["WorkbenchMainPane"]>[0];
 type SidePaneProps = Parameters<AppBindings["WorkbenchSidePane"]>[0];
 
 class FakeNode {
@@ -371,6 +373,9 @@ async function flush(cycles = 1) {
 test("App clears source detail draft state when returning to node context", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
   let latestSidePaneProps: SidePaneProps | null = null;
 
   const bindings: Partial<AppBindings> = {
@@ -382,6 +387,10 @@ test("App clears source detail draft state when returning to node context", asyn
       };
     },
     invokeCommand: async <T,>(command: string, _args: Record<string, unknown>) => {
+      invokeCalls.push({
+        command,
+        args: _args,
+      });
       if (command === "set_menu_locale") {
         return undefined as T;
       }
@@ -397,8 +406,14 @@ test("App clears source detail draft state when returning to node context", asyn
       throw new Error(`unexpected command: ${command}`);
     },
     openPath: async () => null,
-    TreePane: () => <div />,
-    WorkbenchMainPane: () => <div />,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
     WorkbenchSidePane: (props) => {
       latestSidePaneProps = props;
       return <div />;
@@ -433,6 +448,31 @@ test("App clears source detail draft state when returning to node context", asyn
     assert.ok(latestSidePaneProps, "side pane props should be available");
     return latestSidePaneProps;
   };
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "node-1",
+  );
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_node_workspace_context" &&
+        call.args.node_id === "node-1",
+    ),
+    "focused node context should be loaded for the preferred node",
+  );
 
   await act(async () => {
     requireSidePaneProps().onOpenSource("source-1");
@@ -474,6 +514,107 @@ test("App clears source detail draft state when returning to node context", asyn
   assert.equal(
     requireSidePaneProps().patchDraftState.state,
     "empty",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App applies workspace-loaded focus_node_id across tree, canvas, and side pane", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_node_workspace_context" &&
+        call.args.node_id === "node-1",
+    ),
+    "preferred node id should drive context loading",
   );
 
   await act(async () => {
