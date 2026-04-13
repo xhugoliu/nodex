@@ -6,13 +6,13 @@ import { listen } from "@tauri-apps/api/event";
 import {
   countMatchingNodes,
   countNodes,
+  deriveOverviewFocusDecision,
   filterTree,
   findNodeById,
   formatError,
   inspectPatchDraft,
   renderPatchReport,
   renderAiDraftFailure,
-  resolveOverviewFocusNodeId,
   shouldClearTransientReviewState,
   type ConsoleTone,
 } from "./app-helpers";
@@ -36,6 +36,7 @@ import type {
   PatchDocument,
   PatchDraftOrigin,
   SourceDetail,
+  SourceImportOutput,
   SourceImportReport,
   WorkspaceOverview,
 } from "./types";
@@ -337,10 +338,14 @@ export default function App() {
     setConsoleEntry({ message, tone });
   }
 
-  function resetTransientReviewState() {
+  function clearDraftReviewState() {
     setPatchEditor("");
     setPatchDraftOrigin(null);
     setReviewDraft(null);
+  }
+
+  function resetTransientReviewState() {
+    clearDraftReviewState();
     setApplyResult(null);
   }
 
@@ -429,25 +434,21 @@ export default function App() {
       return;
     }
 
-    const nextNodeId = resolveOverviewFocusNodeId(
+    const focusDecision = deriveOverviewFocusDecision(
       overview.tree,
+      {
+        nodeId: selectedNodeId,
+        sourceId: selectedSourceId,
+      },
       options.preferredNodeId,
     );
+    const nextNodeId = focusDecision.nextNodeId;
     if (nextNodeId) {
       const reloaded = await fetchNodeContext(
         nextNodeId,
         overview.root_dir,
         {
-          clearTransientReviewState: shouldClearTransientReviewState(
-            {
-              nodeId: selectedNodeId,
-              sourceId: selectedSourceId,
-            },
-            {
-              nodeId: nextNodeId,
-              sourceId: null,
-            },
-          ),
+          clearTransientReviewState: focusDecision.shouldClearTransientReviewState,
           silentError: true,
         },
       );
@@ -551,18 +552,17 @@ export default function App() {
         return;
       }
 
-      const report = await invokeCommand<SourceImportReport>("import_source", {
+      const output = await invokeCommand<SourceImportOutput>("import_source", {
         start_path: path,
         source_path: selectedPath,
       });
-      const overview = await openWorkspaceCommand(path);
-      await applyOverview(overview, {
-        preferredNodeId: report.root_node_id,
+      await applyOverview(output.overview, {
+        preferredNodeId: output.report.root_node_id,
       });
       setConsoleMessage(
         t("messages.importedSource", {
-          name: report.original_name,
-          title: report.root_title,
+          name: output.report.original_name,
+          title: output.report.root_title,
         }),
         "success",
       );
@@ -735,12 +735,21 @@ export default function App() {
         preserveSelection: false,
         skipAutoSelect: true,
       });
+      clearDraftReviewState();
+      setSelectedSourceId(null);
+      setSelectedSourceDetail(null);
       setApplyResult(output.report);
+      const providedFocusContext = output.focus_node_context;
+      const providedFocusNodeId = providedFocusContext?.node_detail.node.id ?? null;
       const nextNodeId =
         output.preferred_focus_node_id ??
-        output.focus_node_context?.node_detail.node.id ??
+        providedFocusNodeId ??
+        selectedNodeId ??
         null;
-      if (nextNodeId) {
+      if (providedFocusContext && nextNodeId === providedFocusNodeId) {
+        setSelectedNodeId(providedFocusNodeId);
+        setSelectedNodeContext(providedFocusContext);
+      } else if (nextNodeId) {
         await fetchNodeContext(nextNodeId, output.overview.root_dir, {
           clearTransientReviewState: false,
           silentError: true,

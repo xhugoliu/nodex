@@ -84,3 +84,14 @@ test("AiDraftRouteSurface keeps command hidden for healthy default route", () =>
   assert.doesNotMatch(html, /nodeEditing\.aiDraftCommand/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftNextTitle/);
 });
+
+test("AiDraftRouteSurface keeps a neutral checking state while status is still loading", () => {
+  const html = renderSurface({
+    status: null,
+    loading: true,
+  });
+
+  assert.match(html, /nodeEditing\.aiDraftChecking/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftUnavailable/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftNextTitle/);
+});

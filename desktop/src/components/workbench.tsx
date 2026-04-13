@@ -211,12 +211,14 @@ export function AiDraftRouteSurface(props: {
   onRefresh: () => void;
 }) {
   const status = props.status;
-  const routeUnavailable = !status || Boolean(status.status_error);
+  const routeStatusMissing = !status;
+  const routeUnavailable = Boolean(status?.status_error);
   const routeNeedsAttention =
     routeUnavailable ||
     status?.has_auth === false ||
     status?.has_process_env_conflict === true ||
     status?.has_shell_env_conflict === true;
+  const routeIsNeutral = props.loading || routeStatusMissing;
   const nextSteps = buildAiDraftNextSteps(
     status,
     props.t,
@@ -248,13 +250,19 @@ export function AiDraftRouteSurface(props: {
     ? props.t("nodeEditing.aiDraftChecking")
     : routeUnavailable
       ? props.t("nodeEditing.aiDraftUnavailable")
+      : routeStatusMissing
+        ? props.t("nodeEditing.aiDraftChecking")
       : routeNeedsAttention
         ? props.t("nodeEditing.aiDraftNeedsAttention")
         : props.t("nodeEditing.aiDraftReady");
-  const toneClass = routeNeedsAttention
+  const toneClass = routeIsNeutral
+    ? "border-[color:var(--line-soft)] bg-white/75"
+    : routeNeedsAttention
     ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.05)]"
     : "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.05)]";
-  const showNextSteps = Boolean(props.draftError) || (routeNeedsAttention && nextSteps.length > 0);
+  const showNextSteps =
+    Boolean(props.draftError) ||
+    (!routeIsNeutral && routeNeedsAttention && nextSteps.length > 0);
 
   return (
     <section className={`${cardClass} mb-4 space-y-3 ${toneClass}`}>
@@ -389,6 +397,8 @@ export function NodeContextSurface(props: {
   const focusMovedToCreatedNode = Boolean(
     props.applyResult?.created_nodes.some((node) => node.id === detail.node.id),
   );
+  const visibleCreatedNodes =
+    props.applyResult?.created_nodes.filter((node) => node.id !== detail.node.id) ?? [];
   const nextActionKey = props.applyResult?.created_nodes.length
     ? "workbench.applyResultNextCreated"
     : detail.sources.length || detail.evidence.length
@@ -430,13 +440,13 @@ export function NodeContextSurface(props: {
                 ) : null}
               </div>
             </div>
-            {props.applyResult.created_nodes.length ? (
+            {visibleCreatedNodes.length ? (
               <div className="space-y-2">
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
                   {props.t("workbench.applyResultCreatedNodesLabel")}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {props.applyResult.created_nodes.map((node) => (
+                  {visibleCreatedNodes.map((node) => (
                     <button
                       key={node.id}
                       className={ghostButtonClass}

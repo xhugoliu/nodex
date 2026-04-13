@@ -48,6 +48,12 @@ struct DraftReviewPayload {
 }
 
 #[derive(Debug, Serialize, Clone)]
+struct SourceImportOutput {
+    report: SourceImportReport,
+    overview: WorkspaceOverview,
+}
+
+#[derive(Debug, Serialize, Clone)]
 struct ApplyReviewedPatchOutput {
     report: ApplyPatchReport,
     overview: WorkspaceOverview,
@@ -1011,12 +1017,11 @@ fn handle_source_import_menu<R: Runtime>(app: &AppHandle<R>, state: &DesktopStat
                     Err(err) => emit_console(&app_handle, err.to_string(), "error"),
                 }
             } else {
-                match open_workspace_from(&workspace_path)
-                    .and_then(|mut workspace| {
-                        let report = workspace.import_source(&file_path)?;
-                        let overview = workspace_overview(&workspace)?;
-                        Ok((overview, report))
-                    }) {
+                match open_workspace_from(&workspace_path).and_then(|mut workspace| {
+                    let report = workspace.import_source(&file_path)?;
+                    let overview = workspace_overview(&workspace)?;
+                    Ok((overview, report))
+                }) {
                     Ok((overview, report)) => {
                         let state = app_handle.state::<DesktopState>();
                         emit_workspace_loaded(
@@ -1281,17 +1286,18 @@ fn import_source(
     state: State<DesktopState>,
     start_path: String,
     source_path: String,
-) -> Result<SourceImportReport, String> {
+) -> Result<SourceImportOutput, String> {
     let mut workspace = open_workspace_from(&start_path).map_err(|err| err.to_string())?;
     let report = workspace
         .import_source(Path::new(&source_path))
         .map_err(|err| err.to_string())?;
+    let overview = workspace_overview(&workspace).map_err(|err| err.to_string())?;
     set_current_workspace(
         &app,
         state.inner(),
         display_path(workspace.paths.root_dir.as_path()),
     );
-    Ok(report)
+    Ok(SourceImportOutput { report, overview })
 }
 
 #[command]

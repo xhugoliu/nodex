@@ -308,6 +308,11 @@ export interface WorkspaceOverview {
   patch_history: PatchRunRecord[];
 }
 
+export interface SourceImportOutput {
+  report: SourceImportReport;
+  overview: WorkspaceOverview;
+}
+
 export interface NodeWorkspaceContext {
   node_detail: NodeDetail;
 }

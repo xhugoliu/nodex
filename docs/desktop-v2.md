@@ -52,6 +52,7 @@
 - apply 完成后，当前实现会：
   - 显示这次 patch 的结果反馈
   - 如果 patch 新增了节点，优先把用户带到第一个新增节点
+  - apply 成功后，旧的 Review 草案不应继续跨节点残留；右栏应改由 apply result 承接下一步
 - 当前节点摘要、来源上下文和按需编辑已经收回右栏 `Context`
 - source detail 当前也不再只是静态切片列表，而开始允许从来源上下文继续打开关联节点与证据节点
 - 在已有节点上下文时，source detail 也应允许直接起草 cite / uncite patch，把来源查看继续接回 review / apply 流

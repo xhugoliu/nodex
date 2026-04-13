@@ -96,6 +96,7 @@ nodex ai run-external <node-id> <command> [--capability expand|explore] [--by ri
 - 如果你要守住“桌面主流程不回退”，可以直接走 `desktop_flow_smoke.py`：
   - 入口固定复用 `source-context` 场景（`init -> source import/target -> ai draft -> review -> apply/dry-run`）
   - 会额外给出 `next_focus_candidate`，用于验证 apply 后应当聚焦到哪个新增节点（或 dry-run 下应该先看哪个预览分支）
+  - `desktop_flow.predicted_node_count` 表示 patch 预览里会新增几个节点；`desktop_flow.created_node_count` 只在 apply 模式下统计实际新增节点
   - 也应输出一层 `ai_status`，用来回归当前 desktop 默认 draft route 的：
     - provider / runner / model / reasoning
     - auth / process env / shell env 状态
@@ -321,6 +322,8 @@ python3 scripts/desktop_flow_smoke.py --provider anthropic --apply --json
 
 - `desktop_flow.checks`
 - `desktop_flow.next_focus_candidate`
+- `desktop_flow.predicted_node_count`
+- `desktop_flow.created_node_count`
 - `ai_status`
 - `preflight_summary`
 

@@ -58,7 +58,7 @@ function makeApplyResult(overrides: Partial<ApplyPatchReport>): ApplyPatchReport
       "Recorded metadata",
     ],
     created_nodes: [
-      { id: "node-1", title: "Authentication" },
+      { id: "node-1", title: "Current focus node" },
       { id: "node-created-2", title: "Follow-up branch" },
     ],
     ...overrides,
@@ -96,6 +96,19 @@ test("NodeContextSurface renders apply result summary, created nodes, and focus 
   assert.match(html, /Attached source/);
   assert.match(html, /workbench\.applyResultMoreChanges \{&quot;count&quot;:1\}/);
   assert.match(html, /Follow-up branch/);
+  assert.doesNotMatch(html, /Current focus node/);
+  assert.match(html, /workbench\.applyResultFocusNewNode/);
+  assert.match(html, /workbench\.applyResultNextCreated/);
+});
+
+test("NodeContextSurface hides duplicate created-node quick actions when the current focus is the only newly created node", () => {
+  const html = renderSurface({
+    applyResult: makeApplyResult({
+      created_nodes: [{ id: "node-1", title: "Current focus node" }],
+    }),
+  });
+
+  assert.doesNotMatch(html, /workbench\.applyResultCreatedNodesLabel/);
   assert.match(html, /workbench\.applyResultFocusNewNode/);
   assert.match(html, /workbench\.applyResultNextCreated/);
 });

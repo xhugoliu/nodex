@@ -740,6 +740,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(checks["review_payload_available"])
         self.assertTrue(checks["dry_run_verified"])
         self.assertTrue(checks["next_focus_candidate_ready"])
+        self.assertEqual(payload["desktop_flow"]["predicted_node_count"], 1)
+        self.assertEqual(payload["desktop_flow"]["created_node_count"], 0)
         self.assertEqual(
             payload["desktop_flow"]["next_focus_candidate"]["title"],
             "Desktop Flow Draft Branch",
@@ -824,6 +826,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(checks["patch_applied"])
         self.assertTrue(checks["created_node_verified"])
         self.assertTrue(checks["next_focus_candidate_ready"])
+        self.assertEqual(payload["desktop_flow"]["predicted_node_count"], 1)
+        self.assertEqual(payload["desktop_flow"]["created_node_count"], 1)
         candidate = payload["desktop_flow"]["next_focus_candidate"]
         self.assertTrue(candidate["id"])
         self.assertEqual(candidate["title"], "Desktop Flow Applied Branch")

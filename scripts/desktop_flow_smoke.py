@@ -295,9 +295,12 @@ def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:
         "target_node": target_node,
         "evidence_chunk_label": evidence.get("chunk_label"),
         "add_node_op_count": len(add_node_ops),
-        "created_node_count": len(created_nodes)
-        if isinstance(created_nodes, list)
-        else 0,
+        "predicted_node_count": len(add_node_ops),
+        "created_node_count": (
+            len(created_nodes)
+            if apply and isinstance(created_nodes, list)
+            else 0
+        ),
         "next_focus_candidate": next_focus_candidate,
     }
 
