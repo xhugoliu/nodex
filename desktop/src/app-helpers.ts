@@ -180,6 +180,11 @@ export interface OverviewFocusDecision {
   shouldClearTransientReviewState: boolean;
 }
 
+export interface ContextSelectionDecision {
+  nextSelectionPanelTab: "context";
+  shouldClearTransientReviewState: boolean;
+}
+
 export function resolveOverviewFocusNodeId(
   tree: TreeNode,
   preferredNodeId?: string | null,
@@ -198,11 +203,17 @@ export function shouldClearTransientReviewState(
   return previous.nodeId !== next.nodeId || previous.sourceId !== next.sourceId;
 }
 
-export function shouldClearReviewApplyState(
+export function deriveContextSelectionDecision(
   previous: SelectionContext,
   next: SelectionContext,
-): boolean {
-  return shouldClearTransientReviewState(previous, next);
+  clearTransientReviewState?: boolean,
+): ContextSelectionDecision {
+  return {
+    nextSelectionPanelTab: "context",
+    shouldClearTransientReviewState:
+      clearTransientReviewState ??
+      shouldClearTransientReviewState(previous, next),
+  };
 }
 
 export function deriveOverviewFocusDecision(

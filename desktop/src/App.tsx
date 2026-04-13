@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   countMatchingNodes,
   countNodes,
+  deriveContextSelectionDecision,
   deriveOverviewFocusDecision,
   filterTree,
   findNodeById,
@@ -591,26 +592,25 @@ export default function App() {
           node_id: nodeId,
         },
       );
-      const shouldResetReviewState =
-        options.clearTransientReviewState ??
-        shouldClearTransientReviewState(
-          {
-            nodeId: selectedNodeId,
-            sourceId: selectedSourceId,
-          },
-          {
-            nodeId,
-            sourceId: null,
-          },
-        );
-      if (shouldResetReviewState) {
+      const selectionDecision = deriveContextSelectionDecision(
+        {
+          nodeId: selectedNodeId,
+          sourceId: selectedSourceId,
+        },
+        {
+          nodeId,
+          sourceId: null,
+        },
+        options.clearTransientReviewState,
+      );
+      if (selectionDecision.shouldClearTransientReviewState) {
         resetTransientReviewState();
       }
       setSelectedNodeId(nodeId);
       setSelectedNodeContext(context);
       setSelectedSourceId(null);
       setSelectedSourceDetail(null);
-      setSelectionPanelTab("context");
+      setSelectionPanelTab(selectionDecision.nextSelectionPanelTab);
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -637,24 +637,23 @@ export default function App() {
         start_path: path,
         source_id: sourceId,
       });
-      const shouldResetReviewState =
-        options.clearTransientReviewState ??
-        shouldClearTransientReviewState(
-          {
-            nodeId: selectedNodeId,
-            sourceId: selectedSourceId,
-          },
-          {
-            nodeId: selectedNodeId,
-            sourceId,
-          },
-        );
-      if (shouldResetReviewState) {
+      const selectionDecision = deriveContextSelectionDecision(
+        {
+          nodeId: selectedNodeId,
+          sourceId: selectedSourceId,
+        },
+        {
+          nodeId: selectedNodeId,
+          sourceId,
+        },
+        options.clearTransientReviewState,
+      );
+      if (selectionDecision.shouldClearTransientReviewState) {
         resetTransientReviewState();
       }
       setSelectedSourceId(sourceId);
       setSelectedSourceDetail(detail);
-      setSelectionPanelTab("context");
+      setSelectionPanelTab(selectionDecision.nextSelectionPanelTab);
       return true;
     } catch (error) {
       if (!options.silentError) {

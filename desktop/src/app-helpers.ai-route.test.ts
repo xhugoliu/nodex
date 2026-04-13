@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  deriveContextSelectionDecision,
   buildAiDraftNextSteps,
   deriveOverviewFocusDecision,
   renderAiDraftFailure,
@@ -135,6 +136,37 @@ test("switching source detail clears transient review state", () => {
     { nodeId: "node-a", sourceId: "source-2" },
   );
   assert.equal(shouldClear, true);
+});
+
+test("deriveContextSelectionDecision keeps review/apply state when returning to the same node context", () => {
+  const decision = deriveContextSelectionDecision(
+    { nodeId: "node-a", sourceId: null },
+    { nodeId: "node-a", sourceId: null },
+  );
+
+  assert.equal(decision.nextSelectionPanelTab, "context");
+  assert.equal(decision.shouldClearTransientReviewState, false);
+});
+
+test("deriveContextSelectionDecision clears review/apply state when opening a different source", () => {
+  const decision = deriveContextSelectionDecision(
+    { nodeId: "node-a", sourceId: "source-1" },
+    { nodeId: "node-a", sourceId: "source-2" },
+  );
+
+  assert.equal(decision.nextSelectionPanelTab, "context");
+  assert.equal(decision.shouldClearTransientReviewState, true);
+});
+
+test("deriveContextSelectionDecision respects an explicit clear override", () => {
+  const decision = deriveContextSelectionDecision(
+    { nodeId: "node-a", sourceId: null },
+    { nodeId: "node-a", sourceId: null },
+    true,
+  );
+
+  assert.equal(decision.nextSelectionPanelTab, "context");
+  assert.equal(decision.shouldClearTransientReviewState, true);
 });
 
 test("resolveOverviewFocusNodeId still falls back to root when preferred node is missing", () => {

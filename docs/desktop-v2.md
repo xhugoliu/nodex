@@ -49,6 +49,9 @@
   - `Preview` / `Apply`
 - 从桌面原生导入材料成功后，当前实现会优先选中导入得到的 source root node，
   让路径自然回到 `Context -> Expand/Explore -> Review -> Apply`
+- `Context / Review` 的切换语义也应保持稳定：
+  - 只要节点或打开的 source detail 发生变化，就清掉瞬时 Review/apply 状态并回到 `Context`
+  - 只有同一节点、同一 source detail 的刷新，才允许保留当前 Review 草案
 - apply 完成后，当前实现会：
   - 显示这次 patch 的结果反馈
   - 如果 patch 新增了节点，优先把用户带到第一个新增节点
