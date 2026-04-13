@@ -294,6 +294,81 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Provider Authentication Flow",
         )
 
+    def test_runner_compare_source_root_targets_imported_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': 'source-root summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': 'source-root rationale',",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake',",
+                        "        'run_id': 'fake-run',",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': 'source-root summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Source Root Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated from imported root context',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            command = shlex.join([sys.executable, str(fake_runner)])
+            result = run_script(
+                "scripts/runner_compare.py",
+                "--json",
+                "--scenario",
+                "source-root",
+                "--fixture",
+                str(FIXTURE_PATH),
+                "--runner",
+                f"left={command}",
+                "--runner",
+                f"right={command}",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["scenario"], "source-root")
+        self.assertEqual(
+            payload["node_id"],
+            payload["scenario_context"]["imported_root_node"]["id"],
+        )
+        self.assertEqual(
+            payload["scenario_context"]["target_node"]["title"],
+            "Anthropic LangChain Regression",
+        )
+
     def test_runner_compare_fixture_set_runs_multiple_cases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fake_runner = Path(tmp_dir) / "fake_runner.py"

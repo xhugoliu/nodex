@@ -17,6 +17,7 @@ from source_context_scenario import (
     DEFAULT_TARGET_LABEL,
     fixture_set_cases,
     fixture_set_names,
+    prepare_source_root_scenario,
     prepare_source_context_scenario,
 )
 
@@ -121,7 +122,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--scenario",
-        choices=("minimal", "source-context"),
+        choices=("minimal", "source-context", "source-root"),
         default="minimal",
         help="Which workspace setup scenario to run before invoking the runners.",
     )
@@ -250,6 +251,13 @@ def compare_runners(
             fixture_path=fixture_path,
             target_label=DEFAULT_TARGET_LABEL,
             citation_rationale=DEFAULT_CITATION_RATIONALE,
+        )
+        effective_node_id = scenario_payload["target_node"]["id"]
+    elif scenario == "source-root":
+        scenario_payload = prepare_source_root_scenario(
+            manifest_path=MANIFEST_PATH,
+            workspace_dir=workspace_dir,
+            fixture_path=fixture_path,
         )
         effective_node_id = scenario_payload["target_node"]["id"]
     runs = [

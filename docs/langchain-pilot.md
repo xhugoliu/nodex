@@ -31,6 +31,7 @@ cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py
 
 ```bash
 python3 scripts/runner_compare.py --preset langchain-pilot --json
+python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-root --json
 ```
 
 ## 继续推进的判断标准
