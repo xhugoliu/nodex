@@ -1129,6 +1129,12 @@ fn print_ai_run_compare_output(output: &AiRunCompareOutput) {
         "same response notes: {}",
         output.comparison.same_response_notes
     );
+    if !output.comparison.difference_kinds.is_empty() {
+        println!(
+            "difference kinds: {}",
+            output.comparison.difference_kinds.join(", ")
+        );
+    }
 }
 
 fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {

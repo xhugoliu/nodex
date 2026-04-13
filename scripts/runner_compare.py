@@ -542,6 +542,8 @@ def print_text_report(result: dict) -> None:
         print(f"  same patch summary: {summary['same_patch_summary']}")
         print(f"  same patch preview: {summary['same_patch_preview']}")
         print(f"  same response notes: {summary['same_response_notes']}")
+        if summary.get("difference_kinds"):
+            print(f"  difference kinds: {', '.join(summary['difference_kinds'])}")
 
 
 def print_fixture_set_report(result: dict) -> None:

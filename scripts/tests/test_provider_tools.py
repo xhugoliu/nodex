@@ -964,9 +964,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
                         "    'capability': request['capability'],",
                         "    'request_node_id': request['target_node']['id'],",
                         "    'status': 'ok',",
-                        "    'summary': f'{label} summary',",
+                        "    'summary': 'shared summary',",
                         "    'explanation': {",
-                        "        'rationale_summary': f'{label} rationale',",
+                        "        'rationale_summary': 'shared rationale',",
                         "        'direct_evidence': [],",
                         "        'inferred_suggestions': [],",
                         "    },",
@@ -977,18 +977,18 @@ class ProviderToolScriptsTests(unittest.TestCase):
                         "    },",
                         "    'patch': {",
                         "        'version': request['contract']['patch_version'],",
-                        "        'summary': f'{label} summary',",
+                        "        'summary': 'shared summary',",
                         "        'ops': [",
                         "            {",
                         "                'type': 'add_node',",
                         "                'parent_id': request['target_node']['id'],",
-                        "                'title': f'{label} branch',",
+                        "                'title': 'Shared Branch',",
                         "                'kind': 'topic',",
-                        "                'body': f'{label} body',",
+                        "                'body': 'Shared body',",
                         "            }",
                         "        ],",
                         "    },",
-                        "    'notes': notes,",
+                        "    'notes': [],",
                         "}",
                         "metadata = {",
                         "    'provider': 'fake_runner',",
@@ -1037,6 +1037,10 @@ class ProviderToolScriptsTests(unittest.TestCase):
         comparison = payload["comparisons"][0]["comparison"]
         self.assertFalse(comparison["same_used_plain_json_fallback"])
         self.assertFalse(comparison["same_normalization_notes"])
+        self.assertEqual(
+            comparison["difference_kinds"],
+            ["used_plain_json_fallback", "normalization_notes"],
+        )
 
     def test_runner_compare_classifies_failed_runners(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

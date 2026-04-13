@@ -194,6 +194,7 @@ pub struct AiRunCompareSummary {
     pub same_patch_summary: bool,
     pub same_patch_preview: bool,
     pub same_response_notes: bool,
+    pub difference_kinds: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -607,21 +608,53 @@ impl Workspace {
             .as_ref()
             .and_then(|value| value.summary.as_deref());
 
+        let same_node_id = left.record.node_id == right.record.node_id;
+        let same_capability = left.record.capability == right.record.capability;
+        let same_provider = left.record.provider == right.record.provider;
+        let same_model = left.record.model == right.record.model;
+        let same_status = left.record.status == right.record.status;
+        let same_used_plain_json_fallback =
+            left.record.used_plain_json_fallback == right.record.used_plain_json_fallback;
+        let same_normalization_notes =
+            left.record.normalization_notes == right.record.normalization_notes;
+        let same_rationale_summary = left_rationale == right_rationale;
+        let same_patch_summary = left_patch_summary == right_patch_summary;
+        let same_patch_preview = left.patch_preview == right.patch_preview;
+        let same_response_notes = left.response_notes == right.response_notes;
+        let mut difference_kinds = Vec::new();
+        if !same_used_plain_json_fallback {
+            difference_kinds.push("used_plain_json_fallback".to_string());
+        }
+        if !same_normalization_notes {
+            difference_kinds.push("normalization_notes".to_string());
+        }
+        if !same_rationale_summary {
+            difference_kinds.push("rationale_summary".to_string());
+        }
+        if !same_patch_summary {
+            difference_kinds.push("patch_summary".to_string());
+        }
+        if !same_patch_preview {
+            difference_kinds.push("patch_preview".to_string());
+        }
+        if !same_response_notes {
+            difference_kinds.push("response_notes".to_string());
+        }
+
         Ok(AiRunCompareOutput {
             comparison: AiRunCompareSummary {
-                same_node_id: left.record.node_id == right.record.node_id,
-                same_capability: left.record.capability == right.record.capability,
-                same_provider: left.record.provider == right.record.provider,
-                same_model: left.record.model == right.record.model,
-                same_status: left.record.status == right.record.status,
-                same_used_plain_json_fallback: left.record.used_plain_json_fallback
-                    == right.record.used_plain_json_fallback,
-                same_normalization_notes: left.record.normalization_notes
-                    == right.record.normalization_notes,
-                same_rationale_summary: left_rationale == right_rationale,
-                same_patch_summary: left_patch_summary == right_patch_summary,
-                same_patch_preview: left.patch_preview == right.patch_preview,
-                same_response_notes: left.response_notes == right.response_notes,
+                same_node_id,
+                same_capability,
+                same_provider,
+                same_model,
+                same_status,
+                same_used_plain_json_fallback,
+                same_normalization_notes,
+                same_rationale_summary,
+                same_patch_summary,
+                same_patch_preview,
+                same_response_notes,
+                difference_kinds,
             },
             left,
             right,
@@ -2087,6 +2120,17 @@ Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
         assert!(!compare.comparison.same_patch_summary);
         assert!(!compare.comparison.same_patch_preview);
         assert!(!compare.comparison.same_response_notes);
+        assert_eq!(
+            compare.comparison.difference_kinds,
+            vec![
+                "used_plain_json_fallback".to_string(),
+                "normalization_notes".to_string(),
+                "rationale_summary".to_string(),
+                "patch_summary".to_string(),
+                "patch_preview".to_string(),
+                "response_notes".to_string(),
+            ]
+        );
         Ok(())
     }
 
