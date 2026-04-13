@@ -49,7 +49,15 @@ cargo run -- ai run-external root "python3 scripts/langchain_anthropic_runner.py
 ```bash
 python3 scripts/runner_compare.py --preset langchain-pilot --json
 python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-root --json
+python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline openai --scenario source-context --json
 ```
+
+`--preset-offline` 只属于 compare lane：
+
+- `openai`：只把 `langchain-pilot` 里的两条 OpenAI lane 换成 request-sensitive 本地 stub
+- `all`：把整个 preset 都换成本地 stub，方便测试和无依赖回归
+- 仍然通过 `ai run-external` 写标准 `.request.json` / `.response.json` / `.meta.json`
+- 不改变默认 AI 主路，不替代真实 `provider_smoke.py` 或桌面默认 draft route
 
 ## 继续推进的判断标准
 
@@ -73,5 +81,5 @@ python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-roo
 
 下一轮更值得补的仍然是：
 
-- `runner_compare.py` 在 `source-root` / `source-context` 上更贴近真实 LangChain preset 的 compare 回归
+- `runner_compare.py` 在 `source-root` / `source-context` 上继续缩小 compare-only offline lane 与真实成功 runner 的差距
 - compare 输出继续往真实 LangChain preset 的成功 pair 差异归因收口，而不只停在 blocked pair / blocker taxonomy 和高层 difference kinds

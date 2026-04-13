@@ -25,6 +25,7 @@ from source_context_scenario import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / "Cargo.toml"
+PRESET_OFFLINE_MODES = ("none", "openai", "all")
 
 
 def preset_runners() -> dict[str, list[tuple[str, str]]]:
@@ -48,6 +49,28 @@ def preset_runners() -> dict[str, list[tuple[str, str]]]:
     }
 
 
+def build_compare_offline_command(label: str) -> str:
+    python = sys.executable
+    script_path = REPO_ROOT / "scripts" / "compare_offline_runner.py"
+    variant = label
+    return shlex.join([python, str(script_path), "--variant", variant])
+
+
+def should_use_preset_offline_substitute(
+    *,
+    preset_name: str,
+    label: str,
+    preset_offline_mode: str,
+) -> bool:
+    if preset_offline_mode == "none":
+        return False
+    if preset_name != "langchain-pilot":
+        return False
+    if preset_offline_mode == "all":
+        return True
+    return label in {"openai-minimal", "langchain-openai"}
+
+
 def parse_runner_spec(value: str) -> tuple[str, str]:
     if "=" not in value:
         raise argparse.ArgumentTypeError(
@@ -67,6 +90,7 @@ def build_runner_specs(
     *,
     preset_names: list[str],
     explicit_specs: list[tuple[str, str]],
+    preset_offline_mode: str = "none",
 ) -> list[dict]:
     specs: list[dict] = []
     seen_labels: set[str] = set()
@@ -74,17 +98,41 @@ def build_runner_specs(
     for preset_name in preset_names:
         preset = preset_runners()[preset_name]
         for label, command in preset:
+            offline_substitute = should_use_preset_offline_substitute(
+                preset_name=preset_name,
+                label=label,
+                preset_offline_mode=preset_offline_mode,
+            )
+            effective_command = (
+                build_compare_offline_command(label)
+                if offline_substitute
+                else command
+            )
             if label in seen_labels:
                 raise SystemExit(
                     f"[config] duplicate runner label `{label}` from preset `{preset_name}`"
                 )
-            specs.append({"label": label, "command": command, "source": preset_name})
+            specs.append(
+                {
+                    "label": label,
+                    "command": effective_command,
+                    "source": preset_name,
+                    "offline_substitute": offline_substitute,
+                }
+            )
             seen_labels.add(label)
 
     for label, command in explicit_specs:
         if label in seen_labels:
             raise SystemExit(f"[config] duplicate runner label `{label}`")
-        specs.append({"label": label, "command": command, "source": "explicit"})
+        specs.append(
+            {
+                "label": label,
+                "command": command,
+                "source": "explicit",
+                "offline_substitute": False,
+            }
+        )
         seen_labels.add(label)
 
     return specs
@@ -108,6 +156,16 @@ def main() -> int:
         default=[],
         choices=tuple(sorted(preset_runners().keys())),
         help="Add one built-in runner preset.",
+    )
+    parser.add_argument(
+        "--preset-offline",
+        choices=PRESET_OFFLINE_MODES,
+        default="none",
+        help=(
+            "Optionally substitute built-in preset lanes with compare-only local stubs. "
+            "`openai` replaces only the OpenAI lanes for `langchain-pilot`; "
+            "`all` replaces every lane in the preset. Default: none."
+        ),
     )
     parser.add_argument(
         "--runner",
@@ -165,9 +223,13 @@ def main() -> int:
         print_preset_list()
         return 0
 
+    if args.preset_offline != "none" and not args.preset:
+        parser.error("--preset-offline requires at least one --preset")
+
     runner_specs = build_runner_specs(
         preset_names=args.preset,
         explicit_specs=args.runner,
+        preset_offline_mode=args.preset_offline,
     )
     if len(runner_specs) < 2:
         parser.error("at least two runners are required")
@@ -177,6 +239,7 @@ def main() -> int:
             runner_specs=runner_specs,
             fixture_set_name=args.fixture_set,
         )
+        result["preset_offline_mode"] = args.preset_offline
         if args.json:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
@@ -193,6 +256,7 @@ def main() -> int:
             scenario=args.scenario,
             fixture_path=Path(args.fixture).resolve() if args.fixture else None,
         )
+        result["preset_offline_mode"] = args.preset_offline
     elif args.keep_workspace:
         workspace_dir = Path(tempfile.mkdtemp(prefix="nodex-compare-"))
         result = compare_runners(
@@ -203,6 +267,7 @@ def main() -> int:
             fixture_path=Path(args.fixture).resolve() if args.fixture else None,
         )
         result["workspace_dir"] = str(workspace_dir)
+        result["preset_offline_mode"] = args.preset_offline
     else:
         with tempfile.TemporaryDirectory(prefix="nodex-compare-") as tmp_dir:
             workspace_dir = Path(tmp_dir)
@@ -214,6 +279,7 @@ def main() -> int:
                 fixture_path=Path(args.fixture).resolve() if args.fixture else None,
             )
             result["workspace_dir"] = str(workspace_dir)
+            result["preset_offline_mode"] = args.preset_offline
 
     if args.json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -232,6 +298,10 @@ def print_preset_list() -> None:
     print("Fixture sets:")
     for fixture_set_name in fixture_set_names():
         print(f"- {fixture_set_name}")
+    print("Preset offline modes:")
+    print("- none: use built-in commands as-is")
+    print("- openai: replace only OpenAI lanes in `langchain-pilot` with compare-only stubs")
+    print("- all: replace every lane in the preset with compare-only stubs")
 
 
 def compare_runners(
@@ -401,6 +471,7 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "label": spec["label"],
             "command": spec["command"],
             "source": spec["source"],
+            "offline_substitute": spec.get("offline_substitute") is True,
             "status": "ok",
             "run_id": run_id,
             "metadata": metadata,
@@ -414,6 +485,7 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "label": spec["label"],
             "command": spec["command"],
             "source": spec["source"],
+            "offline_substitute": spec.get("offline_substitute") is True,
             "status": "failed",
             "error": exc.detail,
             "failure_kind": failure["kind"],

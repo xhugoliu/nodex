@@ -117,6 +117,19 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - `comparison_readiness`，用于标记 compare 是 fully ready / partial / blocked
 - `blocked_comparisons`，用于列出哪些 runner pair 因依赖或鉴权 blocker 无法进入真实 `ai compare`
 
+如果想在本地缺少 OpenAI 依赖或凭据时继续做 preset compare，也可以显式用：
+
+```bash
+python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline openai --scenario source-root --json
+python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline openai --scenario source-context --json
+```
+
+这里的 `--preset-offline openai|all` 只作用于 compare：
+
+- `openai` 只替换 `langchain-pilot` 里的两条 OpenAI lane
+- `all` 替换整个 preset，主要给测试或无依赖回归使用
+- 不改变默认 provider 路由，也不影响 `provider_smoke.py` 或桌面默认 draft route
+
 ## 当前桌面回归入口
 
 如果目标是守住桌面主路径，不是看单条 CLI 命令，优先跑：

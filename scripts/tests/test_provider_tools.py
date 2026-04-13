@@ -1545,6 +1545,87 @@ class ProviderToolScriptsTests(unittest.TestCase):
             )
             self.assertEqual(len(case["blocked_comparisons"]), 1)
 
+    def test_runner_compare_offline_preset_all_makes_source_context_comparable(self) -> None:
+        result = run_script(
+            "scripts/runner_compare.py",
+            "--json",
+            "--preset",
+            "langchain-pilot",
+            "--preset-offline",
+            "all",
+            "--scenario",
+            "source-context",
+            "--fixture",
+            str(FIXTURE_PATH),
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["preset_offline_mode"], "all")
+        self.assertEqual(payload["scenario"], "source-context")
+        self.assertNotEqual(payload["node_id"], "root")
+        self.assertEqual(payload["comparison_readiness"]["status"], "ready")
+        self.assertTrue(payload["comparison_readiness"]["compare_ready"])
+        self.assertTrue(payload["comparison_readiness"]["all_pairs_compared"])
+        self.assertEqual(payload["comparison_readiness"]["comparable_pairs"], 3)
+        self.assertEqual(payload["comparison_readiness"]["blocked_pairs"], 0)
+        self.assertEqual(payload["blocked_comparisons"], [])
+        self.assertEqual(len(payload["comparisons"]), 3)
+
+        runs = {item["label"]: item for item in payload["runs"]}
+        self.assertEqual(set(runs.keys()), {"openai-minimal", "langchain-openai", "langchain-anthropic"})
+        self.assertTrue(all(item["status"] == "ok" for item in runs.values()))
+        self.assertTrue(all(item["offline_substitute"] is True for item in runs.values()))
+        self.assertTrue(runs["openai-minimal"]["quality"]["used_plain_json_fallback"])
+        self.assertGreater(runs["langchain-openai"]["quality"]["direct_evidence_count"], 0)
+
+        difference_kinds = {
+            kind
+            for comparison in payload["comparisons"]
+            for kind in comparison["comparison"]["difference_kinds"]
+        }
+        self.assertIn("used_plain_json_fallback", difference_kinds)
+        self.assertIn("normalization_notes", difference_kinds)
+        self.assertIn("rationale_summary", difference_kinds)
+        self.assertIn("patch_summary", difference_kinds)
+        self.assertIn("patch_preview", difference_kinds)
+        self.assertIn("response_notes", difference_kinds)
+
+    def test_runner_compare_offline_preset_all_makes_source_root_comparable(self) -> None:
+        result = run_script(
+            "scripts/runner_compare.py",
+            "--json",
+            "--preset",
+            "langchain-pilot",
+            "--preset-offline",
+            "all",
+            "--scenario",
+            "source-root",
+            "--fixture",
+            str(FIXTURE_PATH),
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["preset_offline_mode"], "all")
+        self.assertEqual(payload["scenario"], "source-root")
+        self.assertEqual(
+            payload["node_id"],
+            payload["scenario_context"]["imported_root_node"]["id"],
+        )
+        self.assertEqual(payload["comparison_readiness"]["status"], "ready")
+        self.assertEqual(payload["comparison_readiness"]["comparable_pairs"], 3)
+        self.assertEqual(payload["comparison_readiness"]["blocked_pairs"], 0)
+        self.assertEqual(payload["blocked_comparisons"], [])
+
+        runs = {item["label"]: item for item in payload["runs"]}
+        self.assertTrue(all(item["offline_substitute"] is True for item in runs.values()))
+        self.assertFalse(runs["openai-minimal"]["quality"]["has_direct_evidence"])
+        self.assertFalse(runs["langchain-openai"]["quality"]["has_direct_evidence"])
+        self.assertFalse(runs["langchain-anthropic"]["quality"]["has_direct_evidence"])
+
     def test_langchain_anthropic_runner_help(self) -> None:
         result = run_script("scripts/langchain_anthropic_runner.py", "--help")
         self.assertEqual(result.returncode, 0, result.stderr)
