@@ -8,6 +8,7 @@ import {
   deriveClearedDraftReviewState,
   deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
+  deriveContextTransitionState,
   deriveOverviewFocusDecision,
   deriveReturnToNodeContextState,
   filterTree,
@@ -381,6 +382,20 @@ export default function App(props: AppProps = {}) {
     setConsoleEntry({ message, tone });
   }
 
+  function applyContextTransitionState(state: {
+    nextPatchEditor: string;
+    nextPatchDraftOrigin: PatchDraftOrigin | null;
+    nextReviewDraft: DraftReviewPayload | null;
+    nextApplyResult: ApplyPatchReport | null;
+    nextSelectionPanelTab: "context" | "review";
+  }) {
+    setPatchEditor(state.nextPatchEditor);
+    setPatchDraftOrigin(state.nextPatchDraftOrigin);
+    setReviewDraft(state.nextReviewDraft);
+    setApplyResult(state.nextApplyResult);
+    setSelectionPanelTab(state.nextSelectionPanelTab);
+  }
+
   function clearDraftReviewState() {
     const nextState = deriveClearedDraftReviewState({
       currentSelection: {
@@ -659,29 +674,29 @@ export default function App(props: AppProps = {}) {
           node_id: nodeId,
         },
       );
-      const selectionDecision = deriveContextSelectionDecision(
+      const transitionState = deriveContextTransitionState(
         {
-          nodeId: selectedNodeId,
-          sourceId: selectedSourceId,
+          currentSelection: {
+            nodeId: selectedNodeId,
+            sourceId: selectedSourceId,
+          },
+          currentSelectionPanelTab: selectionPanelTab,
+          patchEditor,
+          patchDraftOrigin,
+          reviewDraft,
+          applyResult,
         },
         {
           nodeId,
           sourceId: null,
         },
-        {
-          clearTransientReviewState: options.clearTransientReviewState,
-          preservePanelTab: options.preservePanelTab,
-          currentSelectionPanelTab: selectionPanelTab,
-        },
+        options,
       );
-      if (selectionDecision.shouldClearTransientReviewState) {
-        resetTransientReviewState();
-      }
+      applyContextTransitionState(transitionState);
       setSelectedNodeId(nodeId);
       setSelectedNodeContext(context);
       setSelectedSourceId(null);
       setSelectedSourceDetail(null);
-      setSelectionPanelTab(selectionDecision.nextSelectionPanelTab);
       return true;
     } catch (error) {
       if (!options.silentError) {
@@ -709,27 +724,27 @@ export default function App(props: AppProps = {}) {
         start_path: path,
         source_id: sourceId,
       });
-      const selectionDecision = deriveContextSelectionDecision(
+      const transitionState = deriveContextTransitionState(
         {
-          nodeId: selectedNodeId,
-          sourceId: selectedSourceId,
+          currentSelection: {
+            nodeId: selectedNodeId,
+            sourceId: selectedSourceId,
+          },
+          currentSelectionPanelTab: selectionPanelTab,
+          patchEditor,
+          patchDraftOrigin,
+          reviewDraft,
+          applyResult,
         },
         {
           nodeId: selectedNodeId,
           sourceId,
         },
-        {
-          clearTransientReviewState: options.clearTransientReviewState,
-          preservePanelTab: options.preservePanelTab,
-          currentSelectionPanelTab: selectionPanelTab,
-        },
+        options,
       );
-      if (selectionDecision.shouldClearTransientReviewState) {
-        resetTransientReviewState();
-      }
+      applyContextTransitionState(transitionState);
       setSelectedSourceId(sourceId);
       setSelectedSourceDetail(detail);
-      setSelectionPanelTab(selectionDecision.nextSelectionPanelTab);
       return true;
     } catch (error) {
       if (!options.silentError) {

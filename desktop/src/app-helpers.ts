@@ -231,6 +231,32 @@ export interface ReturnToNodeContextResult<
   nextApplyResult: TApplyResult | null;
 }
 
+export interface ContextTransitionState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+> extends ReturnToNodeContextState<
+    TPatchDraftOrigin,
+    TReviewDraft,
+    TApplyResult
+  > {
+  currentSelection: SelectionContext;
+  currentSelectionPanelTab: SelectionPanelTab;
+}
+
+export interface ContextTransitionResult<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+> {
+  nextSelectionPanelTab: SelectionPanelTab;
+  shouldClearTransientReviewState: boolean;
+  nextPatchEditor: string;
+  nextPatchDraftOrigin: TPatchDraftOrigin | null;
+  nextReviewDraft: TReviewDraft | null;
+  nextApplyResult: TApplyResult | null;
+}
+
 export function deriveClearedDraftReviewState<
   TPatchDraftOrigin = unknown,
   TReviewDraft = unknown,
@@ -297,27 +323,18 @@ export function deriveContextSelectionDecision(
   };
 }
 
-export function deriveReturnToNodeContextState<
+export function deriveContextTransitionState<
   TPatchDraftOrigin = unknown,
   TReviewDraft = unknown,
   TApplyResult = unknown,
 >(
-  state: {
-    currentSelection: SelectionContext;
-    currentSelectionPanelTab: SelectionPanelTab;
-  } & ReturnToNodeContextState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
+  state: ContextTransitionState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
+  nextSelection: SelectionContext,
   options: ContextSelectionDecisionOptions = {},
-): ReturnToNodeContextResult<
-  TPatchDraftOrigin,
-  TReviewDraft,
-  TApplyResult
-> {
+): ContextTransitionResult<TPatchDraftOrigin, TReviewDraft, TApplyResult> {
   const selectionDecision = deriveContextSelectionDecision(
     state.currentSelection,
-    {
-      nodeId: state.currentSelection.nodeId,
-      sourceId: null,
-    },
+    nextSelection,
     {
       ...options,
       currentSelectionPanelTab:
@@ -345,12 +362,47 @@ export function deriveReturnToNodeContextState<
   return {
     nextSelectionPanelTab: selectionDecision.nextSelectionPanelTab,
     shouldClearTransientReviewState,
-    nextSelectedSourceId: null,
-    nextSelectedSourceDetail: null,
     nextPatchEditor: nextTransientState.patchEditor,
     nextPatchDraftOrigin: nextTransientState.patchDraftOrigin,
     nextReviewDraft: nextTransientState.reviewDraft,
     nextApplyResult: nextTransientState.applyResult,
+  };
+}
+
+export function deriveReturnToNodeContextState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+>(
+  state: {
+    currentSelection: SelectionContext;
+    currentSelectionPanelTab: SelectionPanelTab;
+  } & ReturnToNodeContextState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
+  options: ContextSelectionDecisionOptions = {},
+): ReturnToNodeContextResult<
+  TPatchDraftOrigin,
+  TReviewDraft,
+  TApplyResult
+> {
+  const transitionState = deriveContextTransitionState(
+    state,
+    {
+      nodeId: state.currentSelection.nodeId,
+      sourceId: null,
+    },
+    options,
+  );
+
+  return {
+    nextSelectionPanelTab: transitionState.nextSelectionPanelTab,
+    shouldClearTransientReviewState:
+      transitionState.shouldClearTransientReviewState,
+    nextSelectedSourceId: null,
+    nextSelectedSourceDetail: null,
+    nextPatchEditor: transitionState.nextPatchEditor,
+    nextPatchDraftOrigin: transitionState.nextPatchDraftOrigin,
+    nextReviewDraft: transitionState.nextReviewDraft,
+    nextApplyResult: transitionState.nextApplyResult,
   };
 }
 

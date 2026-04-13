@@ -4,6 +4,7 @@ import {
   deriveClearedDraftReviewState,
   deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
+  deriveContextTransitionState,
   buildAiDraftNextSteps,
   deriveOverviewFocusDecision,
   deriveReturnToNodeContextState,
@@ -231,6 +232,54 @@ test("deriveClearedTransientReviewState clears both draft payload and apply resu
   assert.equal(nextState.patchDraftOrigin, null);
   assert.equal(nextState.reviewDraft, null);
   assert.equal(nextState.applyResult, null);
+});
+
+test("deriveContextTransitionState clears transient state when switching to a different node", () => {
+  const nextState = deriveContextTransitionState(
+    {
+      currentSelection: { nodeId: "node-a", sourceId: null },
+      currentSelectionPanelTab: "review",
+      patchEditor: "{\"summary\":\"draft\"}",
+      patchDraftOrigin: { kind: "manual" },
+      reviewDraft: { kind: "review-draft" },
+      applyResult: { kind: "apply-result" },
+    },
+    { nodeId: "node-b", sourceId: null },
+    {
+      preservePanelTab: true,
+    },
+  );
+
+  assert.equal(nextState.nextSelectionPanelTab, "context");
+  assert.equal(nextState.shouldClearTransientReviewState, true);
+  assert.equal(nextState.nextPatchEditor, "");
+  assert.equal(nextState.nextPatchDraftOrigin, null);
+  assert.equal(nextState.nextReviewDraft, null);
+  assert.equal(nextState.nextApplyResult, null);
+});
+
+test("deriveContextTransitionState preserves review visibility on same source refresh", () => {
+  const nextState = deriveContextTransitionState(
+    {
+      currentSelection: { nodeId: "node-a", sourceId: "source-1" },
+      currentSelectionPanelTab: "review",
+      patchEditor: "{\"summary\":\"draft\"}",
+      patchDraftOrigin: { kind: "manual" },
+      reviewDraft: { kind: "review-draft" },
+      applyResult: { kind: "apply-result" },
+    },
+    { nodeId: "node-a", sourceId: "source-1" },
+    {
+      preservePanelTab: true,
+    },
+  );
+
+  assert.equal(nextState.nextSelectionPanelTab, "review");
+  assert.equal(nextState.shouldClearTransientReviewState, false);
+  assert.equal(nextState.nextPatchEditor, "{\"summary\":\"draft\"}");
+  assert.deepEqual(nextState.nextPatchDraftOrigin, { kind: "manual" });
+  assert.deepEqual(nextState.nextReviewDraft, { kind: "review-draft" });
+  assert.deepEqual(nextState.nextApplyResult, { kind: "apply-result" });
 });
 
 test("deriveContextSelectionDecision falls back to Context when panel preservation is not requested", () => {
