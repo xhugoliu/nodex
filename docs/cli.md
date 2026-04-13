@@ -112,6 +112,7 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 
 - fallback flag 是否一致
 - normalization notes 是否一致
+- failed runner 的 blocker kind / summary / hint
 
 ## 当前桌面回归入口
 

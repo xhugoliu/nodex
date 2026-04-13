@@ -3,6 +3,7 @@
 import argparse
 import itertools
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -288,6 +289,7 @@ def compare_runners(
     if scenario_payload is not None:
         result["scenario_context"] = scenario_payload
     result["runner_metrics"] = aggregate_runner_metrics(runs)
+    result["failure_metrics"] = aggregate_failure_metrics(runs)
     return result
 
 
@@ -393,12 +395,16 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "quality": build_run_quality_summary(run_payload),
         }
     except CommandFailure as exc:
+        failure = classify_run_failure(exc.detail)
         return {
             "label": spec["label"],
             "command": spec["command"],
             "source": spec["source"],
             "status": "failed",
             "error": exc.detail,
+            "failure_kind": failure["kind"],
+            "failure_summary": failure["summary"],
+            "failure_hint": failure["hint"],
         }
 
 
@@ -477,6 +483,12 @@ def print_text_report(result: dict) -> None:
     print(
         f"Runs: {result['successful_runs']} succeeded / {result['failed_runs']} failed / {result['runner_count']} total"
     )
+    failure_metrics = result.get("failure_metrics") or {}
+    if failure_metrics.get("counts"):
+        counts = ", ".join(
+            f"{kind}={count}" for kind, count in sorted(failure_metrics["counts"].items())
+        )
+        print(f"Failure kinds: {counts}")
     scenario_context = result.get("scenario_context")
     if isinstance(scenario_context, dict):
         target_node = scenario_context.get("target_node") or {}
@@ -490,6 +502,12 @@ def print_text_report(result: dict) -> None:
         print(f"  command: {item['command']}")
         if item["status"] != "ok":
             print(f"  error: {item['error']}")
+            if item.get("failure_kind"):
+                print(f"  blocker: {item['failure_kind']}")
+            if item.get("failure_summary"):
+                print(f"  summary: {item['failure_summary']}")
+            if item.get("failure_hint"):
+                print(f"  hint: {item['failure_hint']}")
             continue
         metadata = item["metadata"]
         explanation = item["report"]["explanation"]
@@ -656,6 +674,67 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
         "fallback_used_cases": fallback_used_cases,
         "normalization_note_cases": normalization_note_cases,
         "compare_difference_cases": compare_difference_cases,
+    }
+
+
+def classify_run_failure(detail: str) -> dict:
+    stripped = detail.strip()
+    lower = stripped.lower()
+    dependency_match = re.search(r"Missing `([^`]+)`", stripped)
+    if dependency_match:
+        package = dependency_match.group(1)
+        return {
+            "kind": "missing_dependency",
+            "summary": f"Missing Python package: {package}",
+            "hint": f"Install it with `python3 -m pip install -U {package}`.",
+        }
+    if "[preflight]" in stripped and "no configured auth" in lower:
+        return {
+            "kind": "auth_missing",
+            "summary": "No provider credentials are configured.",
+            "hint": "Run `python3 scripts/provider_doctor.py --provider <provider>` and set the required auth env var.",
+        }
+    if "[auth]" in stripped and "invalid api key" in lower:
+        return {
+            "kind": "auth_invalid",
+            "summary": "Provider rejected the configured API key.",
+            "hint": "Refresh the provider API key in the environment or `.env.local`, then rerun compare.",
+        }
+    if "[auth]" in stripped:
+        return {
+            "kind": "auth_error",
+            "summary": "Authentication failed before the runner could complete.",
+            "hint": "Check provider credentials and retry.",
+        }
+    if "[config]" in stripped:
+        return {
+            "kind": "config_error",
+            "summary": "Runner configuration is incomplete or incompatible.",
+            "hint": "Review the runner error detail and local provider/runtime setup.",
+        }
+    if "command did not return valid json" in lower:
+        return {
+            "kind": "invalid_json",
+            "summary": "Runner completed without valid JSON output.",
+            "hint": "Inspect the runner stdout/stderr and contract response formatting.",
+        }
+    return {
+        "kind": "runner_error",
+        "summary": "Runner failed before compare could collect artifacts.",
+        "hint": None,
+    }
+
+
+def aggregate_failure_metrics(runs: list[dict]) -> dict:
+    counts: dict[str, int] = {}
+    for item in runs:
+        if item.get("status") != "failed":
+            continue
+        kind = item.get("failure_kind") or "unknown"
+        counts[kind] = counts.get(kind, 0) + 1
+    return {
+        "counts": counts,
+        "failed_labels": [item["label"] for item in runs if item.get("status") == "failed"],
     }
 
 
