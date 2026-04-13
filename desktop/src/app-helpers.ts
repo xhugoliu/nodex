@@ -198,8 +198,18 @@ export interface ReturnToNodeContextState<
   TReviewDraft = unknown,
   TApplyResult = unknown,
 > {
+  patchEditor: string;
+  patchDraftOrigin: TPatchDraftOrigin | null;
+  reviewDraft: TReviewDraft | null;
+  applyResult: TApplyResult | null;
+}
+
+export interface TransientReviewState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+> {
   currentSelection: SelectionContext;
-  currentSelectionPanelTab: SelectionPanelTab;
   patchEditor: string;
   patchDraftOrigin: TPatchDraftOrigin | null;
   reviewDraft: TReviewDraft | null;
@@ -219,6 +229,34 @@ export interface ReturnToNodeContextResult<
   nextPatchDraftOrigin: TPatchDraftOrigin | null;
   nextReviewDraft: TReviewDraft | null;
   nextApplyResult: TApplyResult | null;
+}
+
+export function deriveClearedDraftReviewState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+>(
+  state: TransientReviewState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
+): TransientReviewState<TPatchDraftOrigin, TReviewDraft, TApplyResult> {
+  return {
+    ...state,
+    patchEditor: "",
+    patchDraftOrigin: null,
+    reviewDraft: null,
+  };
+}
+
+export function deriveClearedTransientReviewState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+>(
+  state: TransientReviewState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
+): TransientReviewState<TPatchDraftOrigin, TReviewDraft, TApplyResult> {
+  return {
+    ...deriveClearedDraftReviewState(state),
+    applyResult: null,
+  };
 }
 
 export function resolveOverviewFocusNodeId(
@@ -264,11 +302,10 @@ export function deriveReturnToNodeContextState<
   TReviewDraft = unknown,
   TApplyResult = unknown,
 >(
-  state: ReturnToNodeContextState<
-    TPatchDraftOrigin,
-    TReviewDraft,
-    TApplyResult
-  >,
+  state: {
+    currentSelection: SelectionContext;
+    currentSelectionPanelTab: SelectionPanelTab;
+  } & ReturnToNodeContextState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
   options: ContextSelectionDecisionOptions = {},
 ): ReturnToNodeContextResult<
   TPatchDraftOrigin,
@@ -289,18 +326,31 @@ export function deriveReturnToNodeContextState<
   );
   const shouldClearTransientReviewState =
     selectionDecision.shouldClearTransientReviewState;
+  const nextTransientState = shouldClearTransientReviewState
+    ? deriveClearedTransientReviewState({
+        currentSelection: state.currentSelection,
+        patchEditor: state.patchEditor,
+        patchDraftOrigin: state.patchDraftOrigin,
+        reviewDraft: state.reviewDraft,
+        applyResult: state.applyResult,
+      })
+    : {
+        currentSelection: state.currentSelection,
+        patchEditor: state.patchEditor,
+        patchDraftOrigin: state.patchDraftOrigin,
+        reviewDraft: state.reviewDraft,
+        applyResult: state.applyResult,
+      };
 
   return {
     nextSelectionPanelTab: selectionDecision.nextSelectionPanelTab,
     shouldClearTransientReviewState,
     nextSelectedSourceId: null,
     nextSelectedSourceDetail: null,
-    nextPatchEditor: shouldClearTransientReviewState ? "" : state.patchEditor,
-    nextPatchDraftOrigin: shouldClearTransientReviewState
-      ? null
-      : state.patchDraftOrigin,
-    nextReviewDraft: shouldClearTransientReviewState ? null : state.reviewDraft,
-    nextApplyResult: shouldClearTransientReviewState ? null : state.applyResult,
+    nextPatchEditor: nextTransientState.patchEditor,
+    nextPatchDraftOrigin: nextTransientState.patchDraftOrigin,
+    nextReviewDraft: nextTransientState.reviewDraft,
+    nextApplyResult: nextTransientState.applyResult,
   };
 }
 

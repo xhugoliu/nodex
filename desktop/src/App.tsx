@@ -6,6 +6,8 @@ import { listen } from "@tauri-apps/api/event";
 import {
   countMatchingNodes,
   countNodes,
+  deriveClearedDraftReviewState,
+  deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
   deriveOverviewFocusDecision,
   deriveReturnToNodeContextState,
@@ -341,14 +343,36 @@ export default function App() {
   }
 
   function clearDraftReviewState() {
-    setPatchEditor("");
-    setPatchDraftOrigin(null);
-    setReviewDraft(null);
+    const nextState = deriveClearedDraftReviewState({
+      currentSelection: {
+        nodeId: selectedNodeId,
+        sourceId: selectedSourceId,
+      },
+      patchEditor,
+      patchDraftOrigin,
+      reviewDraft,
+      applyResult,
+    });
+    setPatchEditor(nextState.patchEditor);
+    setPatchDraftOrigin(nextState.patchDraftOrigin);
+    setReviewDraft(nextState.reviewDraft);
   }
 
   function resetTransientReviewState() {
-    clearDraftReviewState();
-    setApplyResult(null);
+    const nextState = deriveClearedTransientReviewState({
+      currentSelection: {
+        nodeId: selectedNodeId,
+        sourceId: selectedSourceId,
+      },
+      patchEditor,
+      patchDraftOrigin,
+      reviewDraft,
+      applyResult,
+    });
+    setPatchEditor(nextState.patchEditor);
+    setPatchDraftOrigin(nextState.patchDraftOrigin);
+    setReviewDraft(nextState.reviewDraft);
+    setApplyResult(nextState.applyResult);
   }
 
   function openReviewDraftState(options: {

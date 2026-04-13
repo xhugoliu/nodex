@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  deriveClearedDraftReviewState,
+  deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
   buildAiDraftNextSteps,
   deriveOverviewFocusDecision,
@@ -199,6 +201,36 @@ test("deriveReturnToNodeContextState clears transient review and apply state for
   assert.equal(nextState.nextPatchDraftOrigin, null);
   assert.equal(nextState.nextReviewDraft, null);
   assert.equal(nextState.nextApplyResult, null);
+});
+
+test("deriveClearedDraftReviewState keeps apply result while clearing the draft payload", () => {
+  const nextState = deriveClearedDraftReviewState({
+    currentSelection: { nodeId: "node-a", sourceId: null },
+    patchEditor: "{\"summary\":\"draft\"}",
+    patchDraftOrigin: { kind: "manual" },
+    reviewDraft: { kind: "review-draft" },
+    applyResult: { kind: "apply-result" },
+  });
+
+  assert.equal(nextState.patchEditor, "");
+  assert.equal(nextState.patchDraftOrigin, null);
+  assert.equal(nextState.reviewDraft, null);
+  assert.deepEqual(nextState.applyResult, { kind: "apply-result" });
+});
+
+test("deriveClearedTransientReviewState clears both draft payload and apply result", () => {
+  const nextState = deriveClearedTransientReviewState({
+    currentSelection: { nodeId: "node-a", sourceId: null },
+    patchEditor: "{\"summary\":\"draft\"}",
+    patchDraftOrigin: { kind: "manual" },
+    reviewDraft: { kind: "review-draft" },
+    applyResult: { kind: "apply-result" },
+  });
+
+  assert.equal(nextState.patchEditor, "");
+  assert.equal(nextState.patchDraftOrigin, null);
+  assert.equal(nextState.reviewDraft, null);
+  assert.equal(nextState.applyResult, null);
 });
 
 test("deriveContextSelectionDecision falls back to Context when panel preservation is not requested", () => {
