@@ -114,6 +114,8 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - normalization notes 是否一致
 - failed runner 的 blocker kind / summary / hint
 - `difference_kinds` 这种 machine-readable 差异类别
+- `comparison_readiness`，用于标记 compare 是 fully ready / partial / blocked
+- `blocked_comparisons`，用于列出哪些 runner pair 因依赖或鉴权 blocker 无法进入真实 `ai compare`
 
 ## 当前桌面回归入口
 

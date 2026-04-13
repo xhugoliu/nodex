@@ -43,7 +43,7 @@
 ## 下一轮最小切口
 
 - 把 source-root / source-context 的 compare 继续推进到更贴近真实 LangChain preset 的回归
-- 把 compare 输出继续补到更具体的差异归因，而不只停在依赖 / 鉴权 blocker 和 metadata 一致性
+- 把 compare 输出继续补到成功 pair 内更具体的差异归因；blocked pair / readiness 已经 machine-readable
 - 视本地依赖与凭据情况，补 `langchain-openai` 的可运行 compare 路径
 - 继续避免在主界面回填 run-id、artifact、compare、history 式入口
 

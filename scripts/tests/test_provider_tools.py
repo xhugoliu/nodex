@@ -1109,6 +1109,10 @@ class ProviderToolScriptsTests(unittest.TestCase):
             result = run_script(
                 "scripts/runner_compare.py",
                 "--json",
+                "--scenario",
+                "source-root",
+                "--fixture",
+                str(FIXTURE_PATH),
                 "--runner",
                 f"success={success_command}",
                 "--runner",
@@ -1128,6 +1132,38 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(
             payload["failure_metrics"]["counts"],
             {"auth_invalid": 1, "missing_dependency": 1},
+        )
+        self.assertEqual(payload["scenario"], "source-root")
+        self.assertEqual(
+            payload["node_id"],
+            payload["scenario_context"]["imported_root_node"]["id"],
+        )
+        readiness = payload["comparison_readiness"]
+        self.assertEqual(readiness["status"], "blocked")
+        self.assertFalse(readiness["compare_ready"])
+        self.assertFalse(readiness["all_pairs_compared"])
+        self.assertEqual(readiness["comparable_pairs"], 0)
+        self.assertEqual(readiness["blocked_pairs"], 3)
+        self.assertEqual(
+            readiness["blocker_counts"],
+            {"auth_invalid": 2, "missing_dependency": 2},
+        )
+        blocked = {
+            frozenset((item["left_label"], item["right_label"])): item
+            for item in payload["blocked_comparisons"]
+        }
+        self.assertEqual(len(blocked), 3)
+        self.assertEqual(
+            blocked[frozenset(("success", "missing"))]["blocker_kinds"],
+            ["missing_dependency"],
+        )
+        self.assertEqual(
+            blocked[frozenset(("success", "auth"))]["blocker_kinds"],
+            ["auth_invalid"],
+        )
+        self.assertCountEqual(
+            blocked[frozenset(("missing", "auth"))]["blocker_kinds"],
+            ["missing_dependency", "auth_invalid"],
         )
 
     def test_runner_compare_can_compare_two_fake_runners(self) -> None:
@@ -1416,6 +1452,98 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(payload["fixture_set"], "anthropic-default")
         self.assertEqual(len(payload["cases"]), 3)
         self.assertEqual(payload["aggregate"]["total_cases"], 3)
+        self.assertEqual(payload["aggregate"]["blocked_comparison_cases"], 0)
+        self.assertEqual(payload["aggregate"]["blocked_comparison_pairs"], 0)
+        self.assertEqual(payload["aggregate"]["blocked_comparison_kinds"], {})
+
+    def test_runner_compare_fixture_set_aggregates_blocked_comparisons(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "import sys",
+                        "from pathlib import Path",
+                        "",
+                        "mode = sys.argv[1]",
+                        "if mode == 'missing-dependency':",
+                        "    sys.stderr.write(\"[config] Missing `langchain-openai`. Install it with `python3 -m pip install -U langchain-openai` before using this pilot runner.\\n\")",
+                        "    raise SystemExit(1)",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': request['target_node']['title'],",
+                        "    'explanation': {",
+                        "        'rationale_summary': request['target_node']['title'],",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': mode,",
+                        "        'run_id': request['target_node']['id'],",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': request['target_node']['title'],",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Fixture Set Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated from fixture-set context',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            success_command = shlex.join([sys.executable, str(fake_runner), "success"])
+            missing_dep_command = shlex.join(
+                [sys.executable, str(fake_runner), "missing-dependency"]
+            )
+            result = run_script(
+                "scripts/runner_compare.py",
+                "--json",
+                "--fixture-set",
+                "anthropic-default",
+                "--runner",
+                f"success={success_command}",
+                "--runner",
+                f"missing={missing_dep_command}",
+            )
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["aggregate"]["total_cases"], 3)
+        self.assertEqual(payload["aggregate"]["failed_cases"], 3)
+        self.assertEqual(payload["aggregate"]["blocked_comparison_cases"], 3)
+        self.assertEqual(payload["aggregate"]["blocked_comparison_pairs"], 3)
+        self.assertEqual(
+            payload["aggregate"]["blocked_comparison_kinds"],
+            {"missing_dependency": 3},
+        )
+        for case in payload["cases"]:
+            self.assertEqual(case["comparison_readiness"]["status"], "blocked")
+            self.assertFalse(case["comparison_readiness"]["compare_ready"])
+            self.assertEqual(case["comparison_readiness"]["blocked_pairs"], 1)
+            self.assertEqual(
+                case["comparison_readiness"]["blocker_counts"],
+                {"missing_dependency": 1},
+            )
+            self.assertEqual(len(case["blocked_comparisons"]), 1)
 
     def test_langchain_anthropic_runner_help(self) -> None:
         result = run_script("scripts/langchain_anthropic_runner.py", "--help")

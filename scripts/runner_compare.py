@@ -274,6 +274,7 @@ def compare_runners(
         )
         for left, right in itertools.combinations(successful, 2)
     ]
+    blocked_comparisons = build_blocked_comparisons(runs)
     ok = len(successful) >= 2 and all(item["status"] == "ok" for item in comparisons)
     result = {
         "ok": ok,
@@ -285,6 +286,12 @@ def compare_runners(
         "failed_runs": len(runner_specs) - len(successful),
         "runs": runs,
         "comparisons": comparisons,
+        "blocked_comparisons": blocked_comparisons,
+        "comparison_readiness": build_comparison_readiness(
+            runs=runs,
+            comparisons=comparisons,
+            blocked_comparisons=blocked_comparisons,
+        ),
     }
     if scenario_payload is not None:
         result["scenario_context"] = scenario_payload
@@ -331,6 +338,7 @@ def run_fixture_set_compare(
                 )
                 for left, right in itertools.combinations(successful, 2)
             ]
+            blocked_comparisons = build_blocked_comparisons(runs)
             case_results.append(
                 {
                     "case_id": case["id"],
@@ -340,6 +348,12 @@ def run_fixture_set_compare(
                     "scenario_context": scenario_payload,
                     "runs": runs,
                     "comparisons": comparisons,
+                    "blocked_comparisons": blocked_comparisons,
+                    "comparison_readiness": build_comparison_readiness(
+                        runs=runs,
+                        comparisons=comparisons,
+                        blocked_comparisons=blocked_comparisons,
+                    ),
                     "runner_metrics": aggregate_runner_metrics(runs),
                 }
             )
@@ -489,6 +503,14 @@ def print_text_report(result: dict) -> None:
             f"{kind}={count}" for kind, count in sorted(failure_metrics["counts"].items())
         )
         print(f"Failure kinds: {counts}")
+    readiness = result.get("comparison_readiness") or {}
+    if readiness:
+        print(
+            "Compare readiness: "
+            f"{readiness.get('status', 'unknown')} "
+            f"(comparable_pairs={readiness.get('comparable_pairs', 0)}, "
+            f"blocked_pairs={readiness.get('blocked_pairs', 0)})"
+        )
     scenario_context = result.get("scenario_context")
     if isinstance(scenario_context, dict):
         target_node = scenario_context.get("target_node") or {}
@@ -526,6 +548,18 @@ def print_text_report(result: dict) -> None:
         print()
         print("[comparisons]")
         print("Not enough successful runs to compare.")
+        blocked = result.get("blocked_comparisons") or []
+        if blocked:
+            print()
+            print("[blocked comparisons]")
+            for item in blocked:
+                print(f"- {item['left_label']} vs {item['right_label']}: blocked")
+                for blocker in item.get("blocked_by") or []:
+                    label = blocker.get("label", "(unknown)")
+                    kind = blocker.get("kind") or "unknown"
+                    print(f"  blocker: {label} -> {kind}")
+                    if blocker.get("summary"):
+                        print(f"  summary: {blocker['summary']}")
         return
 
     print()
@@ -544,6 +578,18 @@ def print_text_report(result: dict) -> None:
         print(f"  same response notes: {summary['same_response_notes']}")
         if summary.get("difference_kinds"):
             print(f"  difference kinds: {', '.join(summary['difference_kinds'])}")
+    blocked = result.get("blocked_comparisons") or []
+    if blocked:
+        print()
+        print("[blocked comparisons]")
+        for item in blocked:
+            print(f"- {item['left_label']} vs {item['right_label']}: blocked")
+            for blocker in item.get("blocked_by") or []:
+                label = blocker.get("label", "(unknown)")
+                kind = blocker.get("kind") or "unknown"
+                print(f"  blocker: {label} -> {kind}")
+                if blocker.get("summary"):
+                    print(f"  summary: {blocker['summary']}")
 
 
 def print_fixture_set_report(result: dict) -> None:
@@ -554,6 +600,11 @@ def print_fixture_set_report(result: dict) -> None:
     )
     print(
         f"Patch legal rate: {aggregate['patch_legal_rate']:.2f}, direct evidence cases: {aggregate['direct_evidence_cases']}, explainability complete cases: {aggregate['explainability_complete_cases']}, fallback cases: {aggregate['fallback_used_cases']}, normalization-note cases: {aggregate['normalization_note_cases']}"
+    )
+    print(
+        "Blocked comparison cases: "
+        f"{aggregate['blocked_comparison_cases']}, "
+        f"blocked pairs: {aggregate['blocked_comparison_pairs']}"
     )
     print()
     print("[cases]")
@@ -568,6 +619,12 @@ def print_fixture_set_report(result: dict) -> None:
             quality = item["quality"]
             print(
                 f"    patch_legal={quality['patch_legal']} direct_evidence={quality['direct_evidence_count']} explainability_complete={quality['explainability_complete']} fallback={quality['used_plain_json_fallback']} normalization_notes={quality['normalization_note_count']}"
+            )
+        readiness = case.get("comparison_readiness") or {}
+        if readiness.get("blocked_pairs"):
+            print(
+                "    blocked_pairs="
+                f"{readiness['blocked_pairs']} blocker_kinds={','.join(readiness.get('blocker_kinds') or [])}"
             )
 
 
@@ -621,6 +678,9 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
     compare_difference_cases = 0
     fallback_used_cases = 0
     normalization_note_cases = 0
+    blocked_comparison_cases = 0
+    blocked_comparison_pairs = 0
+    blocked_comparison_kinds: dict[str, int] = {}
 
     for case in case_results:
         runs = case.get("runs") or []
@@ -666,6 +726,17 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
         ):
             compare_difference_cases += 1
 
+        blocked = case.get("blocked_comparisons") or []
+        if blocked:
+            blocked_comparison_cases += 1
+            blocked_comparison_pairs += len(blocked)
+            for item in blocked:
+                for blocker in item.get("blocked_by") or []:
+                    kind = blocker.get("kind") or "unknown"
+                    blocked_comparison_kinds[kind] = (
+                        blocked_comparison_kinds.get(kind, 0) + 1
+                    )
+
     return {
         "total_cases": total_cases,
         "successful_cases": successful_cases,
@@ -676,6 +747,84 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
         "fallback_used_cases": fallback_used_cases,
         "normalization_note_cases": normalization_note_cases,
         "compare_difference_cases": compare_difference_cases,
+        "blocked_comparison_cases": blocked_comparison_cases,
+        "blocked_comparison_pairs": blocked_comparison_pairs,
+        "blocked_comparison_kinds": blocked_comparison_kinds,
+    }
+
+
+def build_runner_blocker(run: dict) -> dict:
+    return {
+        "label": run.get("label"),
+        "status": run.get("status"),
+        "kind": run.get("failure_kind"),
+        "summary": run.get("failure_summary"),
+        "hint": run.get("failure_hint"),
+    }
+
+
+def build_blocked_comparisons(runs: list[dict]) -> list[dict]:
+    blocked = []
+    for left, right in itertools.combinations(runs, 2):
+        blockers = []
+        if left.get("status") != "ok":
+            blockers.append(build_runner_blocker(left))
+        if right.get("status") != "ok":
+            blockers.append(build_runner_blocker(right))
+        if not blockers:
+            continue
+        blocked.append(
+            {
+                "left_label": left["label"],
+                "right_label": right["label"],
+                "left_status": left.get("status"),
+                "right_status": right.get("status"),
+                "status": "blocked",
+                "blocked_by": blockers,
+                "blocker_kinds": [item.get("kind") or "unknown" for item in blockers],
+            }
+        )
+    return blocked
+
+
+def build_comparison_readiness(
+    *,
+    runs: list[dict],
+    comparisons: list[dict],
+    blocked_comparisons: list[dict],
+) -> dict:
+    blocker_counts: dict[str, int] = {}
+    blocker_kinds: list[str] = []
+    for item in blocked_comparisons:
+        for blocker in item.get("blocked_by") or []:
+            kind = blocker.get("kind") or "unknown"
+            blocker_counts[kind] = blocker_counts.get(kind, 0) + 1
+            if kind not in blocker_kinds:
+                blocker_kinds.append(kind)
+
+    if comparisons and blocked_comparisons:
+        status = "partial"
+    elif comparisons:
+        status = "ready"
+    else:
+        status = "blocked"
+
+    return {
+        "status": status,
+        "compare_ready": bool(comparisons),
+        "all_pairs_compared": not blocked_comparisons,
+        "runner_count": len(runs),
+        "successful_runner_labels": [
+            item["label"] for item in runs if item.get("status") == "ok"
+        ],
+        "failed_runner_labels": [
+            item["label"] for item in runs if item.get("status") != "ok"
+        ],
+        "attempted_pairs": len(comparisons) + len(blocked_comparisons),
+        "comparable_pairs": len(comparisons),
+        "blocked_pairs": len(blocked_comparisons),
+        "blocker_kinds": blocker_kinds,
+        "blocker_counts": blocker_counts,
     }
 
 
