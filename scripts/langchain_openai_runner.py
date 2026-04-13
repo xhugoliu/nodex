@@ -19,6 +19,7 @@ from langchain_runner_common import (
     invoke_plain_json_fallback,
     normalize_contract_response,
     normalize_langchain_output,
+    should_use_plain_json_fallback,
 )
 from openai_context import load_openai_context
 
@@ -188,7 +189,7 @@ def invoke_langchain_openai(
                 runner_label="LangChain OpenAI runner",
             )
         except RunnerFailure as exc:
-            if "unsupported structured output type" not in exc.message:
+            if not should_use_plain_json_fallback(exc):
                 raise
             metadata["used_plain_json_fallback"] = True
             return invoke_plain_json_fallback(

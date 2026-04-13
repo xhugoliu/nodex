@@ -59,6 +59,13 @@ python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-roo
 
 ## 下一轮更值得补的回归
 
+当前已经补上的脚本级回归：
+
 - `load_anthropic_context` / `load_openai_context` 的配置发现优先级
-- LangChain runner 的 plain-JSON fallback 和错误分类
-- `runner_compare.py` 在 `source-root` / `source-context` 上的 compare 回归，而不只是 fake-runner 基础设施
+- OpenAI / Anthropic runner-entry 的 plain-JSON fallback metadata
+- OpenAI invoke 路径的 no-broad-fallback 错误分类约束
+
+下一轮更值得补的仍然是：
+
+- `runner_compare.py` 在 `source-root` / `source-context` 上更贴近真实 LangChain preset 的 compare 回归
+- runner metadata 标记在 smoke / compare 汇总里的可见性，而不只是留在 sidecar meta.json

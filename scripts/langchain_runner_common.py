@@ -30,6 +30,12 @@ def normalize_langchain_output(
     )
 
 
+def should_use_plain_json_fallback(exc: RunnerFailure) -> bool:
+    return exc.category == "schema_error" and (
+        "unsupported structured output type" in exc.message
+    )
+
+
 def invoke_plain_json_fallback(
     llm,
     messages,
@@ -613,4 +619,5 @@ __all__ = [
     "normalize_contract_response",
     "normalize_expand_like_patch",
     "normalize_langchain_output",
+    "should_use_plain_json_fallback",
 ]

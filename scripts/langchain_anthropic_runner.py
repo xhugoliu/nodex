@@ -19,9 +19,12 @@ from anthropic_context import load_anthropic_context
 from langchain_runner_common import (
     coerce_contract_response as common_coerce_contract_response,
     coerce_direct_evidence,
+    fallback_kind_for_request,
+    fallback_scaffold_ops,
     invoke_plain_json_fallback,
     normalize_expand_like_patch as common_normalize_expand_like_patch,
     normalize_langchain_output,
+    should_use_plain_json_fallback,
 )
 
 
@@ -184,7 +187,7 @@ def invoke_langchain_anthropic(
                 runner_label="LangChain Anthropic runner",
             )
         except RunnerFailure as exc:
-            if "unsupported structured output type" not in exc.message:
+            if not should_use_plain_json_fallback(exc):
                 raise
             metadata["used_plain_json_fallback"] = True
             return invoke_plain_json_fallback(

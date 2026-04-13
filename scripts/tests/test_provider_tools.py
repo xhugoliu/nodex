@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -6,6 +7,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Optional
+from unittest.mock import patch
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -13,13 +16,17 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 
 from ai_contract import RunnerFailure, validate_contract_response
+from anthropic_context import AnthropicContext
 from desktop_flow_smoke import build_ai_status
+import langchain_anthropic_runner as langchain_anthropic_runner_module
+import langchain_openai_runner as langchain_openai_runner_module
 from langchain_runner_common import (
     coerce_direct_evidence,
     invoke_plain_json_fallback,
     normalize_contract_response,
     normalize_expand_like_patch,
 )
+from openai_context import OpenAIContext
 from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
 from source_context_scenario import fixture_set_cases
@@ -32,6 +39,76 @@ def run_script(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+    )
+
+
+def build_request_payload(
+    *,
+    node_id: str = "node-1",
+    capability: str = "expand",
+    explore_by: Optional[str] = None,
+) -> dict:
+    payload = {
+        "version": 2,
+        "kind": (
+            "nodex_ai_expand_request"
+            if capability == "expand"
+            else "nodex_ai_explore_request"
+        ),
+        "capability": capability,
+        "workspace_name": "test-workspace",
+        "target_node": {
+            "id": node_id,
+            "title": "Test Target",
+            "body": "Source-backed branch context.",
+            "kind": "topic",
+        },
+        "system_prompt": "You are a test runner.",
+        "user_prompt": "Expand the node.",
+        "output_instructions": "Return JSON only.",
+        "contract": {
+            "version": 2,
+            "response_kind": "nodex_ai_patch_response",
+            "patch_version": 1,
+        },
+    }
+    if capability == "explore":
+        payload["explore_by"] = explore_by or "question"
+    return payload
+
+
+def write_request_paths(tmp_dir: str, request_payload: dict) -> tuple[Path, Path, Path]:
+    request_path = Path(tmp_dir) / "request.json"
+    response_path = Path(tmp_dir) / "response.json"
+    metadata_path = Path(tmp_dir) / "metadata.json"
+    request_path.write_text(json.dumps(request_payload, indent=2), encoding="utf-8")
+    return request_path, response_path, metadata_path
+
+
+def build_openai_context() -> OpenAIContext:
+    return OpenAIContext(
+        repo_root=REPO_ROOT,
+        env_file_path=None,
+        api_key="test-openai-key-123456789012",
+        model="gpt-5.4-mini",
+        base_url="https://openai.example/v1",
+        reasoning_effort="medium",
+        timeout_seconds=30,
+        process_openai_env={},
+        shell_openai_env_candidates=[],
+    )
+
+
+def build_anthropic_context() -> AnthropicContext:
+    return AnthropicContext(
+        repo_root=REPO_ROOT,
+        env_file_path=None,
+        api_key="test-anthropic-key-123456789012",
+        model="claude-test",
+        base_url="https://anthropic.example",
+        timeout_seconds=30,
+        process_anthropic_env={},
+        shell_anthropic_env_candidates=[],
     )
 
 
@@ -362,6 +439,390 @@ class ProviderToolScriptsTests(unittest.TestCase):
             [item["type"] for item in normalized["patch"]["ops"]],
             ["attach_source_chunk", "attach_source"],
         )
+
+    def test_openai_runner_main_writes_invalid_request_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            request_path, response_path, metadata_path = write_request_paths(
+                tmp_dir,
+                {"version": 2},
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "NODEX_AI_REQUEST": str(request_path),
+                    "NODEX_AI_RESPONSE": str(response_path),
+                    "NODEX_AI_META": str(metadata_path),
+                },
+                clear=True,
+            ):
+                with patch.object(
+                    langchain_openai_runner_module,
+                    "load_openai_context",
+                    return_value=build_openai_context(),
+                ):
+                    with patch.object(sys, "argv", ["langchain_openai_runner.py"]):
+                        with self.assertRaises(SystemExit):
+                            langchain_openai_runner_module.main()
+
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["last_error_category"], "invalid_request")
+        self.assertIn("missing required keys", metadata["last_error_message"])
+        self.assertFalse(response_path.exists())
+
+    def test_openai_runner_main_records_fallback_metadata_on_success(self) -> None:
+        request_payload = build_request_payload(node_id="openai-node")
+        fallback_response = {
+            "explanation": {
+                "rationale_summary": "Fallback JSON repaired the structured response path.",
+                "direct_evidence": [],
+                "inferred_suggestions": [],
+            },
+            "patch": {
+                "ops": [
+                    {
+                        "parent_id": "openai-node",
+                        "title": "OpenAI Fallback Branch",
+                    }
+                ]
+            },
+        }
+
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                return object()
+
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema, method=None):
+                return FakeStructuredLlm()
+
+            def invoke(self, messages):
+                return type(
+                    "FakeResponse",
+                    (),
+                    {
+                        "content": "```json\n"
+                        + json.dumps(fallback_response)
+                        + "\n```"
+                    },
+                )()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            request_path, response_path, metadata_path = write_request_paths(
+                tmp_dir,
+                request_payload,
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "NODEX_AI_REQUEST": str(request_path),
+                    "NODEX_AI_RESPONSE": str(response_path),
+                    "NODEX_AI_META": str(metadata_path),
+                },
+                clear=True,
+            ):
+                with patch.object(
+                    langchain_openai_runner_module,
+                    "load_openai_context",
+                    return_value=build_openai_context(),
+                ), patch.object(
+                    langchain_openai_runner_module,
+                    "load_langchain_openai_class",
+                    return_value=FakeChatOpenAI,
+                ), patch.object(sys, "argv", ["langchain_openai_runner.py"]):
+                    exit_code = langchain_openai_runner_module.main()
+
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            response_payload = json.loads(response_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(metadata["used_plain_json_fallback"])
+        self.assertIn(
+            "runner_normalized:inferred_patch_op_types=1",
+            metadata["normalization_notes"],
+        )
+        self.assertIsNone(metadata["last_error_category"])
+        self.assertEqual(response_payload["patch"]["ops"][0]["type"], "add_node")
+
+    def test_openai_runner_main_records_schema_error_metadata_after_normalization(self) -> None:
+        request_payload = build_request_payload(node_id="schema-node")
+        malformed_response = {
+            "patch": {
+                "ops": [
+                    {
+                        "parent_id": "schema-node",
+                        "title": "Missing Explanation Branch",
+                    }
+                ]
+            }
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            request_path, response_path, metadata_path = write_request_paths(
+                tmp_dir,
+                request_payload,
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "NODEX_AI_REQUEST": str(request_path),
+                    "NODEX_AI_RESPONSE": str(response_path),
+                    "NODEX_AI_META": str(metadata_path),
+                },
+                clear=True,
+            ):
+                with patch.object(
+                    langchain_openai_runner_module,
+                    "load_openai_context",
+                    return_value=build_openai_context(),
+                ), patch.object(
+                    langchain_openai_runner_module,
+                    "invoke_langchain_openai",
+                    return_value=malformed_response,
+                ), patch.object(sys, "argv", ["langchain_openai_runner.py"]):
+                    with self.assertRaises(SystemExit):
+                        langchain_openai_runner_module.main()
+
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(metadata["last_error_category"], "schema_error")
+        self.assertIn(
+            "runner_normalized:inferred_patch_op_types=1",
+            metadata["normalization_notes"],
+        )
+        self.assertFalse(response_path.exists())
+
+    def test_anthropic_runner_main_records_fallback_metadata_on_success(self) -> None:
+        request_payload = build_request_payload(node_id="anthropic-node")
+        fallback_response = {
+            "explanation": {
+                "rationale_summary": "Fallback JSON repaired the Anthropic structured path.",
+                "direct_evidence": [],
+                "inferred_suggestions": [],
+            },
+            "patch": {
+                "ops": [
+                    {
+                        "parent_id": "anthropic-node",
+                        "title": "Anthropic Fallback Branch",
+                    }
+                ]
+            },
+        }
+
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                return object()
+
+        class FakeChatAnthropic:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema):
+                return FakeStructuredLlm()
+
+            def invoke(self, messages):
+                return type(
+                    "FakeResponse",
+                    (),
+                    {
+                        "content": "```json\n"
+                        + json.dumps(fallback_response)
+                        + "\n```"
+                    },
+                )()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            request_path, response_path, metadata_path = write_request_paths(
+                tmp_dir,
+                request_payload,
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "NODEX_AI_REQUEST": str(request_path),
+                    "NODEX_AI_RESPONSE": str(response_path),
+                    "NODEX_AI_META": str(metadata_path),
+                },
+                clear=True,
+            ):
+                with patch.object(
+                    langchain_anthropic_runner_module,
+                    "load_anthropic_context",
+                    return_value=build_anthropic_context(),
+                ), patch.object(
+                    langchain_anthropic_runner_module,
+                    "load_langchain_anthropic_class",
+                    return_value=FakeChatAnthropic,
+                ), patch.object(sys, "argv", ["langchain_anthropic_runner.py"]):
+                    exit_code = langchain_anthropic_runner_module.main()
+
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(metadata["used_plain_json_fallback"])
+        self.assertIn(
+            "runner_normalized:inferred_patch_op_types=1",
+            metadata["normalization_notes"],
+        )
+        self.assertIsNone(metadata["last_error_category"])
+
+    def test_openai_invoke_preserves_auth_failure_without_plain_json_fallback(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RunnerFailure(category="auth", message="401 unauthorized")
+
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema, method=None):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_openai_runner_module,
+            "load_langchain_openai_class",
+            return_value=FakeChatOpenAI,
+        ), patch.object(
+            langchain_openai_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_openai_runner_module.invoke_langchain_openai(
+                    request_payload=build_request_payload(node_id="auth-node"),
+                    api_key="test-openai-key-123456789012",
+                    model="gpt-5.4-mini",
+                    base_url="https://openai.example/v1",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "auth")
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
+    def test_openai_invoke_wraps_runtime_error_without_plain_json_fallback(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RuntimeError("socket closed")
+
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema, method=None):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_openai_runner_module,
+            "load_langchain_openai_class",
+            return_value=FakeChatOpenAI,
+        ), patch.object(
+            langchain_openai_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_openai_runner_module.invoke_langchain_openai(
+                    request_payload=build_request_payload(node_id="runtime-node"),
+                    api_key="test-openai-key-123456789012",
+                    model="gpt-5.4-mini",
+                    base_url="https://openai.example/v1",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "runner_error")
+        self.assertIn("socket closed", ctx.exception.message)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
+    def test_anthropic_invoke_preserves_auth_failure_without_plain_json_fallback(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RunnerFailure(category="auth", message="401 unauthorized")
+
+        class FakeChatAnthropic:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_anthropic_runner_module,
+            "load_langchain_anthropic_class",
+            return_value=FakeChatAnthropic,
+        ), patch.object(
+            langchain_anthropic_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_anthropic_runner_module.invoke_langchain_anthropic(
+                    request_payload=build_request_payload(node_id="anthropic-auth-node"),
+                    api_key="test-anthropic-key-123456789012",
+                    model="claude-test",
+                    base_url="https://anthropic.example",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "auth")
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
+    def test_anthropic_invoke_wraps_runtime_error_without_plain_json_fallback(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RuntimeError("socket closed")
+
+        class FakeChatAnthropic:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_anthropic_runner_module,
+            "load_langchain_anthropic_class",
+            return_value=FakeChatAnthropic,
+        ), patch.object(
+            langchain_anthropic_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_anthropic_runner_module.invoke_langchain_anthropic(
+                    request_payload=build_request_payload(node_id="anthropic-runtime-node"),
+                    api_key="test-anthropic-key-123456789012",
+                    model="claude-test",
+                    base_url="https://anthropic.example",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "runner_error")
+        self.assertIn("socket closed", ctx.exception.message)
+        self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_runner_compare_lists_presets(self) -> None:
         result = run_script("scripts/runner_compare.py", "--list-presets")
