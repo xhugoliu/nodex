@@ -114,7 +114,9 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - normalization notes 是否一致
 - failed runner 的 blocker kind / summary / hint
 - `difference_kinds` 这种 machine-readable 差异类别
+- `difference_details`，用于把成功 pair 的差异继续细化到具体字段和值
 - `comparison_readiness`，用于标记 compare 是 fully ready / partial / blocked
+- `comparison_metrics`，用于汇总 compared pair 数量、differing pair 数量和 difference kind 计数
 - `blocked_comparisons`，用于列出哪些 runner pair 因依赖或鉴权 blocker 无法进入真实 `ai compare`
 
 如果想在本地缺少 OpenAI 依赖或凭据时继续做 preset compare，也可以显式用：

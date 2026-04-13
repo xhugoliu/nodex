@@ -1452,6 +1452,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(payload["fixture_set"], "anthropic-default")
         self.assertEqual(len(payload["cases"]), 3)
         self.assertEqual(payload["aggregate"]["total_cases"], 3)
+        self.assertEqual(payload["aggregate"]["compared_pairs"], 3)
+        self.assertEqual(payload["aggregate"]["differing_pairs"], 0)
+        self.assertEqual(payload["aggregate"]["compare_difference_kind_counts"], {})
         self.assertEqual(payload["aggregate"]["blocked_comparison_cases"], 0)
         self.assertEqual(payload["aggregate"]["blocked_comparison_pairs"], 0)
         self.assertEqual(payload["aggregate"]["blocked_comparison_kinds"], {})
@@ -1572,6 +1575,22 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(payload["comparison_readiness"]["blocked_pairs"], 0)
         self.assertEqual(payload["blocked_comparisons"], [])
         self.assertEqual(len(payload["comparisons"]), 3)
+        self.assertEqual(
+            payload["comparison_metrics"],
+            {
+                "compared_pairs": 3,
+                "differing_pairs": 3,
+                "identical_pairs": 0,
+                "difference_kind_counts": {
+                    "used_plain_json_fallback": 2,
+                    "normalization_notes": 2,
+                    "rationale_summary": 3,
+                    "patch_summary": 3,
+                    "patch_preview": 3,
+                    "response_notes": 3,
+                },
+            },
+        )
 
         runs = {item["label"]: item for item in payload["runs"]}
         self.assertEqual(set(runs.keys()), {"openai-minimal", "langchain-openai", "langchain-anthropic"})
@@ -1591,6 +1610,47 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn("patch_summary", difference_kinds)
         self.assertIn("patch_preview", difference_kinds)
         self.assertIn("response_notes", difference_kinds)
+
+        comparisons = {
+            (item["left_label"], item["right_label"]): item
+            for item in payload["comparisons"]
+        }
+        openai_pair = comparisons[("openai-minimal", "langchain-openai")]
+        self.assertEqual(
+            openai_pair["difference_details"]["used_plain_json_fallback"],
+            {"left": True, "right": False},
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["normalization_notes"]["left_only"],
+            ["runner_normalized:inferred_patch_op_types=3"],
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["patch_summary"],
+            {
+                "left": "Expand Provider Authentication Flow with 3 branches",
+                "right": "Expand Provider Authentication Flow with 4 branches",
+            },
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["patch_preview"]["left_count"],
+            3,
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["patch_preview"]["right_count"],
+            4,
+        )
+        self.assertIn(
+            "offline_compare_stub:openai-minimal",
+            openai_pair["difference_details"]["response_notes"]["left_only"],
+        )
+        self.assertIn(
+            "offline_compare_stub:langchain-openai",
+            openai_pair["difference_details"]["response_notes"]["right_only"],
+        )
+        self.assertIn(
+            "source-context request shape",
+            openai_pair["difference_details"]["rationale_summary"]["left"],
+        )
 
     def test_runner_compare_offline_preset_all_makes_source_root_comparable(self) -> None:
         result = run_script(
@@ -1619,12 +1679,53 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(payload["comparison_readiness"]["comparable_pairs"], 3)
         self.assertEqual(payload["comparison_readiness"]["blocked_pairs"], 0)
         self.assertEqual(payload["blocked_comparisons"], [])
+        self.assertEqual(
+            payload["comparison_metrics"],
+            {
+                "compared_pairs": 3,
+                "differing_pairs": 3,
+                "identical_pairs": 0,
+                "difference_kind_counts": {
+                    "used_plain_json_fallback": 2,
+                    "normalization_notes": 2,
+                    "rationale_summary": 3,
+                    "patch_summary": 3,
+                    "patch_preview": 3,
+                    "response_notes": 3,
+                },
+            },
+        )
 
         runs = {item["label"]: item for item in payload["runs"]}
         self.assertTrue(all(item["offline_substitute"] is True for item in runs.values()))
         self.assertFalse(runs["openai-minimal"]["quality"]["has_direct_evidence"])
         self.assertFalse(runs["langchain-openai"]["quality"]["has_direct_evidence"])
         self.assertFalse(runs["langchain-anthropic"]["quality"]["has_direct_evidence"])
+
+        comparisons = {
+            (item["left_label"], item["right_label"]): item
+            for item in payload["comparisons"]
+        }
+        openai_pair = comparisons[("openai-minimal", "langchain-openai")]
+        self.assertIn(
+            "source-root request shape",
+            openai_pair["difference_details"]["rationale_summary"]["left"],
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["patch_summary"],
+            {
+                "left": "Expand Anthropic LangChain Regression with 3 branches",
+                "right": "Expand Anthropic LangChain Regression with 4 branches",
+            },
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["patch_preview"]["left_count"],
+            3,
+        )
+        self.assertEqual(
+            openai_pair["difference_details"]["patch_preview"]["right_count"],
+            4,
+        )
 
     def test_langchain_anthropic_runner_help(self) -> None:
         result = run_script("scripts/langchain_anthropic_runner.py", "--help")

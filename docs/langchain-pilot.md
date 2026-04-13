@@ -78,8 +78,9 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 - `runner_compare.py` 对失败 runner 的 blocker 归因
 - `difference_kinds` 这种 machine-readable 的 compare 差异类别
 - `comparison_readiness` / `blocked_comparisons` 这种 machine-readable 的 compare 阻塞归因
+- `difference_details` / `comparison_metrics` 这种 machine-readable 的成功 pair 差异细节与汇总
 
 下一轮更值得补的仍然是：
 
 - `runner_compare.py` 在 `source-root` / `source-context` 上继续缩小 compare-only offline lane 与真实成功 runner 的差距
-- compare 输出继续往真实 LangChain preset 的成功 pair 差异归因收口，而不只停在 blocked pair / blocker taxonomy 和高层 difference kinds
+- compare 输出继续往更稳定的字段级、结构级归因收口，而不只停在 pair 级计数和当前的 detail summary

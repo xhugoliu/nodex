@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from source_context_scenario import (
     DEFAULT_CITATION_RATIONALE,
@@ -367,6 +367,7 @@ def compare_runners(
         result["scenario_context"] = scenario_payload
     result["runner_metrics"] = aggregate_runner_metrics(runs)
     result["failure_metrics"] = aggregate_failure_metrics(runs)
+    result["comparison_metrics"] = aggregate_comparison_metrics(comparisons)
     return result
 
 
@@ -425,6 +426,7 @@ def run_fixture_set_compare(
                         blocked_comparisons=blocked_comparisons,
                     ),
                     "runner_metrics": aggregate_runner_metrics(runs),
+                    "comparison_metrics": aggregate_comparison_metrics(comparisons),
                 }
             )
 
@@ -508,6 +510,7 @@ def compare_pair(*, workspace_dir: Path, left: dict, right: dict) -> dict:
             "right_run_id": right["run_id"],
             "status": "ok",
             "comparison": payload["comparison"],
+            "difference_details": build_comparison_difference_details(payload),
             "output": payload,
         }
     except CommandFailure as exc:
@@ -583,6 +586,13 @@ def print_text_report(result: dict) -> None:
             f"(comparable_pairs={readiness.get('comparable_pairs', 0)}, "
             f"blocked_pairs={readiness.get('blocked_pairs', 0)})"
         )
+    comparison_metrics = result.get("comparison_metrics") or {}
+    if comparison_metrics.get("compared_pairs"):
+        print(
+            "Compare metrics: "
+            f"pairs={comparison_metrics.get('compared_pairs', 0)}, "
+            f"differing_pairs={comparison_metrics.get('differing_pairs', 0)}"
+        )
     scenario_context = result.get("scenario_context")
     if isinstance(scenario_context, dict):
         target_node = scenario_context.get("target_node") or {}
@@ -650,6 +660,26 @@ def print_text_report(result: dict) -> None:
         print(f"  same response notes: {summary['same_response_notes']}")
         if summary.get("difference_kinds"):
             print(f"  difference kinds: {', '.join(summary['difference_kinds'])}")
+        details = item.get("difference_details") or {}
+        if details.get("patch_summary"):
+            detail = details["patch_summary"]
+            print(
+                f"  patch summary detail: left={detail.get('left')!r} right={detail.get('right')!r}"
+            )
+        if details.get("patch_preview"):
+            detail = details["patch_preview"]
+            print(
+                "  patch preview detail: "
+                f"left_count={detail.get('left_count', 0)} "
+                f"right_count={detail.get('right_count', 0)}"
+            )
+        if details.get("response_notes"):
+            detail = details["response_notes"]
+            print(
+                "  response note detail: "
+                f"left_only={len(detail.get('left_only') or [])} "
+                f"right_only={len(detail.get('right_only') or [])}"
+            )
     blocked = result.get("blocked_comparisons") or []
     if blocked:
         print()
@@ -678,6 +708,11 @@ def print_fixture_set_report(result: dict) -> None:
         f"{aggregate['blocked_comparison_cases']}, "
         f"blocked pairs: {aggregate['blocked_comparison_pairs']}"
     )
+    print(
+        "Compared pairs: "
+        f"{aggregate['compared_pairs']}, "
+        f"differing pairs: {aggregate['differing_pairs']}"
+    )
     print()
     print("[cases]")
     for case in result["cases"]:
@@ -697,6 +732,13 @@ def print_fixture_set_report(result: dict) -> None:
             print(
                 "    blocked_pairs="
                 f"{readiness['blocked_pairs']} blocker_kinds={','.join(readiness.get('blocker_kinds') or [])}"
+            )
+        comparison_metrics = case.get("comparison_metrics") or {}
+        if comparison_metrics.get("differing_pairs"):
+            print(
+                "    differing_pairs="
+                f"{comparison_metrics['differing_pairs']} difference_kinds="
+                f"{','.join(sorted((comparison_metrics.get('difference_kind_counts') or {}).keys()))}"
             )
 
 
@@ -741,6 +783,24 @@ def aggregate_runner_metrics(runs: list[dict]) -> dict:
     }
 
 
+def aggregate_comparison_metrics(comparisons: list[dict]) -> dict:
+    successful = [item for item in comparisons if item.get("status") == "ok"]
+    difference_kind_counts: dict[str, int] = {}
+    differing_pairs = 0
+    for item in successful:
+        kinds = item.get("comparison", {}).get("difference_kinds") or []
+        if kinds:
+            differing_pairs += 1
+        for kind in kinds:
+            difference_kind_counts[kind] = difference_kind_counts.get(kind, 0) + 1
+    return {
+        "compared_pairs": len(successful),
+        "differing_pairs": differing_pairs,
+        "identical_pairs": len(successful) - differing_pairs,
+        "difference_kind_counts": difference_kind_counts,
+    }
+
+
 def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
     total_cases = len(case_results)
     successful_cases = 0
@@ -753,6 +813,9 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
     blocked_comparison_cases = 0
     blocked_comparison_pairs = 0
     blocked_comparison_kinds: dict[str, int] = {}
+    compared_pairs = 0
+    differing_pairs = 0
+    compare_difference_kind_counts: dict[str, int] = {}
 
     for case in case_results:
         runs = case.get("runs") or []
@@ -785,6 +848,13 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
             normalization_note_cases += 1
 
         comparisons = case.get("comparisons") or []
+        comparison_metrics = case.get("comparison_metrics") or {}
+        compared_pairs += comparison_metrics.get("compared_pairs", 0)
+        differing_pairs += comparison_metrics.get("differing_pairs", 0)
+        for kind, count in (comparison_metrics.get("difference_kind_counts") or {}).items():
+            compare_difference_kind_counts[kind] = (
+                compare_difference_kind_counts.get(kind, 0) + count
+            )
         if any(
             item.get("status") == "ok"
             and (
@@ -822,6 +892,9 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
         "blocked_comparison_cases": blocked_comparison_cases,
         "blocked_comparison_pairs": blocked_comparison_pairs,
         "blocked_comparison_kinds": blocked_comparison_kinds,
+        "compared_pairs": compared_pairs,
+        "differing_pairs": differing_pairs,
+        "compare_difference_kind_counts": compare_difference_kind_counts,
     }
 
 
@@ -857,6 +930,79 @@ def build_blocked_comparisons(runs: list[dict]) -> list[dict]:
             }
         )
     return blocked
+
+
+def normalize_str_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def build_list_difference_details(left: Any, right: Any) -> dict:
+    left_list = normalize_str_list(left)
+    right_list = normalize_str_list(right)
+    left_set = set(left_list)
+    right_set = set(right_list)
+    return {
+        "left": left_list,
+        "right": right_list,
+        "shared": [item for item in left_list if item in right_set],
+        "left_only": [item for item in left_list if item not in right_set],
+        "right_only": [item for item in right_list if item not in left_set],
+    }
+
+
+def build_comparison_difference_details(payload: dict) -> dict:
+    comparison = payload.get("comparison") or {}
+    difference_kinds = comparison.get("difference_kinds") or []
+    left = payload.get("left") or {}
+    right = payload.get("right") or {}
+    left_record = left.get("record") or {}
+    right_record = right.get("record") or {}
+    left_explanation = left.get("explanation") or {}
+    right_explanation = right.get("explanation") or {}
+    left_patch = left.get("patch") or {}
+    right_patch = right.get("patch") or {}
+
+    details = {}
+    if "used_plain_json_fallback" in difference_kinds:
+        details["used_plain_json_fallback"] = {
+            "left": left_record.get("used_plain_json_fallback") is True,
+            "right": right_record.get("used_plain_json_fallback") is True,
+        }
+    if "normalization_notes" in difference_kinds:
+        details["normalization_notes"] = build_list_difference_details(
+            left_record.get("normalization_notes"),
+            right_record.get("normalization_notes"),
+        )
+    if "rationale_summary" in difference_kinds:
+        left_value = left_explanation.get("rationale_summary")
+        right_value = right_explanation.get("rationale_summary")
+        details["rationale_summary"] = {
+            "left": left_value,
+            "right": right_value,
+            "left_length": len(left_value) if isinstance(left_value, str) else 0,
+            "right_length": len(right_value) if isinstance(right_value, str) else 0,
+        }
+    if "patch_summary" in difference_kinds:
+        details["patch_summary"] = {
+            "left": left_patch.get("summary"),
+            "right": right_patch.get("summary"),
+        }
+    if "patch_preview" in difference_kinds:
+        patch_preview = build_list_difference_details(
+            left.get("patch_preview"),
+            right.get("patch_preview"),
+        )
+        patch_preview["left_count"] = len(patch_preview["left"])
+        patch_preview["right_count"] = len(patch_preview["right"])
+        details["patch_preview"] = patch_preview
+    if "response_notes" in difference_kinds:
+        details["response_notes"] = build_list_difference_details(
+            left.get("response_notes"),
+            right.get("response_notes"),
+        )
+    return details
 
 
 def build_comparison_readiness(
