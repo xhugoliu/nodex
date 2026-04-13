@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { deriveReturnToNodeContextState } from "./app-helpers";
 import { WorkbenchSidePane } from "./components/workbench";
 import type {
   ApplyPatchReport,
@@ -196,4 +197,28 @@ test("WorkbenchSidePane falls back to node context apply results when no source 
   assert.match(html, /Applied patch summary/);
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
   assert.doesNotMatch(html, /patchEditor\.preview/);
+});
+
+test("source-detail handoff clears stale review/apply state before node context renders", () => {
+  const nextState = deriveReturnToNodeContextState({
+    currentSelection: { nodeId: "node-1", sourceId: "source-1" },
+    currentSelectionPanelTab: "review",
+    patchEditor: "{\"summary\":\"Draft patch summary\"}",
+    patchDraftOrigin: { kind: "manual" },
+    reviewDraft: makeReviewDraft(),
+    applyResult: makeApplyResult(),
+  });
+
+  const html = renderSidePane({
+    selectionTab: nextState.nextSelectionPanelTab,
+    selectedSourceDetail: nextState.nextSelectedSourceDetail,
+    applyResult: nextState.nextApplyResult,
+    reviewDraft: nextState.nextReviewDraft,
+  });
+
+  assert.equal(nextState.shouldClearTransientReviewState, true);
+  assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
+  assert.doesNotMatch(html, /workbench\.applyResultTitle/);
+  assert.doesNotMatch(html, /patchEditor\.preview/);
+  assert.match(html, /Authentication/);
 });

@@ -4,6 +4,7 @@ import {
   deriveContextSelectionDecision,
   buildAiDraftNextSteps,
   deriveOverviewFocusDecision,
+  deriveReturnToNodeContextState,
   renderAiDraftFailure,
   resolveOverviewFocusNodeId,
   shouldClearTransientReviewState,
@@ -178,6 +179,26 @@ test("deriveContextSelectionDecision clears review/apply state when closing the 
 
   assert.equal(decision.nextSelectionPanelTab, "context");
   assert.equal(decision.shouldClearTransientReviewState, true);
+});
+
+test("deriveReturnToNodeContextState clears transient review and apply state for source-detail handoff", () => {
+  const nextState = deriveReturnToNodeContextState({
+    currentSelection: { nodeId: "node-a", sourceId: "source-1" },
+    currentSelectionPanelTab: "review",
+    patchEditor: "{\"summary\":\"draft\"}",
+    patchDraftOrigin: { kind: "manual" },
+    reviewDraft: { kind: "review-draft" },
+    applyResult: { kind: "apply-result" },
+  });
+
+  assert.equal(nextState.nextSelectionPanelTab, "context");
+  assert.equal(nextState.shouldClearTransientReviewState, true);
+  assert.equal(nextState.nextSelectedSourceId, null);
+  assert.equal(nextState.nextSelectedSourceDetail, null);
+  assert.equal(nextState.nextPatchEditor, "");
+  assert.equal(nextState.nextPatchDraftOrigin, null);
+  assert.equal(nextState.nextReviewDraft, null);
+  assert.equal(nextState.nextApplyResult, null);
 });
 
 test("deriveContextSelectionDecision falls back to Context when panel preservation is not requested", () => {

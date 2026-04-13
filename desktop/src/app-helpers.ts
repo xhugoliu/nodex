@@ -193,6 +193,34 @@ export interface ContextSelectionDecisionOptions {
   currentSelectionPanelTab?: SelectionPanelTab;
 }
 
+export interface ReturnToNodeContextState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+> {
+  currentSelection: SelectionContext;
+  currentSelectionPanelTab: SelectionPanelTab;
+  patchEditor: string;
+  patchDraftOrigin: TPatchDraftOrigin | null;
+  reviewDraft: TReviewDraft | null;
+  applyResult: TApplyResult | null;
+}
+
+export interface ReturnToNodeContextResult<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+> {
+  nextSelectionPanelTab: SelectionPanelTab;
+  shouldClearTransientReviewState: boolean;
+  nextSelectedSourceId: null;
+  nextSelectedSourceDetail: null;
+  nextPatchEditor: string;
+  nextPatchDraftOrigin: TPatchDraftOrigin | null;
+  nextReviewDraft: TReviewDraft | null;
+  nextApplyResult: TApplyResult | null;
+}
+
 export function resolveOverviewFocusNodeId(
   tree: TreeNode,
   preferredNodeId?: string | null,
@@ -228,6 +256,51 @@ export function deriveContextSelectionDecision(
         ? "review"
         : "context",
     shouldClearTransientReviewState: shouldResetTransientReviewState,
+  };
+}
+
+export function deriveReturnToNodeContextState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+>(
+  state: ReturnToNodeContextState<
+    TPatchDraftOrigin,
+    TReviewDraft,
+    TApplyResult
+  >,
+  options: ContextSelectionDecisionOptions = {},
+): ReturnToNodeContextResult<
+  TPatchDraftOrigin,
+  TReviewDraft,
+  TApplyResult
+> {
+  const selectionDecision = deriveContextSelectionDecision(
+    state.currentSelection,
+    {
+      nodeId: state.currentSelection.nodeId,
+      sourceId: null,
+    },
+    {
+      ...options,
+      currentSelectionPanelTab:
+        options.currentSelectionPanelTab ?? state.currentSelectionPanelTab,
+    },
+  );
+  const shouldClearTransientReviewState =
+    selectionDecision.shouldClearTransientReviewState;
+
+  return {
+    nextSelectionPanelTab: selectionDecision.nextSelectionPanelTab,
+    shouldClearTransientReviewState,
+    nextSelectedSourceId: null,
+    nextSelectedSourceDetail: null,
+    nextPatchEditor: shouldClearTransientReviewState ? "" : state.patchEditor,
+    nextPatchDraftOrigin: shouldClearTransientReviewState
+      ? null
+      : state.patchDraftOrigin,
+    nextReviewDraft: shouldClearTransientReviewState ? null : state.reviewDraft,
+    nextApplyResult: shouldClearTransientReviewState ? null : state.applyResult,
   };
 }
 

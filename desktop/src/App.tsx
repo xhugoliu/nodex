@@ -8,6 +8,7 @@ import {
   countNodes,
   deriveContextSelectionDecision,
   deriveOverviewFocusDecision,
+  deriveReturnToNodeContextState,
   filterTree,
   findNodeById,
   formatError,
@@ -679,29 +680,28 @@ export default function App() {
     clearTransientReviewState?: boolean;
     preservePanelTab?: boolean;
   } = {}) {
-    const selectionDecision = deriveContextSelectionDecision(
+    const nextState = deriveReturnToNodeContextState(
       {
-        nodeId: selectedNodeId,
-        sourceId: selectedSourceId,
-      },
-      {
-        nodeId: selectedNodeId,
-        sourceId: null,
-      },
-      {
-        clearTransientReviewState: options.clearTransientReviewState,
-        preservePanelTab: options.preservePanelTab,
+        currentSelection: {
+          nodeId: selectedNodeId,
+          sourceId: selectedSourceId,
+        },
         currentSelectionPanelTab: selectionPanelTab,
+        patchEditor,
+        patchDraftOrigin,
+        reviewDraft,
+        applyResult,
       },
+      options,
     );
 
-    if (selectionDecision.shouldClearTransientReviewState) {
-      resetTransientReviewState();
-    }
-
-    setSelectedSourceId(null);
-    setSelectedSourceDetail(null);
-    setSelectionPanelTab(selectionDecision.nextSelectionPanelTab);
+    setPatchEditor(nextState.nextPatchEditor);
+    setPatchDraftOrigin(nextState.nextPatchDraftOrigin);
+    setReviewDraft(nextState.nextReviewDraft);
+    setApplyResult(nextState.nextApplyResult);
+    setSelectedSourceId(nextState.nextSelectedSourceId);
+    setSelectedSourceDetail(nextState.nextSelectedSourceDetail);
+    setSelectionPanelTab(nextState.nextSelectionPanelTab);
   }
 
   async function refreshWorkspace() {
