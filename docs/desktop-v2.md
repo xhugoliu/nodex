@@ -29,16 +29,18 @@
 
 - `python3 scripts/desktop_flow_smoke.py`
   守主流程闭环、`next_focus_candidate`、`ai_status`
+- `python3 scripts/provider_smoke.py --provider anthropic --scenario source-root --json`
+  守 imported root 上的真实材料 draft/apply 路径
 - `cd desktop && npm run test:logic`
-  守 helper seam、右栏 surface 和 handoff 可见态
-  当前也已覆盖 mounted App 级 `back` handoff、导入落点后的跨 pane 交接，以及 `source import -> AI expand -> review -> apply`
+  守 helper seam、右栏 surface 和 mounted App 级主路径交接
+  当前也已覆盖 `back` handoff、导入落点后的跨 pane 交接，以及 `source import -> AI expand -> review -> apply`
 
 ## 如果继续推进
 
 优先顺序：
 
 1. 把 `desktop_flow_smoke.py` 继续补到更多主路径交接语义
-2. 把真实材料路径继续推到 smoke / live-provider 验证
+2. 把 source-root 路径继续推到真实 provider 凭据下的手动 / 对照验证
 3. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
 ## 当前不做

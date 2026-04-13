@@ -24,6 +24,8 @@
 
 - `python3 scripts/desktop_flow_smoke.py`
   作用：守桌面主流程闭环、`next_focus_candidate`、`ai_status`
+- `python3 scripts/provider_smoke.py --provider anthropic --scenario source-root --json`
+  作用：守真实材料路径里的 imported root draft/apply 闭环
 - `cd desktop && npm run test:logic`
   作用：守右栏和相关 helper 的轻量语义
   当前覆盖：
@@ -39,7 +41,7 @@
 ## 下一轮最小切口
 
 - 把 `desktop_flow_smoke.py` 继续补到 imported root / source target 之外的主路径交接语义
-- 或把真实材料路径继续推到 smoke / live-provider 验证
+- 或把 source-root 路径继续推进到真实 provider 凭据下的手动 / 对照验证
 - 继续避免在主界面回填 run-id、artifact、compare、history 式入口
 
 ## 当前不优先
