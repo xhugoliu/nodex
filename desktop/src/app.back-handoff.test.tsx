@@ -6,7 +6,9 @@ import ReactDOM from "react-dom/client";
 
 import App, { type AppBindings } from "./App";
 import type {
+  ApplyReviewedPatchOutput,
   DesktopAiStatus,
+  DraftReviewPayload,
   NodeWorkspaceContext,
   PatchDocument,
   SourceDetail,
@@ -368,6 +370,148 @@ function makeImportedNodeContext(): NodeWorkspaceContext {
       sources: [],
       evidence: [],
     },
+  };
+}
+
+function makeGeneratedOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "imported-root",
+            parent_id: "root",
+            title: "Imported Source Root",
+            body: "Imported body",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [
+            {
+              node: {
+                id: "generated-node",
+                parent_id: "imported-root",
+                title: "Generated Follow-up Branch",
+                body: "Generated body",
+                kind: "action",
+                position: 0,
+                created_at: 1710000000,
+                updated_at: 1710000000,
+              },
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeGeneratedNodeContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-node",
+        parent_id: "imported-root",
+        title: "Generated Follow-up Branch",
+        body: "Generated body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      parent: { id: "imported-root", title: "Imported Source Root" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeDraftReviewPayload(nodeId: string): DraftReviewPayload {
+  return {
+    run: {
+      id: "run-1",
+      capability: "expand",
+      explore_by: null,
+      node_id: nodeId,
+      command: "python3 scripts/provider_runner.py",
+      dry_run: true,
+      status: "completed",
+      started_at: 1710000000,
+      finished_at: 1710000001,
+      request_path: "/tmp/request.json",
+      response_path: "/tmp/response.json",
+      exit_code: 0,
+      provider: "anthropic",
+      model: "claude-sonnet",
+      provider_run_id: null,
+      retry_count: 0,
+      last_error_category: null,
+      last_error_message: null,
+      last_status_code: null,
+      patch_run_id: null,
+      patch_summary: "Generated follow-up branch",
+    },
+    explanation: {
+      rationale_summary: "Expand the imported root into one next action branch.",
+      direct_evidence: [],
+      inferred_suggestions: [],
+    },
+    response_notes: [],
+    patch: {
+      version: 1,
+      summary: "Generated follow-up branch",
+      ops: [
+        {
+          type: "add_node",
+          parent_id: nodeId,
+          title: "Generated Follow-up Branch",
+          kind: "action",
+          body: "Generated body",
+        },
+      ],
+    },
+    patch_preview: ["Add Generated Follow-up Branch under the imported root"],
+    report: {
+      run_id: null,
+      summary: "Generated follow-up branch",
+      preview: ["Preview generated branch"],
+      created_nodes: [{ id: "generated-node", title: "Generated Follow-up Branch" }],
+    },
+  };
+}
+
+function makeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-1",
+      summary: "Applied generated follow-up branch",
+      preview: ["Added Generated Follow-up Branch"],
+      created_nodes: [
+        { id: "generated-node", title: "Generated Follow-up Branch" },
+      ],
+    },
+    overview: makeGeneratedOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeGeneratedNodeContext(),
   };
 }
 
@@ -811,6 +955,160 @@ test("App focuses the imported root across tree, canvas, and side pane after sid
         call.args.node_id === "imported-root",
     ),
     "imported root should drive the follow-up context load",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App drives source import through draft review and apply on the imported root", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-node"
+            ? makeGeneratedNodeContext()
+            : args.node_id === "imported-root"
+              ? makeImportedNodeContext()
+              : makeNodeContext()
+        ) as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload(String(args.node_id)) as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  assert.equal(requireMainPaneProps().selectedNodeId, "imported-root");
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "imported-root");
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_node_expand" &&
+        call.args.node_id === "imported-root",
+    ),
+    "AI expand should draft from the imported root",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(2);
+  });
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-node");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-node");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "generated-node",
+  );
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied generated follow-up branch",
+  );
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "imported-root",
+    ),
+    "apply should use the imported root as the review focus node",
   );
 
   await act(async () => {

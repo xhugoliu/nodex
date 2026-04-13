@@ -34,11 +34,12 @@
   - `WorkbenchSidePane` 在 handoff 后回到 node context 的可见态
   - mounted App 级 `back` handoff
   - mounted App 级导入落点后的 tree / main / side 交接
+  - mounted App 级 `source import -> AI expand -> review -> apply` 闭环
 
 ## 下一轮最小切口
 
 - 把 `desktop_flow_smoke.py` 继续补到 imported root / source target 之外的主路径交接语义
-- 或补一条真实材料路径 `source import -> AI expand -> review -> apply` 回归
+- 或把真实材料路径继续推到 smoke / live-provider 验证
 - 继续避免在主界面回填 run-id、artifact、compare、history 式入口
 
 ## 当前不优先
