@@ -831,6 +831,210 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn("langchain-openai", result.stdout)
         self.assertIn("langchain-anthropic", result.stdout)
 
+    def test_provider_smoke_quality_surfaces_runner_metadata_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': 'metadata smoke summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': 'metadata smoke rationale',",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': 'fake-model',",
+                        "        'run_id': 'fake-run',",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': 'metadata smoke summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Metadata Smoke Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated from smoke metadata test',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "metadata = {",
+                        "    'provider': 'fake_runner',",
+                        "    'model': 'fake-model',",
+                        "    'provider_run_id': 'provider-run-1',",
+                        "    'retry_count': 0,",
+                        "    'used_plain_json_fallback': True,",
+                        "    'normalization_notes': [",
+                        "        'runner_normalized:fallback_scaffold_ops',",
+                        "        'runner_normalized:inferred_patch_op_types=1',",
+                        "    ],",
+                        "    'last_error_category': None,",
+                        "    'last_error_message': None,",
+                        "    'last_status_code': None,",
+                        "}",
+                        "Path(os.environ['NODEX_AI_META']).write_text(json.dumps(metadata, indent=2))",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            result = run_smoke(
+                manifest_path=REPO_ROOT / "Cargo.toml",
+                workspace_dir=Path(tmp_dir),
+                node_id="root",
+                scenario="minimal",
+                fixture_path=None,
+                runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
+                apply=False,
+                json_mode=True,
+            )
+
+        self.assertTrue(result["quality"]["used_plain_json_fallback"])
+        self.assertEqual(result["quality"]["normalization_note_count"], 2)
+        self.assertTrue(result["quality"]["has_normalization_notes"])
+        self.assertIn(
+            "runner_normalized:fallback_scaffold_ops",
+            result["quality"]["normalization_notes"],
+        )
+        self.assertTrue(
+            result["run_external_json"]["metadata"]["used_plain_json_fallback"]
+        )
+        self.assertTrue(
+            result["verification"]["ai_run"]["history_used_plain_json_fallback"]
+        )
+        self.assertTrue(
+            result["verification"]["ai_run"]["show_used_plain_json_fallback"]
+        )
+        self.assertTrue(result["verification"]["ai_run"]["history_metadata_flags_match"])
+        self.assertTrue(result["verification"]["ai_run"]["show_metadata_flags_match"])
+        self.assertEqual(
+            result["verification"]["ai_run"]["show_normalization_note_count"],
+            2,
+        )
+        self.assertCountEqual(
+            result["verification"]["ai_run"]["history_normalization_notes"],
+            [
+                "runner_normalized:inferred_patch_op_types=1",
+                "runner_normalized:fallback_scaffold_ops",
+            ],
+        )
+        self.assertCountEqual(
+            result["verification"]["ai_run"]["show_normalization_notes"],
+            [
+                "runner_normalized:inferred_patch_op_types=1",
+                "runner_normalized:fallback_scaffold_ops",
+            ],
+        )
+
+    def test_runner_compare_surfaces_runner_metadata_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "import sys",
+                        "from pathlib import Path",
+                        "",
+                        "label = sys.argv[1]",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "used_fallback = label == 'left'",
+                        "notes = ['runner_normalized:fallback_scaffold_ops'] if used_fallback else []",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': f'{label} summary',",
+                        "    'explanation': {",
+                        "        'rationale_summary': f'{label} rationale',",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': label,",
+                        "        'run_id': label,",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': f'{label} summary',",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': f'{label} branch',",
+                        "                'kind': 'topic',",
+                        "                'body': f'{label} body',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': notes,",
+                        "}",
+                        "metadata = {",
+                        "    'provider': 'fake_runner',",
+                        "    'model': label,",
+                        "    'provider_run_id': label,",
+                        "    'retry_count': 0,",
+                        "    'used_plain_json_fallback': used_fallback,",
+                        "    'normalization_notes': notes,",
+                        "    'last_error_category': None,",
+                        "    'last_error_message': None,",
+                        "    'last_status_code': None,",
+                        "}",
+                        "Path(os.environ['NODEX_AI_META']).write_text(json.dumps(metadata, indent=2))",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            left_command = shlex.join([sys.executable, str(fake_runner), "left"])
+            right_command = shlex.join([sys.executable, str(fake_runner), "right"])
+            result = run_script(
+                "scripts/runner_compare.py",
+                "--json",
+                "--scenario",
+                "source-root",
+                "--fixture",
+                str(FIXTURE_PATH),
+                "--runner",
+                f"left={left_command}",
+                "--runner",
+                f"right={right_command}",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["runner_metrics"]["left"]["used_plain_json_fallback"])
+        self.assertFalse(payload["runner_metrics"]["right"]["used_plain_json_fallback"])
+        self.assertEqual(
+            payload["runner_metrics"]["left"]["normalization_note_count"],
+            1,
+        )
+        self.assertEqual(
+            payload["runner_metrics"]["right"]["normalization_note_count"],
+            0,
+        )
+
     def test_runner_compare_can_compare_two_fake_runners(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fake_runner = Path(tmp_dir) / "fake_runner.py"

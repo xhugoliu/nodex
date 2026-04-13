@@ -34,6 +34,7 @@ LangChain 已经从“可选试点”切到“当前默认 AI runtime / orchestr
 - runner metadata 中的 fallback / normalization 标记
 
 Anthropic-specific 的质量约束仍保留在 `langchain_anthropic_runner.py`，不把默认主路经验硬塞进所有 provider。
+这些标记现在也已经进入 `provider_smoke.py` / `runner_compare.py` 的 quality summary / runner metrics，并进入本地 `ai_runs` 索引与 `ai show` / `ai compare` 读取链路，不再只留在 sidecar `*.meta.json` 里。
 
 ## 最小使用方式
 
@@ -64,8 +65,9 @@ python3 scripts/runner_compare.py --preset langchain-pilot --scenario source-roo
 - `load_anthropic_context` / `load_openai_context` 的配置发现优先级
 - OpenAI / Anthropic runner-entry 的 plain-JSON fallback metadata
 - OpenAI invoke 路径的 no-broad-fallback 错误分类约束
+- smoke / compare summary 对 fallback / normalization metadata 的透传
 
 下一轮更值得补的仍然是：
 
 - `runner_compare.py` 在 `source-root` / `source-context` 上更贴近真实 LangChain preset 的 compare 回归
-- runner metadata 标记在 smoke / compare 汇总里的可见性，而不只是留在 sidecar meta.json
+- compare 输出对 normalization metadata 差异的直接摘要，而不只是 run-level metrics

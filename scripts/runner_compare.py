@@ -499,6 +499,10 @@ def print_text_report(result: dict) -> None:
         print(f"  model: {metadata.get('model') or '(unknown)'}")
         print(f"  patch summary: {summary}")
         print(f"  rationale: {explanation['rationale_summary']}")
+        print(
+            f"  fallback: {item['quality']['used_plain_json_fallback']} "
+            f"(notes={item['quality']['normalization_note_count']})"
+        )
 
     if not result["comparisons"]:
         print()
@@ -527,7 +531,7 @@ def print_fixture_set_report(result: dict) -> None:
         f"Cases: {aggregate['successful_cases']} succeeded / {aggregate['failed_cases']} failed / {aggregate['total_cases']} total"
     )
     print(
-        f"Patch legal rate: {aggregate['patch_legal_rate']:.2f}, direct evidence cases: {aggregate['direct_evidence_cases']}, explainability complete cases: {aggregate['explainability_complete_cases']}"
+        f"Patch legal rate: {aggregate['patch_legal_rate']:.2f}, direct evidence cases: {aggregate['direct_evidence_cases']}, explainability complete cases: {aggregate['explainability_complete_cases']}, fallback cases: {aggregate['fallback_used_cases']}, normalization-note cases: {aggregate['normalization_note_cases']}"
     )
     print()
     print("[cases]")
@@ -541,23 +545,33 @@ def print_fixture_set_report(result: dict) -> None:
                 continue
             quality = item["quality"]
             print(
-                f"    patch_legal={quality['patch_legal']} direct_evidence={quality['direct_evidence_count']} explainability_complete={quality['explainability_complete']}"
+                f"    patch_legal={quality['patch_legal']} direct_evidence={quality['direct_evidence_count']} explainability_complete={quality['explainability_complete']} fallback={quality['used_plain_json_fallback']} normalization_notes={quality['normalization_note_count']}"
             )
 
 
 def build_run_quality_summary(run_payload: dict) -> dict:
     explanation = run_payload.get("explanation") or {}
     report = run_payload.get("report") or {}
+    metadata = run_payload.get("metadata", {}) or {}
     direct_evidence = explanation.get("direct_evidence") or []
     inferred = explanation.get("inferred_suggestions") or []
     rationale = explanation.get("rationale_summary") or ""
     preview = report.get("preview") or []
+    normalization_notes = metadata.get("normalization_notes") or []
     return {
-        "patch_legal": run_payload.get("metadata", {}).get("status") == "dry_run_succeeded",
+        "patch_legal": metadata.get("status") == "dry_run_succeeded",
         "patch_op_count": len(preview) if isinstance(preview, list) else 0,
         "direct_evidence_count": len(direct_evidence) if isinstance(direct_evidence, list) else 0,
         "has_direct_evidence": bool(direct_evidence),
         "inferred_suggestions_count": len(inferred) if isinstance(inferred, list) else 0,
+        "used_plain_json_fallback": metadata.get("used_plain_json_fallback") is True,
+        "normalization_note_count": (
+            len(normalization_notes) if isinstance(normalization_notes, list) else 0
+        ),
+        "has_normalization_notes": bool(normalization_notes),
+        "normalization_notes": (
+            normalization_notes if isinstance(normalization_notes, list) else []
+        ),
         "rationale_present": isinstance(rationale, str) and bool(rationale.strip()),
         "explainability_complete": (
             isinstance(rationale, str)
@@ -583,6 +597,8 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
     explainability_complete_cases = 0
     failed_cases = 0
     compare_difference_cases = 0
+    fallback_used_cases = 0
+    normalization_note_cases = 0
 
     for case in case_results:
         runs = case.get("runs") or []
@@ -601,6 +617,18 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
             for item in runs
         ):
             explainability_complete_cases += 1
+
+        if any(
+            item.get("quality", {}).get("used_plain_json_fallback") is True
+            for item in runs
+        ):
+            fallback_used_cases += 1
+
+        if any(
+            item.get("quality", {}).get("has_normalization_notes") is True
+            for item in runs
+        ):
+            normalization_note_cases += 1
 
         comparisons = case.get("comparisons") or []
         if any(
@@ -621,6 +649,8 @@ def aggregate_fixture_set_metrics(case_results: list[dict]) -> dict:
         "patch_legal_rate": successful_cases / total_cases if total_cases else 0,
         "direct_evidence_cases": direct_evidence_cases,
         "explainability_complete_cases": explainability_complete_cases,
+        "fallback_used_cases": fallback_used_cases,
+        "normalization_note_cases": normalization_note_cases,
         "compare_difference_cases": compare_difference_cases,
     }
 

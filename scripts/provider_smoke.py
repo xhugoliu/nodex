@@ -378,6 +378,16 @@ def build_fixture_set_metrics(case_results: list[dict], *, apply: bool) -> dict:
         for item in case_results
         if item.get("quality", {}).get("explainability_complete") is True
     )
+    fallback_used_cases = sum(
+        1
+        for item in case_results
+        if item.get("quality", {}).get("used_plain_json_fallback") is True
+    )
+    normalization_note_cases = sum(
+        1
+        for item in case_results
+        if item.get("quality", {}).get("has_normalization_notes") is True
+    )
     return {
         "total_cases": total_cases,
         "successful_cases": successful_cases,
@@ -387,6 +397,8 @@ def build_fixture_set_metrics(case_results: list[dict], *, apply: bool) -> dict:
         "verification_failed_cases": verification_failed_cases,
         "direct_evidence_cases": direct_evidence_cases,
         "explainability_complete_cases": explainability_complete_cases,
+        "fallback_used_cases": fallback_used_cases,
+        "normalization_note_cases": normalization_note_cases,
     }
 
 
@@ -407,6 +419,7 @@ def build_run_quality_summary(run_payload: dict, *, apply: bool) -> dict:
         op for op in ops if isinstance(op, dict) and op.get("type") == "add_node"
     ]
     patch_run_id = metadata.get("patch_run_id")
+    normalization_notes = metadata.get("normalization_notes") or []
     return {
         "status": status,
         "expected_status": expected_status,
@@ -418,6 +431,14 @@ def build_run_quality_summary(run_payload: dict, *, apply: bool) -> dict:
         "has_direct_evidence": bool(direct_evidence),
         "inferred_suggestions_count": len(inferred) if isinstance(inferred, list) else 0,
         "patch_run_link_ok": bool(patch_run_id) if apply else patch_run_id is None,
+        "used_plain_json_fallback": metadata.get("used_plain_json_fallback") is True,
+        "normalization_note_count": (
+            len(normalization_notes) if isinstance(normalization_notes, list) else 0
+        ),
+        "has_normalization_notes": bool(normalization_notes),
+        "normalization_notes": (
+            normalization_notes if isinstance(normalization_notes, list) else []
+        ),
         "created_node_count": len(created_nodes) if isinstance(created_nodes, list) else 0,
         "add_node_op_count": len(add_node_ops),
         "created_nodes_recorded": (
@@ -455,6 +476,7 @@ def build_smoke_verification(
             run_id=run_id,
             node_id=node_id,
             apply=apply,
+            run_payload=run_payload,
         )
     if scenario == "source-root" and scenario_payload is not None:
         verification["scenario"] = verify_source_root_workspace_state(
@@ -487,6 +509,7 @@ def verify_ai_run_persistence(
     run_id: str,
     node_id: str,
     apply: bool,
+    run_payload: dict,
 ) -> dict:
     history = run_nodex_json_command(
         manifest_path=manifest_path,
@@ -510,6 +533,11 @@ def verify_ai_run_persistence(
     record = show_output.get("record") or {}
     patch_preview = show_output.get("patch_preview") or []
     patch_run_id = record.get("patch_run_id")
+    expected_metadata = run_payload.get("metadata", {}) or {}
+    expected_used_plain_json_fallback = (
+        expected_metadata.get("used_plain_json_fallback") is True
+    )
+    expected_normalization_notes = expected_metadata.get("normalization_notes") or []
     history_entry_found = history_entry is not None
     history_status_ok = history_entry is not None and history_entry.get("status") == expected_status
     history_patch_link_ok = (
@@ -519,11 +547,34 @@ def verify_ai_run_persistence(
         history_patch_link_ok = history_entry.get("patch_run_id") is None
     show_status_ok = record.get("status") == expected_status
     show_patch_link_ok = bool(patch_run_id) if apply else patch_run_id is None
+    history_used_plain_json_fallback = (
+        history_entry.get("used_plain_json_fallback") is True
+        if isinstance(history_entry, dict)
+        else False
+    )
+    show_used_plain_json_fallback = record.get("used_plain_json_fallback") is True
+    history_normalization_notes = (
+        history_entry.get("normalization_notes") or []
+        if isinstance(history_entry, dict)
+        else []
+    )
+    show_normalization_notes = record.get("normalization_notes") or []
+    history_metadata_flags_match = (
+        isinstance(history_entry, dict)
+        and history_used_plain_json_fallback == expected_used_plain_json_fallback
+        and history_normalization_notes == expected_normalization_notes
+    )
+    show_metadata_flags_match = (
+        show_used_plain_json_fallback == expected_used_plain_json_fallback
+        and show_normalization_notes == expected_normalization_notes
+    )
     ok = (
         history_entry_found
         and history_status_ok
         and history_patch_link_ok
+        and history_metadata_flags_match
         and show_status_ok
+        and show_metadata_flags_match
         and record.get("node_id") == node_id
         and isinstance(show_output.get("patch"), dict)
         and isinstance(show_output.get("explanation"), dict)
@@ -536,8 +587,16 @@ def verify_ai_run_persistence(
         "history_entry_found": history_entry_found,
         "history_status_ok": history_status_ok,
         "history_patch_link_ok": history_patch_link_ok,
+        "history_used_plain_json_fallback": history_used_plain_json_fallback,
+        "history_normalization_note_count": len(history_normalization_notes),
+        "history_normalization_notes": history_normalization_notes,
+        "history_metadata_flags_match": history_metadata_flags_match,
         "show_status_ok": show_status_ok,
         "show_patch_link_ok": show_patch_link_ok,
+        "show_used_plain_json_fallback": show_used_plain_json_fallback,
+        "show_normalization_note_count": len(show_normalization_notes),
+        "show_normalization_notes": show_normalization_notes,
+        "show_metadata_flags_match": show_metadata_flags_match,
         "show_patch_preview_count": len(patch_preview) if isinstance(patch_preview, list) else 0,
         "response_notes_count": len(show_output.get("response_notes") or []),
         "ok": ok,

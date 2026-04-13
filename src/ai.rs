@@ -212,6 +212,10 @@ pub struct AiRunMetadata {
     pub model: Option<String>,
     pub provider_run_id: Option<String>,
     pub retry_count: u32,
+    #[serde(default)]
+    pub used_plain_json_fallback: bool,
+    #[serde(default)]
+    pub normalization_notes: Vec<String>,
     pub last_error_category: Option<String>,
     pub last_error_message: Option<String>,
     pub last_status_code: Option<i32>,
@@ -229,6 +233,10 @@ struct RunnerSidecarMetadata {
     provider_run_id: Option<String>,
     #[serde(default)]
     retry_count: u32,
+    #[serde(default)]
+    used_plain_json_fallback: bool,
+    #[serde(default)]
+    normalization_notes: Vec<String>,
     #[serde(default)]
     last_error_category: Option<String>,
     #[serde(default)]
@@ -1299,6 +1307,8 @@ fn build_run_metadata(
         model: sidecar.model.clone(),
         provider_run_id: sidecar.provider_run_id.clone(),
         retry_count: sidecar.retry_count,
+        used_plain_json_fallback: sidecar.used_plain_json_fallback,
+        normalization_notes: sidecar.normalization_notes.clone(),
         last_error_category: sidecar.last_error_category.clone(),
         last_error_message: sidecar.last_error_message.clone(),
         last_status_code: sidecar.last_status_code,

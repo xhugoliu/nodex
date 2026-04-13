@@ -1003,6 +1003,20 @@ fn print_ai_run_record(entry: &AiRunRecord) {
         println!("  provider run: {}", provider_run_id);
     }
     println!("  retries: {}", entry.retry_count);
+    println!(
+        "  plain json fallback: {}",
+        if entry.used_plain_json_fallback {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    if !entry.normalization_notes.is_empty() {
+        println!("  normalization notes:");
+        for note in &entry.normalization_notes {
+            println!("    - {}", note);
+        }
+    }
     if let Some(exit_code) = entry.exit_code {
         println!("  exit code: {}", exit_code);
     }
@@ -1126,6 +1140,20 @@ fn print_external_runner_report(report: &ExternalRunnerReport, dry_run: bool) {
         println!("provider run id: {}", run_id);
     }
     println!("retry count: {}", report.metadata.retry_count);
+    println!(
+        "plain json fallback: {}",
+        if report.metadata.used_plain_json_fallback {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    if !report.metadata.normalization_notes.is_empty() {
+        println!("normalization notes:");
+        for note in &report.metadata.normalization_notes {
+            println!("- {note}");
+        }
+    }
     print_ai_patch_explanation(&report.explanation);
     if !report.notes.is_empty() {
         println!("[notes]");

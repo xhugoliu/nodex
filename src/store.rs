@@ -21,7 +21,7 @@ mod queries;
 mod snapshots;
 mod source_import;
 
-const CURRENT_SCHEMA_VERSION: &str = "4";
+const CURRENT_SCHEMA_VERSION: &str = "5";
 
 pub struct Workspace {
     pub paths: ProjectPaths,
@@ -120,6 +120,8 @@ impl Workspace {
                 model TEXT,
                 provider_run_id TEXT,
                 retry_count INTEGER NOT NULL,
+                used_plain_json_fallback INTEGER NOT NULL DEFAULT 0,
+                normalization_notes TEXT NOT NULL DEFAULT '[]',
                 last_error_category TEXT,
                 last_error_message TEXT,
                 last_status_code INTEGER,
@@ -179,6 +181,7 @@ impl Workspace {
             ",
         )?;
         self.ensure_node_evidence_schema()?;
+        self.ensure_ai_run_metadata_schema()?;
         Ok(())
     }
 
@@ -226,6 +229,22 @@ impl Workspace {
         if !self.table_has_column("node_evidence_chunks", "rationale")? {
             self.conn.execute(
                 "ALTER TABLE node_evidence_chunks ADD COLUMN rationale TEXT",
+                [],
+            )?;
+        }
+        Ok(())
+    }
+
+    fn ensure_ai_run_metadata_schema(&self) -> Result<()> {
+        if !self.table_has_column("ai_runs", "used_plain_json_fallback")? {
+            self.conn.execute(
+                "ALTER TABLE ai_runs ADD COLUMN used_plain_json_fallback INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !self.table_has_column("ai_runs", "normalization_notes")? {
+            self.conn.execute(
+                "ALTER TABLE ai_runs ADD COLUMN normalization_notes TEXT NOT NULL DEFAULT '[]'",
                 [],
             )?;
         }
@@ -1272,6 +1291,8 @@ mod tests {
             model: Some("gpt-5.4-mini".to_string()),
             provider_run_id: Some("provider-run-1".to_string()),
             retry_count: 0,
+            used_plain_json_fallback: false,
+            normalization_notes: vec![],
             last_error_category: None,
             last_error_message: None,
             last_status_code: None,
@@ -1346,6 +1367,8 @@ mod tests {
             model: Some("test-model".to_string()),
             provider_run_id: Some("provider-run-1".to_string()),
             retry_count: 0,
+            used_plain_json_fallback: false,
+            normalization_notes: vec![],
             last_error_category: None,
             last_error_message: None,
             last_status_code: None,
@@ -1418,6 +1441,8 @@ mod tests {
             model: Some("test-model".to_string()),
             provider_run_id: Some("provider-run-2".to_string()),
             retry_count: 0,
+            used_plain_json_fallback: false,
+            normalization_notes: vec![],
             last_error_category: None,
             last_error_message: None,
             last_status_code: None,
@@ -1464,6 +1489,8 @@ mod tests {
             model: Some("test-model".to_string()),
             provider_run_id: Some("provider-run-apply".to_string()),
             retry_count: 0,
+            used_plain_json_fallback: false,
+            normalization_notes: vec![],
             last_error_category: None,
             last_error_message: None,
             last_status_code: None,
@@ -1505,6 +1532,8 @@ mod tests {
             model: Some("test-model".to_string()),
             provider_run_id: Some("provider-run-3".to_string()),
             retry_count: 0,
+            used_plain_json_fallback: false,
+            normalization_notes: vec![],
             last_error_category: None,
             last_error_message: None,
             last_status_code: None,
@@ -1738,11 +1767,108 @@ Path(os.environ["NODEX_AI_RESPONSE"]).write_text(json.dumps(response, indent=2))
 
         assert_eq!(
             workspace.metadata_value("schema_version")?.as_deref(),
-            Some("4")
+            Some("5")
         );
         assert_eq!(evidence.len(), 1);
         assert_eq!(evidence[0].citation_kind, "direct");
         assert!(evidence[0].rationale.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn open_workspace_migrates_legacy_ai_run_metadata_schema() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let root = temp_dir.path().canonicalize()?;
+        let paths = ProjectPaths::for_root(root.clone());
+        paths.create_layout()?;
+
+        let conn = rusqlite::Connection::open(&paths.db_path)?;
+        conn.execute_batch(
+            "
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
+            CREATE TABLE ai_runs (
+                id TEXT PRIMARY KEY,
+                capability TEXT NOT NULL,
+                explore_by TEXT,
+                node_id TEXT NOT NULL,
+                command TEXT NOT NULL,
+                dry_run INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                started_at INTEGER NOT NULL,
+                finished_at INTEGER NOT NULL,
+                request_path TEXT NOT NULL,
+                response_path TEXT NOT NULL,
+                exit_code INTEGER,
+                provider TEXT,
+                model TEXT,
+                provider_run_id TEXT,
+                retry_count INTEGER NOT NULL,
+                last_error_category TEXT,
+                last_error_message TEXT,
+                last_status_code INTEGER,
+                patch_run_id TEXT,
+                patch_summary TEXT
+            );
+            ",
+        )?;
+        conn.execute(
+            "INSERT INTO metadata (key, value) VALUES (?1, ?2)",
+            params!["schema_version", "4"],
+        )?;
+        conn.execute(
+            "INSERT INTO ai_runs (
+                id, capability, explore_by, node_id, command, dry_run, status, started_at,
+                finished_at, request_path, response_path, exit_code, provider, model,
+                provider_run_id, retry_count, last_error_category, last_error_message,
+                last_status_code, patch_run_id, patch_summary
+            ) VALUES (
+                ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
+                ?9, ?10, ?11, ?12, ?13, ?14,
+                ?15, ?16, ?17, ?18, ?19, ?20, ?21
+            )",
+            params![
+                "legacy-run",
+                "expand",
+                Option::<String>::None,
+                "root",
+                "python3 legacy_runner.py",
+                1,
+                "dry_run_succeeded",
+                10,
+                11,
+                "/tmp/legacy.request.json",
+                "/tmp/legacy.response.json",
+                0,
+                "legacy-provider",
+                "legacy-model",
+                "legacy-provider-run",
+                0,
+                Option::<String>::None,
+                Option::<String>::None,
+                Option::<i32>::None,
+                Option::<String>::None,
+                Option::<String>::None,
+            ],
+        )?;
+        drop(conn);
+
+        let workspace = Workspace::open_from(&root)?;
+        let record = workspace
+            .ai_run_record_by_id("legacy-run")?
+            .context("legacy ai run should still exist after migration")?;
+
+        assert_eq!(
+            workspace.metadata_value("schema_version")?.as_deref(),
+            Some("5")
+        );
+        assert!(workspace.table_has_column("ai_runs", "used_plain_json_fallback")?);
+        assert!(workspace.table_has_column("ai_runs", "normalization_notes")?);
+        assert!(!record.used_plain_json_fallback);
+        assert!(record.normalization_notes.is_empty());
         Ok(())
     }
 

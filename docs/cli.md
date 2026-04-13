@@ -102,6 +102,12 @@ cargo run -- ai replay <run-id> --dry-run
 cargo run -- ai compare <left-run-id> <right-run-id>
 ```
 
+当前 `ai history` / `ai show` / `ai compare` 相关路径也会保留并读取：
+
+- runner retry / error 分类
+- `used_plain_json_fallback`
+- `normalization_notes`
+
 ## 当前桌面回归入口
 
 如果目标是守住桌面主路径，不是看单条 CLI 命令，优先跑：

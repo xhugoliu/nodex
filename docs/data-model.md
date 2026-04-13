@@ -24,7 +24,7 @@
 ## 当前 SQLite 表
 
 - `metadata`
-  工作区元信息；当前 `schema_version` 为 `4`
+  工作区元信息；当前 `schema_version` 为 `5`
 - `nodes`
   当前脑图状态
 - `patch_runs`
@@ -32,7 +32,7 @@
 - `snapshots`
   完整快照记录
 - `ai_runs`
-  AI 运行最小索引
+  AI 运行索引；当前也保留 runner fallback 标记与 normalization note 摘要
 - `sources`
   导入来源文件
 - `node_sources`
@@ -69,3 +69,8 @@
 - `*.meta.json`
 
 SQLite `ai_runs` 只保存最小索引和关键路径，不代替这些工件文件。
+但当前 `ai_runs` 也会索引：
+
+- runner retry / error 分类
+- `used_plain_json_fallback`
+- `normalization_notes`

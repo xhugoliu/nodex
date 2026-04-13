@@ -81,6 +81,8 @@ pub struct AiRunRecord {
     pub model: Option<String>,
     pub provider_run_id: Option<String>,
     pub retry_count: u32,
+    pub used_plain_json_fallback: bool,
+    pub normalization_notes: Vec<String>,
     pub last_error_category: Option<String>,
     pub last_error_message: Option<String>,
     pub last_status_code: Option<i32>,

@@ -118,12 +118,12 @@ impl Workspace {
 
     pub fn ai_run_history(&self, node_id: Option<&str>) -> Result<Vec<AiRunRecord>> {
         let sql = if node_id.is_some() {
-            "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
+            "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, used_plain_json_fallback, normalization_notes, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
              FROM ai_runs
              WHERE node_id = ?1
              ORDER BY started_at DESC, id DESC"
         } else {
-            "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
+            "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, used_plain_json_fallback, normalization_notes, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
              FROM ai_runs
              ORDER BY started_at DESC, id DESC"
         };
@@ -146,7 +146,7 @@ impl Workspace {
     pub fn ai_run_record_by_id(&self, run_id: &str) -> Result<Option<AiRunRecord>> {
         self.conn
             .query_row(
-                "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
+                "SELECT id, capability, explore_by, node_id, command, dry_run, status, started_at, finished_at, request_path, response_path, exit_code, provider, model, provider_run_id, retry_count, used_plain_json_fallback, normalization_notes, last_error_category, last_error_message, last_status_code, patch_run_id, patch_summary
                  FROM ai_runs
                  WHERE id = ?1",
                 [run_id],
@@ -641,16 +641,19 @@ impl Workspace {
     }
 
     pub(crate) fn upsert_ai_run_index(&self, metadata: &AiRunMetadata) -> Result<()> {
+        let normalization_notes_json = serde_json::to_string(&metadata.normalization_notes)
+            .context("failed to serialize AI run normalization notes")?;
         self.conn.execute(
             "INSERT INTO ai_runs (
                 id, capability, explore_by, node_id, command, dry_run, status, started_at,
                 finished_at, request_path, response_path, exit_code, provider, model,
-                provider_run_id, retry_count, last_error_category, last_error_message,
-                last_status_code, patch_run_id, patch_summary
+                provider_run_id, retry_count, used_plain_json_fallback, normalization_notes,
+                last_error_category, last_error_message, last_status_code, patch_run_id,
+                patch_summary
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8,
                 ?9, ?10, ?11, ?12, ?13, ?14,
-                ?15, ?16, ?17, ?18, ?19, ?20, ?21
+                ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23
             )
             ON CONFLICT(id) DO UPDATE SET
                 capability = excluded.capability,
@@ -668,6 +671,8 @@ impl Workspace {
                 model = excluded.model,
                 provider_run_id = excluded.provider_run_id,
                 retry_count = excluded.retry_count,
+                used_plain_json_fallback = excluded.used_plain_json_fallback,
+                normalization_notes = excluded.normalization_notes,
                 last_error_category = excluded.last_error_category,
                 last_error_message = excluded.last_error_message,
                 last_status_code = excluded.last_status_code,
@@ -690,6 +695,12 @@ impl Workspace {
                 metadata.model,
                 metadata.provider_run_id,
                 metadata.retry_count as i64,
+                if metadata.used_plain_json_fallback {
+                    1
+                } else {
+                    0
+                },
+                normalization_notes_json,
                 metadata.last_error_category,
                 metadata.last_error_message,
                 metadata.last_status_code,
@@ -715,6 +726,9 @@ pub(super) fn read_node(row: &rusqlite::Row<'_>) -> rusqlite::Result<Node> {
 }
 
 fn read_ai_run_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<AiRunRecord> {
+    let normalization_notes_json: String = row.get(17)?;
+    let normalization_notes =
+        serde_json::from_str::<Vec<String>>(&normalization_notes_json).unwrap_or_default();
     Ok(AiRunRecord {
         id: row.get(0)?,
         capability: row.get(1)?,
@@ -732,11 +746,13 @@ fn read_ai_run_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<AiRunRecord> 
         model: row.get(13)?,
         provider_run_id: row.get(14)?,
         retry_count: row.get::<_, i64>(15)? as u32,
-        last_error_category: row.get(16)?,
-        last_error_message: row.get(17)?,
-        last_status_code: row.get(18)?,
-        patch_run_id: row.get(19)?,
-        patch_summary: row.get(20)?,
+        used_plain_json_fallback: row.get::<_, i64>(16)? != 0,
+        normalization_notes,
+        last_error_category: row.get(18)?,
+        last_error_message: row.get(19)?,
+        last_status_code: row.get(20)?,
+        patch_run_id: row.get(21)?,
+        patch_summary: row.get(22)?,
     })
 }
 
