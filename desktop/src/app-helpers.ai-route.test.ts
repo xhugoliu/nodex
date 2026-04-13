@@ -142,9 +142,13 @@ test("deriveContextSelectionDecision keeps review/apply state when returning to 
   const decision = deriveContextSelectionDecision(
     { nodeId: "node-a", sourceId: null },
     { nodeId: "node-a", sourceId: null },
+    {
+      currentSelectionPanelTab: "review",
+      preservePanelTab: true,
+    },
   );
 
-  assert.equal(decision.nextSelectionPanelTab, "context");
+  assert.equal(decision.nextSelectionPanelTab, "review");
   assert.equal(decision.shouldClearTransientReviewState, false);
 });
 
@@ -152,17 +156,38 @@ test("deriveContextSelectionDecision clears review/apply state when opening a di
   const decision = deriveContextSelectionDecision(
     { nodeId: "node-a", sourceId: "source-1" },
     { nodeId: "node-a", sourceId: "source-2" },
+    {
+      currentSelectionPanelTab: "review",
+      preservePanelTab: true,
+    },
   );
 
   assert.equal(decision.nextSelectionPanelTab, "context");
   assert.equal(decision.shouldClearTransientReviewState, true);
 });
 
+test("deriveContextSelectionDecision falls back to Context when panel preservation is not requested", () => {
+  const decision = deriveContextSelectionDecision(
+    { nodeId: "node-a", sourceId: null },
+    { nodeId: "node-a", sourceId: null },
+    {
+      currentSelectionPanelTab: "review",
+    },
+  );
+
+  assert.equal(decision.nextSelectionPanelTab, "context");
+  assert.equal(decision.shouldClearTransientReviewState, false);
+});
+
 test("deriveContextSelectionDecision respects an explicit clear override", () => {
   const decision = deriveContextSelectionDecision(
     { nodeId: "node-a", sourceId: null },
     { nodeId: "node-a", sourceId: null },
-    true,
+    {
+      clearTransientReviewState: true,
+      currentSelectionPanelTab: "review",
+      preservePanelTab: true,
+    },
   );
 
   assert.equal(decision.nextSelectionPanelTab, "context");

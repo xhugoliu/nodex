@@ -175,14 +175,22 @@ export interface SelectionContext {
   sourceId: string | null;
 }
 
+export type SelectionPanelTab = "context" | "review";
+
 export interface OverviewFocusDecision {
   nextNodeId: string | null;
   shouldClearTransientReviewState: boolean;
 }
 
 export interface ContextSelectionDecision {
-  nextSelectionPanelTab: "context";
+  nextSelectionPanelTab: SelectionPanelTab;
   shouldClearTransientReviewState: boolean;
+}
+
+export interface ContextSelectionDecisionOptions {
+  clearTransientReviewState?: boolean;
+  preservePanelTab?: boolean;
+  currentSelectionPanelTab?: SelectionPanelTab;
 }
 
 export function resolveOverviewFocusNodeId(
@@ -206,13 +214,20 @@ export function shouldClearTransientReviewState(
 export function deriveContextSelectionDecision(
   previous: SelectionContext,
   next: SelectionContext,
-  clearTransientReviewState?: boolean,
+  options: ContextSelectionDecisionOptions = {},
 ): ContextSelectionDecision {
+  const shouldResetTransientReviewState =
+    options.clearTransientReviewState ??
+    shouldClearTransientReviewState(previous, next);
+
   return {
-    nextSelectionPanelTab: "context",
-    shouldClearTransientReviewState:
-      clearTransientReviewState ??
-      shouldClearTransientReviewState(previous, next),
+    nextSelectionPanelTab:
+      !shouldResetTransientReviewState &&
+      options.preservePanelTab &&
+      options.currentSelectionPanelTab === "review"
+        ? "review"
+        : "context",
+    shouldClearTransientReviewState: shouldResetTransientReviewState,
   };
 }
 

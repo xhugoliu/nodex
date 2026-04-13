@@ -418,12 +418,14 @@ export default function App() {
     ) {
       const reloaded = await fetchNodeContext(selectedNodeId, overview.root_dir, {
         clearTransientReviewState: false,
+        preservePanelTab: true,
         silentError: true,
       });
       if (reloaded) {
         if (selectedSourceId) {
           await fetchSourceDetail(selectedSourceId, overview.root_dir, {
             clearTransientReviewState: false,
+            preservePanelTab: true,
             silentError: true,
           });
         }
@@ -577,6 +579,7 @@ export default function App() {
     path = workspacePath,
     options: {
       clearTransientReviewState?: boolean;
+      preservePanelTab?: boolean;
       silentError?: boolean;
     } = {},
   ) {
@@ -601,7 +604,11 @@ export default function App() {
           nodeId,
           sourceId: null,
         },
-        options.clearTransientReviewState,
+        {
+          clearTransientReviewState: options.clearTransientReviewState,
+          preservePanelTab: options.preservePanelTab,
+          currentSelectionPanelTab: selectionPanelTab,
+        },
       );
       if (selectionDecision.shouldClearTransientReviewState) {
         resetTransientReviewState();
@@ -625,6 +632,7 @@ export default function App() {
     path = workspacePath,
     options: {
       clearTransientReviewState?: boolean;
+      preservePanelTab?: boolean;
       silentError?: boolean;
     } = {},
   ) {
@@ -646,7 +654,11 @@ export default function App() {
           nodeId: selectedNodeId,
           sourceId,
         },
-        options.clearTransientReviewState,
+        {
+          clearTransientReviewState: options.clearTransientReviewState,
+          preservePanelTab: options.preservePanelTab,
+          currentSelectionPanelTab: selectionPanelTab,
+        },
       );
       if (selectionDecision.shouldClearTransientReviewState) {
         resetTransientReviewState();
