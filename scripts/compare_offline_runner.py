@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 
 from ai_contract import (
@@ -146,6 +147,11 @@ def build_contract_response(
         scenario=scenario,
         default=variant_config["branch_count"],
     )
+    branch_blueprint = build_branch_blueprint(
+        request_payload=request_payload,
+        scenario=scenario,
+        branch_count=branch_count,
+    )
 
     return {
         "explanation": {
@@ -154,10 +160,12 @@ def build_contract_response(
                 f"through the {scenario} request shape."
             ),
             "direct_evidence": build_direct_evidence(request_payload, variant, scenario),
-            "inferred_suggestions": [
-                f"Review how {variant} reacts to the {scenario} request payload.",
-                f"Compare {variant} against the Anthropic default route for {target_title}.",
-            ],
+            "inferred_suggestions": build_inferred_suggestions(
+                variant=variant,
+                scenario=scenario,
+                target_title=target_title,
+                branch_blueprint=branch_blueprint,
+            ),
         },
         "patch": {
             "ops": build_patch_ops(
@@ -165,6 +173,7 @@ def build_contract_response(
                 variant=variant,
                 scenario=scenario,
                 branch_count=branch_count,
+                branch_blueprint=branch_blueprint,
             )
         },
         "notes": [
@@ -208,11 +217,13 @@ def build_patch_ops(
     variant: str,
     scenario: str,
     branch_count: int,
+    branch_blueprint: list[dict],
 ) -> list[dict]:
     ops = []
     for index in range(branch_count):
-        title = f"{branch_title_prefix(variant)} {scenario} {index + 1}"
-        body = (
+        blueprint = branch_blueprint[index] if index < len(branch_blueprint) else {}
+        title = blueprint.get("title") or f"{branch_title_prefix(variant)} {scenario} {index + 1}"
+        body = blueprint.get("body") or (
             f"{branch_body_prefix(variant)} offline compare branch {index + 1} "
             f"for the {scenario} request path"
         )
@@ -239,6 +250,146 @@ def should_emit_explicit_type(*, variant: str, scenario: str) -> bool:
     if variant != "openai-minimal":
         return True
     return scenario in {"source-context", "source-root"}
+
+
+def build_branch_blueprint(
+    *,
+    request_payload: dict,
+    scenario: str,
+    branch_count: int,
+) -> list[dict]:
+    if scenario == "source-context":
+        blueprint = build_source_context_branch_blueprint(request_payload)
+        if len(blueprint) == branch_count:
+            return blueprint
+    if scenario == "source-root":
+        blueprint = build_source_root_branch_blueprint(request_payload)
+        if len(blueprint) == branch_count:
+            return blueprint
+    return []
+
+
+def build_source_context_branch_blueprint(request_payload: dict) -> list[dict]:
+    target_node = request_payload.get("target_node") or {}
+    target_body = target_node.get("body") or ""
+    env_vars = extract_env_vars(target_body)
+    route_title = (
+        "Desktop Default Route"
+        if "default route" in target_body.lower() or "prefers" in target_body.lower()
+        else None
+    )
+
+    entries = []
+    for env_var in env_vars[:3]:
+        entries.append(
+            {
+                "title": env_var,
+                "body": describe_env_var(env_var),
+            }
+        )
+    if route_title:
+        entries.append(
+            {
+                "title": route_title,
+                "body": (
+                    "The desktop default now prefers the Anthropic-compatible "
+                    "LangChain runner over other providers"
+                ),
+            }
+        )
+    return entries[:4]
+
+
+def build_source_root_branch_blueprint(request_payload: dict) -> list[dict]:
+    target_node = request_payload.get("target_node") or {}
+    title = (target_node.get("title") or "").lower()
+    body = (target_node.get("body") or "").lower()
+    if "regression" not in title and "regression" not in body:
+        return []
+    if "draft" not in body and "source-backed" not in body:
+        return []
+    return [
+        {
+            "title": "Draft Path Trigger Conditions",
+            "body": "Conditions under which the AI draft path is activated for this fixture",
+        },
+        {
+            "title": "Source-Backed Chunk Resolution",
+            "body": (
+                "How source chunks are resolved and mapped into the draft output "
+                "for this regression"
+            ),
+        },
+        {
+            "title": "Regression Scope And Assertions",
+            "body": (
+                "Expected assertions and pass/fail criteria specific to this "
+                "regression fixture"
+            ),
+        },
+        {
+            "title": "Anthropic Model Configuration",
+            "body": "Model parameters and provider settings used in this regression run",
+        },
+    ]
+
+
+def build_inferred_suggestions(
+    *,
+    variant: str,
+    scenario: str,
+    target_title: str,
+    branch_blueprint: list[dict],
+) -> list[str]:
+    if scenario == "source-root" and len(branch_blueprint) >= 4:
+        return [
+            (
+                f"Expand {branch_blueprint[0]['title']} with specific input payloads "
+                "or environment flags that activate the path."
+            ),
+            (
+                f"Populate {branch_blueprint[2]['title']} with concrete pass/fail "
+                "criteria once test specs are available."
+            ),
+            (
+                f"Add LangChain chain topology details under "
+                f"{branch_blueprint[3]['title']} if chain structure is relevant."
+            ),
+        ]
+    if scenario == "source-context" and len(branch_blueprint) >= 4:
+        auth_var = branch_blueprint[0]["title"]
+        return [
+            "Add a node for fallback behavior when any of the three variables are missing.",
+            f"Document how to rotate or refresh {auth_var} in local environments.",
+            (
+                "Capture any environment-specific overrides (dev vs staging vs "
+                "production) for the base URL or model."
+            ),
+        ]
+    return [
+        f"Review how {variant} reacts to the {scenario} request payload.",
+        f"Compare {variant} against the Anthropic default route for {target_title}.",
+    ]
+
+
+def extract_env_vars(text: str) -> list[str]:
+    if not isinstance(text, str):
+        return []
+    seen = []
+    for item in re.findall(r"`([A-Z][A-Z0-9_]+)`", text):
+        if item not in seen:
+            seen.append(item)
+    return seen
+
+
+def describe_env_var(env_var: str) -> str:
+    if env_var.endswith("_TOKEN") or env_var.endswith("_KEY"):
+        return "Secret token used to authenticate requests to the Anthropic-compatible runner"
+    if env_var.endswith("_BASE_URL"):
+        return "Base URL for routing requests to the Anthropic-compatible API endpoint"
+    if env_var.endswith("_MODEL"):
+        return "Model identifier passed to the Anthropic-compatible LangChain runner"
+    return f"Configuration value required for the Anthropic-compatible runner: {env_var}"
 
 
 def branch_title_prefix(variant: str) -> str:

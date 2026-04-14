@@ -132,7 +132,7 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 
 - `openai` 只替换 `langchain-pilot` 里的两条 OpenAI lane
 - `all` 替换整个 preset，主要给测试或无依赖回归使用
-- compare-only offline lane 现在会把 `source-root` / `source-context` 收口到共享的 4-branch 结构基线，并避免额外制造 inferred-op normalization 噪声
+- compare-only offline lane 现在会把 `source-root` / `source-context` 收口到共享的 4-branch 结构基线，并用 request-driven 的场景语义模板收紧 title/body/inferred-suggestion 漂移，同时避免额外制造 inferred-op normalization 噪声
 - 不改变默认 provider 路由，也不影响 `provider_smoke.py` 或桌面默认 draft route
 
 ## 当前桌面回归入口

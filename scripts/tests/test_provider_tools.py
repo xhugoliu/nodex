@@ -17,6 +17,7 @@ FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 
 from ai_contract import RunnerFailure, validate_contract_response
 from anthropic_context import AnthropicContext
+import compare_offline_runner
 from desktop_flow_smoke import build_ai_status
 import langchain_anthropic_runner as langchain_anthropic_runner_module
 import langchain_openai_runner as langchain_openai_runner_module
@@ -144,6 +145,94 @@ def build_anthropic_context() -> AnthropicContext:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_compare_offline_runner_source_context_builds_semantic_env_var_blueprint(self) -> None:
+        request_payload = build_request_payload(node_id="node-1")
+        request_payload["target_node"]["title"] = "Provider Authentication Flow"
+        request_payload["target_node"]["body"] = (
+            "Local configuration is expected to define "
+            "`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_MODEL`. "
+            "The desktop default route now prefers the Anthropic-compatible LangChain runner."
+        )
+        request_payload["cited_evidence"] = [
+            {
+                "source_id": "source-1",
+                "original_name": "fixture.md",
+                "chunks": [
+                    {
+                        "chunk_id": "chunk-1",
+                        "label": "Provider Authentication Flow",
+                        "start_line": 1,
+                        "end_line": 3,
+                    }
+                ],
+            }
+        ]
+
+        response = compare_offline_runner.build_contract_response(
+            request_payload=request_payload,
+            variant="openai-minimal",
+            scenario="source-context",
+        )
+
+        self.assertEqual(
+            [item["title"] for item in response["patch"]["ops"]],
+            [
+                "ANTHROPIC_AUTH_TOKEN",
+                "ANTHROPIC_BASE_URL",
+                "ANTHROPIC_MODEL",
+                "Desktop Default Route",
+            ],
+        )
+        self.assertEqual(
+            [item["body"] for item in response["patch"]["ops"]],
+            [
+                "Secret token used to authenticate requests to the Anthropic-compatible runner",
+                "Base URL for routing requests to the Anthropic-compatible API endpoint",
+                "Model identifier passed to the Anthropic-compatible LangChain runner",
+                "The desktop default now prefers the Anthropic-compatible LangChain runner over other providers",
+            ],
+        )
+        self.assertEqual(
+            response["explanation"]["inferred_suggestions"],
+            [
+                "Add a node for fallback behavior when any of the three variables are missing.",
+                "Document how to rotate or refresh ANTHROPIC_AUTH_TOKEN in local environments.",
+                "Capture any environment-specific overrides (dev vs staging vs production) for the base URL or model.",
+            ],
+        )
+
+    def test_compare_offline_runner_source_root_builds_regression_blueprint(self) -> None:
+        request_payload = build_request_payload(node_id="node-1")
+        request_payload["target_node"]["title"] = "Anthropic LangChain Regression"
+        request_payload["target_node"]["body"] = (
+            "This fixture is used to exercise a realistic source-backed AI draft "
+            "path in Nodex."
+        )
+
+        response = compare_offline_runner.build_contract_response(
+            request_payload=request_payload,
+            variant="openai-minimal",
+            scenario="source-root",
+        )
+
+        self.assertEqual(
+            [item["title"] for item in response["patch"]["ops"]],
+            [
+                "Draft Path Trigger Conditions",
+                "Source-Backed Chunk Resolution",
+                "Regression Scope And Assertions",
+                "Anthropic Model Configuration",
+            ],
+        )
+        self.assertEqual(
+            response["explanation"]["inferred_suggestions"],
+            [
+                "Expand Draft Path Trigger Conditions with specific input payloads or environment flags that activate the path.",
+                "Populate Regression Scope And Assertions with concrete pass/fail criteria once test specs are available.",
+                "Add LangChain chain topology details under Anthropic Model Configuration if chain structure is relevant.",
+            ],
+        )
+
     def test_build_patch_ops_structure_reports_position_level_field_differences(self) -> None:
         detail = runner_compare.build_patch_ops_structure(
             [
@@ -1796,12 +1885,18 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
-        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
-        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
-        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 4)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 4)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 1)
         self.assertFalse(
             patch_ops["position_details"]["differing_positions"][0]["kind_match"]
+        )
+        self.assertTrue(
+            patch_ops["position_details"]["differing_positions"][0]["title_match"]
+        )
+        self.assertTrue(
+            patch_ops["position_details"]["differing_positions"][0]["body_match"]
         )
         explanation = openai_pair["structure_details"]["explanation"]
         self.assertEqual(explanation["left_direct_evidence_count"], 1)
@@ -1810,21 +1905,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(len(explanation["shared_direct_evidence_refs"]), 1)
         self.assertEqual(explanation["left_only_direct_evidence_refs"], [])
         self.assertEqual(explanation["right_only_direct_evidence_refs"], [])
-        self.assertEqual(explanation["shared_inferred_suggestions"], [])
         self.assertEqual(
-            explanation["left_only_inferred_suggestions"],
+            explanation["shared_inferred_suggestions"],
             [
-                "Review how openai-minimal reacts to the source-context request payload.",
-                "Compare openai-minimal against the Anthropic default route for Provider Authentication Flow.",
+                "Add a node for fallback behavior when any of the three variables are missing.",
+                "Document how to rotate or refresh ANTHROPIC_AUTH_TOKEN in local environments.",
+                "Capture any environment-specific overrides (dev vs staging vs production) for the base URL or model.",
             ],
         )
+        self.assertEqual(explanation["left_inferred_suggestions_count"], 3)
+        self.assertEqual(explanation["right_inferred_suggestions_count"], 3)
         self.assertEqual(
-            explanation["right_only_inferred_suggestions"],
-            [
-                "Review how langchain-openai reacts to the source-context request payload.",
-                "Compare langchain-openai against the Anthropic default route for Provider Authentication Flow.",
-            ],
+            explanation["left_only_inferred_suggestions"], []
         )
+        self.assertEqual(explanation["right_only_inferred_suggestions"], [])
         self.assertEqual(
             openai_pair["structure_details"]["response_notes"],
             {
@@ -1927,29 +2021,26 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
-        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
-        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
-        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 4)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 4)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 1)
         explanation = openai_pair["structure_details"]["explanation"]
         self.assertEqual(explanation["left_direct_evidence_count"], 0)
         self.assertEqual(explanation["right_direct_evidence_count"], 0)
         self.assertEqual(explanation["shared_direct_evidence_refs"], [])
-        self.assertEqual(explanation["shared_inferred_suggestions"], [])
         self.assertEqual(
-            explanation["left_only_inferred_suggestions"],
+            explanation["shared_inferred_suggestions"],
             [
-                "Review how openai-minimal reacts to the source-root request payload.",
-                "Compare openai-minimal against the Anthropic default route for Anthropic LangChain Regression.",
+                "Expand Draft Path Trigger Conditions with specific input payloads or environment flags that activate the path.",
+                "Populate Regression Scope And Assertions with concrete pass/fail criteria once test specs are available.",
+                "Add LangChain chain topology details under Anthropic Model Configuration if chain structure is relevant.",
             ],
         )
         self.assertEqual(
-            explanation["right_only_inferred_suggestions"],
-            [
-                "Review how langchain-openai reacts to the source-root request payload.",
-                "Compare langchain-openai against the Anthropic default route for Anthropic LangChain Regression.",
-            ],
+            explanation["left_only_inferred_suggestions"], []
         )
+        self.assertEqual(explanation["right_only_inferred_suggestions"], [])
         self.assertEqual(
             openai_pair["structure_details"]["response_notes"],
             {
@@ -2074,9 +2165,10 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
-        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
-        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 4)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 1)
         self.assertEqual(
             openai_pair["structure_details"]["normalization_notes"],
             {
@@ -2129,9 +2221,10 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
-        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
-        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 4)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 1)
         self.assertEqual(
             openai_pair["structure_details"]["normalization_notes"],
             {
