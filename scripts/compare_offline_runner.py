@@ -141,7 +141,11 @@ def build_contract_response(
     target_title = target_node.get("title") or target_id
     variant_config = VARIANT_CONFIG[variant]
     note_prefix = variant_config["note_prefix"]
-    branch_count = variant_config["branch_count"]
+    branch_count = resolve_branch_count(
+        variant=variant,
+        scenario=scenario,
+        default=variant_config["branch_count"],
+    )
 
     return {
         "explanation": {
@@ -219,10 +223,22 @@ def build_patch_ops(
             "body": body,
             "position": index,
         }
-        if variant != "openai-minimal":
+        if should_emit_explicit_type(variant=variant, scenario=scenario):
             item["type"] = "add_node"
         ops.append(item)
     return ops
+
+
+def resolve_branch_count(*, variant: str, scenario: str, default: int) -> int:
+    if scenario in {"source-context", "source-root"}:
+        return 4
+    return default
+
+
+def should_emit_explicit_type(*, variant: str, scenario: str) -> bool:
+    if variant != "openai-minimal":
+        return True
+    return scenario in {"source-context", "source-root"}
 
 
 def branch_title_prefix(variant: str) -> str:

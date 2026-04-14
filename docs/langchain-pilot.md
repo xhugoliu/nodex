@@ -79,8 +79,10 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 - `difference_kinds` 这种 machine-readable 的 compare 差异类别
 - `comparison_readiness` / `blocked_comparisons` 这种 machine-readable 的 compare 阻塞归因
 - `difference_details` / `comparison_metrics` 这种 machine-readable 的成功 pair 差异细节与汇总
+- `structure_details` 这种 machine-readable 的结构级归因，用来拆 patch ops、explanation shape、response / normalization notes 的差异层
+- compare-only offline lane 在 `source-root` / `source-context` 上共享 4-branch 结构基线，不再额外制造 inferred-op normalization 噪声
 
 下一轮更值得补的仍然是：
 
-- `runner_compare.py` 在 `source-root` / `source-context` 上继续缩小 compare-only offline lane 与真实成功 runner 的差距
-- compare 输出继续往更稳定的字段级、结构级归因收口，而不只停在 pair 级计数和当前的 detail summary
+- `runner_compare.py` 在 `source-root` / `source-context` 上继续缩小 compare-only offline lane 与真实成功 runner 的标题 / kind / body 语义漂移
+- compare 输出继续往更稳定的字段级、结构级归因收口，而不只停在当前的 pair detail 和 category summary

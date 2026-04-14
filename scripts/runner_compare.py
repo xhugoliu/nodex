@@ -511,6 +511,7 @@ def compare_pair(*, workspace_dir: Path, left: dict, right: dict) -> dict:
             "status": "ok",
             "comparison": payload["comparison"],
             "difference_details": build_comparison_difference_details(payload),
+            "structure_details": build_comparison_structure_details(payload),
             "output": payload,
         }
     except CommandFailure as exc:
@@ -952,6 +953,149 @@ def build_list_difference_details(left: Any, right: Any) -> dict:
     }
 
 
+def build_value_counts(values: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    return counts
+
+
+def normalize_patch_ops(value: Any) -> list[dict]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
+def build_patch_ops_structure(left: Any, right: Any) -> dict:
+    left_ops = normalize_patch_ops(left)
+    right_ops = normalize_patch_ops(right)
+    left_titles = [
+        item["title"] for item in left_ops if isinstance(item.get("title"), str)
+    ]
+    right_titles = [
+        item["title"] for item in right_ops if isinstance(item.get("title"), str)
+    ]
+    left_kinds = [item["kind"] for item in left_ops if isinstance(item.get("kind"), str)]
+    right_kinds = [
+        item["kind"] for item in right_ops if isinstance(item.get("kind"), str)
+    ]
+    left_types = [item["type"] for item in left_ops if isinstance(item.get("type"), str)]
+    right_types = [
+        item["type"] for item in right_ops if isinstance(item.get("type"), str)
+    ]
+    left_bodies = [
+        item["body"]
+        for item in left_ops
+        if isinstance(item.get("body"), str) and item["body"].strip()
+    ]
+    right_bodies = [
+        item["body"]
+        for item in right_ops
+        if isinstance(item.get("body"), str) and item["body"].strip()
+    ]
+    left_body_count = len(left_bodies)
+    right_body_count = len(right_bodies)
+    return {
+        "left_count": len(left_ops),
+        "right_count": len(right_ops),
+        "same_count": len(left_ops) == len(right_ops),
+        "left_title_count": len(left_titles),
+        "right_title_count": len(right_titles),
+        "shared_title_count": len(set(left_titles) & set(right_titles)),
+        "same_title_sequence": left_titles == right_titles,
+        "left_kind_counts": build_value_counts(left_kinds),
+        "right_kind_counts": build_value_counts(right_kinds),
+        "same_kind_counts": build_value_counts(left_kinds)
+        == build_value_counts(right_kinds),
+        "left_type_counts": build_value_counts(left_types),
+        "right_type_counts": build_value_counts(right_types),
+        "same_type_counts": build_value_counts(left_types)
+        == build_value_counts(right_types),
+        "left_body_count": left_body_count,
+        "right_body_count": right_body_count,
+        "shared_body_count": len(set(left_bodies) & set(right_bodies)),
+        "same_body_sequence": left_bodies == right_bodies,
+    }
+
+
+def normalize_direct_evidence_refs(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    refs = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        source_id = item.get("source_id")
+        chunk_id = item.get("chunk_id")
+        if isinstance(source_id, str) and source_id and isinstance(chunk_id, str) and chunk_id:
+            refs.append(f"{source_id}:{chunk_id}")
+    return refs
+
+
+def build_explanation_structure(left: Any, right: Any) -> dict:
+    left_evidence_refs = normalize_direct_evidence_refs(
+        (left or {}).get("direct_evidence")
+    )
+    right_evidence_refs = normalize_direct_evidence_refs(
+        (right or {}).get("direct_evidence")
+    )
+    left_inferred = normalize_str_list((left or {}).get("inferred_suggestions"))
+    right_inferred = normalize_str_list((right or {}).get("inferred_suggestions"))
+    return {
+        "left_direct_evidence_count": len(left_evidence_refs),
+        "right_direct_evidence_count": len(right_evidence_refs),
+        "shared_direct_evidence_count": len(
+            set(left_evidence_refs) & set(right_evidence_refs)
+        ),
+        "same_direct_evidence_count": len(left_evidence_refs)
+        == len(right_evidence_refs),
+        "left_inferred_suggestions_count": len(left_inferred),
+        "right_inferred_suggestions_count": len(right_inferred),
+        "same_inferred_suggestions_count": len(left_inferred) == len(right_inferred),
+    }
+
+
+def categorize_note(note: str) -> str:
+    if note.startswith("runner_normalized:"):
+        return "runner_normalized"
+    if note.startswith("offline_compare_stub:") or note.startswith(
+        "offline_compare_scenario:"
+    ):
+        return "offline_compare_marker"
+    if "offline compare branch count=" in note:
+        return "branch_count"
+    return "plain_text"
+
+
+def build_note_structure(left: Any, right: Any) -> dict:
+    left_notes = normalize_str_list(left)
+    right_notes = normalize_str_list(right)
+    left_category_counts = build_value_counts(
+        [categorize_note(note) for note in left_notes]
+    )
+    right_category_counts = build_value_counts(
+        [categorize_note(note) for note in right_notes]
+    )
+    return {
+        "left_count": len(left_notes),
+        "right_count": len(right_notes),
+        "same_count": len(left_notes) == len(right_notes),
+        "left_category_counts": left_category_counts,
+        "right_category_counts": right_category_counts,
+        "same_category_counts": left_category_counts == right_category_counts,
+    }
+
+
+def build_rationale_structure(left: Any, right: Any) -> dict:
+    left_value = left if isinstance(left, str) else ""
+    right_value = right if isinstance(right, str) else ""
+    return {
+        "left_length": len(left_value),
+        "right_length": len(right_value),
+        "same_length": len(left_value) == len(right_value),
+    }
+
+
 def build_comparison_difference_details(payload: dict) -> dict:
     comparison = payload.get("comparison") or {}
     difference_kinds = comparison.get("difference_kinds") or []
@@ -1003,6 +1147,40 @@ def build_comparison_difference_details(payload: dict) -> dict:
             right.get("response_notes"),
         )
     return details
+
+
+def build_comparison_structure_details(payload: dict) -> dict:
+    left = payload.get("left") or {}
+    right = payload.get("right") or {}
+    left_record = left.get("record") or {}
+    right_record = right.get("record") or {}
+    left_explanation = left.get("explanation") or {}
+    right_explanation = right.get("explanation") or {}
+    left_patch = left.get("patch") or {}
+    right_patch = right.get("patch") or {}
+
+    return {
+        "patch_ops": build_patch_ops_structure(
+            left_patch.get("ops"),
+            right_patch.get("ops"),
+        ),
+        "explanation": build_explanation_structure(
+            left_explanation,
+            right_explanation,
+        ),
+        "response_notes": build_note_structure(
+            left.get("response_notes"),
+            right.get("response_notes"),
+        ),
+        "normalization_notes": build_note_structure(
+            left_record.get("normalization_notes"),
+            right_record.get("normalization_notes"),
+        ),
+        "rationale_summary": build_rationale_structure(
+            left_explanation.get("rationale_summary"),
+            right_explanation.get("rationale_summary"),
+        ),
+    }
 
 
 def build_comparison_readiness(

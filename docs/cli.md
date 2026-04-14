@@ -115,6 +115,7 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - failed runner 的 blocker kind / summary / hint
 - `difference_kinds` 这种 machine-readable 差异类别
 - `difference_details`，用于把成功 pair 的差异继续细化到具体字段和值
+- `structure_details`，用于把 patch ops、explanation shape、response / normalization note categories 继续收口到结构级归因
 - `comparison_readiness`，用于标记 compare 是 fully ready / partial / blocked
 - `comparison_metrics`，用于汇总 compared pair 数量、differing pair 数量和 difference kind 计数
 - `blocked_comparisons`，用于列出哪些 runner pair 因依赖或鉴权 blocker 无法进入真实 `ai compare`
@@ -130,6 +131,7 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 
 - `openai` 只替换 `langchain-pilot` 里的两条 OpenAI lane
 - `all` 替换整个 preset，主要给测试或无依赖回归使用
+- compare-only offline lane 现在会把 `source-root` / `source-context` 收口到共享的 4-branch 结构基线，并避免额外制造 inferred-op normalization 噪声
 - 不改变默认 provider 路由，也不影响 `provider_smoke.py` 或桌面默认 draft route
 
 ## 当前桌面回归入口

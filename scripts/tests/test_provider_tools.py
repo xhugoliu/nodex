@@ -29,6 +29,7 @@ from langchain_runner_common import (
 from openai_context import OpenAIContext
 from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
+import runner_compare
 from source_context_scenario import fixture_set_cases
 
 
@@ -75,6 +76,36 @@ def build_request_payload(
     if capability == "explore":
         payload["explore_by"] = explore_by or "question"
     return payload
+
+
+def build_mixed_offline_runner_specs() -> list[dict]:
+    fake_preset = {
+        "langchain-pilot": [
+            ("openai-minimal", "python3 scripts/openai_runner.py"),
+            ("langchain-openai", "python3 scripts/langchain_openai_runner.py"),
+            (
+                "langchain-anthropic",
+                runner_compare.build_compare_offline_command("langchain-anthropic"),
+            ),
+        ]
+    }
+    with patch.object(runner_compare, "preset_runners", return_value=fake_preset):
+        return runner_compare.build_runner_specs(
+            preset_names=["langchain-pilot"],
+            explicit_specs=[],
+            preset_offline_mode="openai",
+        )
+
+
+def run_mixed_offline_compare(*, scenario: str) -> dict:
+    with tempfile.TemporaryDirectory(prefix="nodex-mixed-compare-") as tmp_dir:
+        return runner_compare.compare_runners(
+            workspace_dir=Path(tmp_dir),
+            runner_specs=build_mixed_offline_runner_specs(),
+            node_id="root",
+            scenario=scenario,
+            fixture_path=FIXTURE_PATH,
+        )
 
 
 def write_request_paths(tmp_dir: str, request_payload: dict) -> tuple[Path, Path, Path]:
@@ -1583,9 +1614,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "identical_pairs": 0,
                 "difference_kind_counts": {
                     "used_plain_json_fallback": 2,
-                    "normalization_notes": 2,
                     "rationale_summary": 3,
-                    "patch_summary": 3,
                     "patch_preview": 3,
                     "response_notes": 3,
                 },
@@ -1597,6 +1626,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(all(item["status"] == "ok" for item in runs.values()))
         self.assertTrue(all(item["offline_substitute"] is True for item in runs.values()))
         self.assertTrue(runs["openai-minimal"]["quality"]["used_plain_json_fallback"])
+        self.assertFalse(runs["openai-minimal"]["quality"]["has_normalization_notes"])
+        self.assertEqual(runs["openai-minimal"]["quality"]["patch_op_count"], 4)
         self.assertGreater(runs["langchain-openai"]["quality"]["direct_evidence_count"], 0)
 
         difference_kinds = {
@@ -1605,9 +1636,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
             for kind in comparison["comparison"]["difference_kinds"]
         }
         self.assertIn("used_plain_json_fallback", difference_kinds)
-        self.assertIn("normalization_notes", difference_kinds)
         self.assertIn("rationale_summary", difference_kinds)
-        self.assertIn("patch_summary", difference_kinds)
         self.assertIn("patch_preview", difference_kinds)
         self.assertIn("response_notes", difference_kinds)
 
@@ -1620,20 +1649,11 @@ class ProviderToolScriptsTests(unittest.TestCase):
             openai_pair["difference_details"]["used_plain_json_fallback"],
             {"left": True, "right": False},
         )
-        self.assertEqual(
-            openai_pair["difference_details"]["normalization_notes"]["left_only"],
-            ["runner_normalized:inferred_patch_op_types=3"],
-        )
-        self.assertEqual(
-            openai_pair["difference_details"]["patch_summary"],
-            {
-                "left": "Expand Provider Authentication Flow with 3 branches",
-                "right": "Expand Provider Authentication Flow with 4 branches",
-            },
-        )
+        self.assertNotIn("normalization_notes", openai_pair["difference_details"])
+        self.assertNotIn("patch_summary", openai_pair["difference_details"])
         self.assertEqual(
             openai_pair["difference_details"]["patch_preview"]["left_count"],
-            3,
+            4,
         )
         self.assertEqual(
             openai_pair["difference_details"]["patch_preview"]["right_count"],
@@ -1650,6 +1670,68 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn(
             "source-context request shape",
             openai_pair["difference_details"]["rationale_summary"]["left"],
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["patch_ops"],
+            {
+                "left_count": 4,
+                "right_count": 4,
+                "same_count": True,
+                "left_title_count": 4,
+                "right_title_count": 4,
+                "shared_title_count": 0,
+                "same_title_sequence": False,
+                "left_kind_counts": {"topic": 4},
+                "right_kind_counts": {"action": 1, "topic": 3},
+                "same_kind_counts": False,
+                "left_type_counts": {"add_node": 4},
+                "right_type_counts": {"add_node": 4},
+                "same_type_counts": True,
+                "left_body_count": 4,
+                "right_body_count": 4,
+                "shared_body_count": 0,
+                "same_body_sequence": False,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["explanation"],
+            {
+                "left_direct_evidence_count": 1,
+                "right_direct_evidence_count": 1,
+                "shared_direct_evidence_count": 1,
+                "same_direct_evidence_count": True,
+                "left_inferred_suggestions_count": 2,
+                "right_inferred_suggestions_count": 2,
+                "same_inferred_suggestions_count": True,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["response_notes"],
+            {
+                "left_count": 3,
+                "right_count": 3,
+                "same_count": True,
+                "left_category_counts": {
+                    "offline_compare_marker": 2,
+                    "branch_count": 1,
+                },
+                "right_category_counts": {
+                    "offline_compare_marker": 2,
+                    "branch_count": 1,
+                },
+                "same_category_counts": True,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["normalization_notes"],
+            {
+                "left_count": 0,
+                "right_count": 0,
+                "same_count": True,
+                "left_category_counts": {},
+                "right_category_counts": {},
+                "same_category_counts": True,
+            },
         )
 
     def test_runner_compare_offline_preset_all_makes_source_root_comparable(self) -> None:
@@ -1687,9 +1769,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "identical_pairs": 0,
                 "difference_kind_counts": {
                     "used_plain_json_fallback": 2,
-                    "normalization_notes": 2,
                     "rationale_summary": 3,
-                    "patch_summary": 3,
                     "patch_preview": 3,
                     "response_notes": 3,
                 },
@@ -1699,6 +1779,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         runs = {item["label"]: item for item in payload["runs"]}
         self.assertTrue(all(item["offline_substitute"] is True for item in runs.values()))
         self.assertFalse(runs["openai-minimal"]["quality"]["has_direct_evidence"])
+        self.assertFalse(runs["openai-minimal"]["quality"]["has_normalization_notes"])
         self.assertFalse(runs["langchain-openai"]["quality"]["has_direct_evidence"])
         self.assertFalse(runs["langchain-anthropic"]["quality"]["has_direct_evidence"])
 
@@ -1711,20 +1792,267 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "source-root request shape",
             openai_pair["difference_details"]["rationale_summary"]["left"],
         )
-        self.assertEqual(
-            openai_pair["difference_details"]["patch_summary"],
-            {
-                "left": "Expand Anthropic LangChain Regression with 3 branches",
-                "right": "Expand Anthropic LangChain Regression with 4 branches",
-            },
-        )
+        self.assertNotIn("patch_summary", openai_pair["difference_details"])
         self.assertEqual(
             openai_pair["difference_details"]["patch_preview"]["left_count"],
-            3,
+            4,
         )
         self.assertEqual(
             openai_pair["difference_details"]["patch_preview"]["right_count"],
             4,
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["patch_ops"],
+            {
+                "left_count": 4,
+                "right_count": 4,
+                "same_count": True,
+                "left_title_count": 4,
+                "right_title_count": 4,
+                "shared_title_count": 0,
+                "same_title_sequence": False,
+                "left_kind_counts": {"topic": 4},
+                "right_kind_counts": {"action": 1, "topic": 3},
+                "same_kind_counts": False,
+                "left_type_counts": {"add_node": 4},
+                "right_type_counts": {"add_node": 4},
+                "same_type_counts": True,
+                "left_body_count": 4,
+                "right_body_count": 4,
+                "shared_body_count": 0,
+                "same_body_sequence": False,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["explanation"],
+            {
+                "left_direct_evidence_count": 0,
+                "right_direct_evidence_count": 0,
+                "shared_direct_evidence_count": 0,
+                "same_direct_evidence_count": True,
+                "left_inferred_suggestions_count": 2,
+                "right_inferred_suggestions_count": 2,
+                "same_inferred_suggestions_count": True,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["response_notes"],
+            {
+                "left_count": 3,
+                "right_count": 3,
+                "same_count": True,
+                "left_category_counts": {
+                    "offline_compare_marker": 2,
+                    "branch_count": 1,
+                },
+                "right_category_counts": {
+                    "offline_compare_marker": 2,
+                    "branch_count": 1,
+                },
+                "same_category_counts": True,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["normalization_notes"],
+            {
+                "left_count": 0,
+                "right_count": 0,
+                "same_count": True,
+                "left_category_counts": {},
+                "right_category_counts": {},
+                "same_category_counts": True,
+            },
+        )
+
+    def test_runner_compare_offline_preset_all_minimal_keeps_openai_normalization_noise(self) -> None:
+        result = run_script(
+            "scripts/runner_compare.py",
+            "--json",
+            "--preset",
+            "langchain-pilot",
+            "--preset-offline",
+            "all",
+            "--scenario",
+            "minimal",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        runs = {item["label"]: item for item in payload["runs"]}
+        self.assertTrue(runs["openai-minimal"]["quality"]["has_normalization_notes"])
+        self.assertEqual(runs["openai-minimal"]["quality"]["patch_op_count"], 3)
+        self.assertIn(
+            "normalization_notes",
+            payload["comparison_metrics"]["difference_kind_counts"],
+        )
+        self.assertIn(
+            "patch_summary",
+            payload["comparison_metrics"]["difference_kind_counts"],
+        )
+
+    def test_build_runner_specs_openai_offline_only_substitutes_openai_lanes(self) -> None:
+        specs = runner_compare.build_runner_specs(
+            preset_names=["langchain-pilot"],
+            explicit_specs=[],
+            preset_offline_mode="openai",
+        )
+
+        by_label = {item["label"]: item for item in specs}
+        self.assertTrue(by_label["openai-minimal"]["offline_substitute"])
+        self.assertTrue(by_label["langchain-openai"]["offline_substitute"])
+        self.assertFalse(by_label["langchain-anthropic"]["offline_substitute"])
+        self.assertIn(
+            "compare_offline_runner.py",
+            by_label["openai-minimal"]["command"],
+        )
+        self.assertIn(
+            "compare_offline_runner.py",
+            by_label["langchain-openai"]["command"],
+        )
+        self.assertIn(
+            "langchain_anthropic_runner.py",
+            by_label["langchain-anthropic"]["command"],
+        )
+
+    def test_runner_compare_mixed_openai_offline_source_context_is_compare_ready(self) -> None:
+        payload = run_mixed_offline_compare(scenario="source-context")
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["comparison_readiness"]["status"], "ready")
+        self.assertEqual(
+            payload["comparison_metrics"],
+            {
+                "compared_pairs": 3,
+                "differing_pairs": 3,
+                "identical_pairs": 0,
+                "difference_kind_counts": {
+                    "used_plain_json_fallback": 2,
+                    "rationale_summary": 3,
+                    "patch_preview": 3,
+                    "response_notes": 3,
+                },
+            },
+        )
+
+        runs = {item["label"]: item for item in payload["runs"]}
+        self.assertTrue(runs["openai-minimal"]["offline_substitute"])
+        self.assertTrue(runs["langchain-openai"]["offline_substitute"])
+        self.assertFalse(runs["langchain-anthropic"]["offline_substitute"])
+
+        comparisons = {
+            (item["left_label"], item["right_label"]): item
+            for item in payload["comparisons"]
+        }
+        openai_pair = comparisons[("openai-minimal", "langchain-openai")]
+        self.assertEqual(
+            openai_pair["comparison"]["difference_kinds"],
+            [
+                "used_plain_json_fallback",
+                "rationale_summary",
+                "patch_preview",
+                "response_notes",
+            ],
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["patch_ops"],
+            {
+                "left_count": 4,
+                "right_count": 4,
+                "same_count": True,
+                "left_title_count": 4,
+                "right_title_count": 4,
+                "shared_title_count": 0,
+                "same_title_sequence": False,
+                "left_kind_counts": {"topic": 4},
+                "right_kind_counts": {"action": 1, "topic": 3},
+                "same_kind_counts": False,
+                "left_type_counts": {"add_node": 4},
+                "right_type_counts": {"add_node": 4},
+                "same_type_counts": True,
+                "left_body_count": 4,
+                "right_body_count": 4,
+                "shared_body_count": 0,
+                "same_body_sequence": False,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["normalization_notes"],
+            {
+                "left_count": 0,
+                "right_count": 0,
+                "same_count": True,
+                "left_category_counts": {},
+                "right_category_counts": {},
+                "same_category_counts": True,
+            },
+        )
+
+    def test_runner_compare_mixed_openai_offline_source_root_is_compare_ready(self) -> None:
+        payload = run_mixed_offline_compare(scenario="source-root")
+
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["comparison_readiness"]["status"], "ready")
+        self.assertEqual(
+            payload["comparison_metrics"],
+            {
+                "compared_pairs": 3,
+                "differing_pairs": 3,
+                "identical_pairs": 0,
+                "difference_kind_counts": {
+                    "used_plain_json_fallback": 2,
+                    "rationale_summary": 3,
+                    "patch_preview": 3,
+                    "response_notes": 3,
+                },
+            },
+        )
+
+        comparisons = {
+            (item["left_label"], item["right_label"]): item
+            for item in payload["comparisons"]
+        }
+        openai_pair = comparisons[("openai-minimal", "langchain-openai")]
+        self.assertEqual(
+            openai_pair["comparison"]["difference_kinds"],
+            [
+                "used_plain_json_fallback",
+                "rationale_summary",
+                "patch_preview",
+                "response_notes",
+            ],
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["patch_ops"],
+            {
+                "left_count": 4,
+                "right_count": 4,
+                "same_count": True,
+                "left_title_count": 4,
+                "right_title_count": 4,
+                "shared_title_count": 0,
+                "same_title_sequence": False,
+                "left_kind_counts": {"topic": 4},
+                "right_kind_counts": {"action": 1, "topic": 3},
+                "same_kind_counts": False,
+                "left_type_counts": {"add_node": 4},
+                "right_type_counts": {"add_node": 4},
+                "same_type_counts": True,
+                "left_body_count": 4,
+                "right_body_count": 4,
+                "shared_body_count": 0,
+                "same_body_sequence": False,
+            },
+        )
+        self.assertEqual(
+            openai_pair["structure_details"]["normalization_notes"],
+            {
+                "left_count": 0,
+                "right_count": 0,
+                "same_count": True,
+                "left_category_counts": {},
+                "right_category_counts": {},
+                "same_category_counts": True,
+            },
         )
 
     def test_langchain_anthropic_runner_help(self) -> None:
