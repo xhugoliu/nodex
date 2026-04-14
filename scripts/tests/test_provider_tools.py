@@ -144,6 +144,125 @@ def build_anthropic_context() -> AnthropicContext:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_build_patch_ops_structure_reports_position_level_field_differences(self) -> None:
+        detail = runner_compare.build_patch_ops_structure(
+            [
+                {
+                    "type": "add_node",
+                    "title": "Alpha",
+                    "kind": "topic",
+                    "body": "Body A",
+                },
+                {
+                    "type": "add_node",
+                    "title": "Beta",
+                    "kind": "topic",
+                    "body": "Body B",
+                },
+            ],
+            [
+                {
+                    "type": "add_node",
+                    "title": "Alpha",
+                    "kind": "action",
+                    "body": "Body A revised",
+                },
+                {
+                    "type": "add_node",
+                    "title": "Gamma",
+                    "kind": "topic",
+                    "body": "Body C",
+                },
+            ],
+        )
+
+        self.assertEqual(detail["left_count"], 2)
+        self.assertEqual(detail["right_count"], 2)
+        self.assertEqual(detail["left_kind_counts"], {"topic": 2})
+        self.assertEqual(detail["right_kind_counts"], {"action": 1, "topic": 1})
+        self.assertFalse(detail["same_body_sequence"])
+        self.assertEqual(detail["position_details"]["aligned_positions"], 2)
+        self.assertEqual(detail["position_details"]["title_match_count"], 1)
+        self.assertEqual(detail["position_details"]["kind_match_count"], 1)
+        self.assertEqual(detail["position_details"]["body_match_count"], 0)
+        self.assertEqual(detail["position_details"]["left_extra_positions"], [])
+        self.assertEqual(detail["position_details"]["right_extra_positions"], [])
+        self.assertEqual(
+            detail["position_details"]["differing_positions"],
+            [
+                {
+                    "position": 0,
+                    "title_match": True,
+                    "left_title": "Alpha",
+                    "right_title": "Alpha",
+                    "kind_match": False,
+                    "left_kind": "topic",
+                    "right_kind": "action",
+                    "body_match": False,
+                    "left_body": "Body A",
+                    "right_body": "Body A revised",
+                },
+                {
+                    "position": 1,
+                    "title_match": False,
+                    "left_title": "Beta",
+                    "right_title": "Gamma",
+                    "kind_match": True,
+                    "left_kind": "topic",
+                    "right_kind": "topic",
+                    "body_match": False,
+                    "left_body": "Body B",
+                    "right_body": "Body C",
+                },
+            ],
+        )
+
+    def test_build_explanation_structure_reports_shared_and_side_specific_refs(self) -> None:
+        detail = runner_compare.build_explanation_structure(
+            {
+                "direct_evidence": [
+                    {"source_id": "source-1", "chunk_id": "chunk-a"},
+                    {"source_id": "source-2", "chunk_id": "chunk-b"},
+                ],
+                "inferred_suggestions": [
+                    "Keep the current branch focused.",
+                    "Attach more evidence.",
+                ],
+            },
+            {
+                "direct_evidence": [
+                    {"source_id": "source-2", "chunk_id": "chunk-b"},
+                    {"source_id": "source-3", "chunk_id": "chunk-c"},
+                ],
+                "inferred_suggestions": [
+                    "Attach more evidence.",
+                    "Capture blocker details.",
+                ],
+            },
+        )
+
+        self.assertEqual(detail["shared_direct_evidence_refs"], ["source-2:chunk-b"])
+        self.assertEqual(
+            detail["left_only_direct_evidence_refs"],
+            ["source-1:chunk-a"],
+        )
+        self.assertEqual(
+            detail["right_only_direct_evidence_refs"],
+            ["source-3:chunk-c"],
+        )
+        self.assertEqual(
+            detail["shared_inferred_suggestions"],
+            ["Attach more evidence."],
+        )
+        self.assertEqual(
+            detail["left_only_inferred_suggestions"],
+            ["Keep the current branch focused."],
+        )
+        self.assertEqual(
+            detail["right_only_inferred_suggestions"],
+            ["Capture blocker details."],
+        )
+
     def test_anthropic_runner_coerces_incomplete_direct_evidence(self) -> None:
         request_payload = {
             "cited_evidence": [
@@ -1671,39 +1790,40 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "source-context request shape",
             openai_pair["difference_details"]["rationale_summary"]["left"],
         )
+        patch_ops = openai_pair["structure_details"]["patch_ops"]
+        self.assertEqual(patch_ops["left_count"], 4)
+        self.assertEqual(patch_ops["right_count"], 4)
+        self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
+        self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 4)
+        self.assertFalse(
+            patch_ops["position_details"]["differing_positions"][0]["kind_match"]
+        )
+        explanation = openai_pair["structure_details"]["explanation"]
+        self.assertEqual(explanation["left_direct_evidence_count"], 1)
+        self.assertEqual(explanation["right_direct_evidence_count"], 1)
+        self.assertEqual(explanation["shared_direct_evidence_count"], 1)
+        self.assertEqual(len(explanation["shared_direct_evidence_refs"]), 1)
+        self.assertEqual(explanation["left_only_direct_evidence_refs"], [])
+        self.assertEqual(explanation["right_only_direct_evidence_refs"], [])
+        self.assertEqual(explanation["shared_inferred_suggestions"], [])
         self.assertEqual(
-            openai_pair["structure_details"]["patch_ops"],
-            {
-                "left_count": 4,
-                "right_count": 4,
-                "same_count": True,
-                "left_title_count": 4,
-                "right_title_count": 4,
-                "shared_title_count": 0,
-                "same_title_sequence": False,
-                "left_kind_counts": {"topic": 4},
-                "right_kind_counts": {"action": 1, "topic": 3},
-                "same_kind_counts": False,
-                "left_type_counts": {"add_node": 4},
-                "right_type_counts": {"add_node": 4},
-                "same_type_counts": True,
-                "left_body_count": 4,
-                "right_body_count": 4,
-                "shared_body_count": 0,
-                "same_body_sequence": False,
-            },
+            explanation["left_only_inferred_suggestions"],
+            [
+                "Review how openai-minimal reacts to the source-context request payload.",
+                "Compare openai-minimal against the Anthropic default route for Provider Authentication Flow.",
+            ],
         )
         self.assertEqual(
-            openai_pair["structure_details"]["explanation"],
-            {
-                "left_direct_evidence_count": 1,
-                "right_direct_evidence_count": 1,
-                "shared_direct_evidence_count": 1,
-                "same_direct_evidence_count": True,
-                "left_inferred_suggestions_count": 2,
-                "right_inferred_suggestions_count": 2,
-                "same_inferred_suggestions_count": True,
-            },
+            explanation["right_only_inferred_suggestions"],
+            [
+                "Review how langchain-openai reacts to the source-context request payload.",
+                "Compare langchain-openai against the Anthropic default route for Provider Authentication Flow.",
+            ],
         )
         self.assertEqual(
             openai_pair["structure_details"]["response_notes"],
@@ -1801,39 +1921,34 @@ class ProviderToolScriptsTests(unittest.TestCase):
             openai_pair["difference_details"]["patch_preview"]["right_count"],
             4,
         )
+        patch_ops = openai_pair["structure_details"]["patch_ops"]
+        self.assertEqual(patch_ops["left_count"], 4)
+        self.assertEqual(patch_ops["right_count"], 4)
+        self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
+        self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 4)
+        explanation = openai_pair["structure_details"]["explanation"]
+        self.assertEqual(explanation["left_direct_evidence_count"], 0)
+        self.assertEqual(explanation["right_direct_evidence_count"], 0)
+        self.assertEqual(explanation["shared_direct_evidence_refs"], [])
+        self.assertEqual(explanation["shared_inferred_suggestions"], [])
         self.assertEqual(
-            openai_pair["structure_details"]["patch_ops"],
-            {
-                "left_count": 4,
-                "right_count": 4,
-                "same_count": True,
-                "left_title_count": 4,
-                "right_title_count": 4,
-                "shared_title_count": 0,
-                "same_title_sequence": False,
-                "left_kind_counts": {"topic": 4},
-                "right_kind_counts": {"action": 1, "topic": 3},
-                "same_kind_counts": False,
-                "left_type_counts": {"add_node": 4},
-                "right_type_counts": {"add_node": 4},
-                "same_type_counts": True,
-                "left_body_count": 4,
-                "right_body_count": 4,
-                "shared_body_count": 0,
-                "same_body_sequence": False,
-            },
+            explanation["left_only_inferred_suggestions"],
+            [
+                "Review how openai-minimal reacts to the source-root request payload.",
+                "Compare openai-minimal against the Anthropic default route for Anthropic LangChain Regression.",
+            ],
         )
         self.assertEqual(
-            openai_pair["structure_details"]["explanation"],
-            {
-                "left_direct_evidence_count": 0,
-                "right_direct_evidence_count": 0,
-                "shared_direct_evidence_count": 0,
-                "same_direct_evidence_count": True,
-                "left_inferred_suggestions_count": 2,
-                "right_inferred_suggestions_count": 2,
-                "same_inferred_suggestions_count": True,
-            },
+            explanation["right_only_inferred_suggestions"],
+            [
+                "Review how langchain-openai reacts to the source-root request payload.",
+                "Compare langchain-openai against the Anthropic default route for Anthropic LangChain Regression.",
+            ],
         )
         self.assertEqual(
             openai_pair["structure_details"]["response_notes"],
@@ -1953,28 +2068,15 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "response_notes",
             ],
         )
-        self.assertEqual(
-            openai_pair["structure_details"]["patch_ops"],
-            {
-                "left_count": 4,
-                "right_count": 4,
-                "same_count": True,
-                "left_title_count": 4,
-                "right_title_count": 4,
-                "shared_title_count": 0,
-                "same_title_sequence": False,
-                "left_kind_counts": {"topic": 4},
-                "right_kind_counts": {"action": 1, "topic": 3},
-                "same_kind_counts": False,
-                "left_type_counts": {"add_node": 4},
-                "right_type_counts": {"add_node": 4},
-                "same_type_counts": True,
-                "left_body_count": 4,
-                "right_body_count": 4,
-                "shared_body_count": 0,
-                "same_body_sequence": False,
-            },
-        )
+        patch_ops = openai_pair["structure_details"]["patch_ops"]
+        self.assertEqual(patch_ops["left_count"], 4)
+        self.assertEqual(patch_ops["right_count"], 4)
+        self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
+        self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
         self.assertEqual(
             openai_pair["structure_details"]["normalization_notes"],
             {
@@ -2021,28 +2123,15 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "response_notes",
             ],
         )
-        self.assertEqual(
-            openai_pair["structure_details"]["patch_ops"],
-            {
-                "left_count": 4,
-                "right_count": 4,
-                "same_count": True,
-                "left_title_count": 4,
-                "right_title_count": 4,
-                "shared_title_count": 0,
-                "same_title_sequence": False,
-                "left_kind_counts": {"topic": 4},
-                "right_kind_counts": {"action": 1, "topic": 3},
-                "same_kind_counts": False,
-                "left_type_counts": {"add_node": 4},
-                "right_type_counts": {"add_node": 4},
-                "same_type_counts": True,
-                "left_body_count": 4,
-                "right_body_count": 4,
-                "shared_body_count": 0,
-                "same_body_sequence": False,
-            },
-        )
+        patch_ops = openai_pair["structure_details"]["patch_ops"]
+        self.assertEqual(patch_ops["left_count"], 4)
+        self.assertEqual(patch_ops["right_count"], 4)
+        self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
+        self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
+        self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
         self.assertEqual(
             openai_pair["structure_details"]["normalization_notes"],
             {

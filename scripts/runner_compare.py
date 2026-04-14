@@ -966,6 +966,70 @@ def normalize_patch_ops(value: Any) -> list[dict]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def normalize_optional_str(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def build_patch_op_position_details(left_ops: list[dict], right_ops: list[dict]) -> dict:
+    aligned_positions = min(len(left_ops), len(right_ops))
+    title_match_count = 0
+    kind_match_count = 0
+    body_match_count = 0
+    differing_positions = []
+
+    for index in range(aligned_positions):
+        left_op = left_ops[index]
+        right_op = right_ops[index]
+        left_title = normalize_optional_str(left_op.get("title"))
+        right_title = normalize_optional_str(right_op.get("title"))
+        left_kind = normalize_optional_str(left_op.get("kind"))
+        right_kind = normalize_optional_str(right_op.get("kind"))
+        left_body = normalize_optional_str(left_op.get("body"))
+        right_body = normalize_optional_str(right_op.get("body"))
+
+        title_match = left_title == right_title
+        kind_match = left_kind == right_kind
+        body_match = left_body == right_body
+
+        if title_match:
+            title_match_count += 1
+        if kind_match:
+            kind_match_count += 1
+        if body_match:
+            body_match_count += 1
+
+        if title_match and kind_match and body_match:
+            continue
+
+        differing_positions.append(
+            {
+                "position": index,
+                "title_match": title_match,
+                "left_title": left_title,
+                "right_title": right_title,
+                "kind_match": kind_match,
+                "left_kind": left_kind,
+                "right_kind": right_kind,
+                "body_match": body_match,
+                "left_body": left_body,
+                "right_body": right_body,
+            }
+        )
+
+    return {
+        "aligned_positions": aligned_positions,
+        "title_match_count": title_match_count,
+        "kind_match_count": kind_match_count,
+        "body_match_count": body_match_count,
+        "differing_positions": differing_positions,
+        "left_extra_positions": list(range(aligned_positions, len(left_ops))),
+        "right_extra_positions": list(range(aligned_positions, len(right_ops))),
+    }
+
+
 def build_patch_ops_structure(left: Any, right: Any) -> dict:
     left_ops = normalize_patch_ops(left)
     right_ops = normalize_patch_ops(right)
@@ -1015,6 +1079,7 @@ def build_patch_ops_structure(left: Any, right: Any) -> dict:
         "right_body_count": right_body_count,
         "shared_body_count": len(set(left_bodies) & set(right_bodies)),
         "same_body_sequence": left_bodies == right_bodies,
+        "position_details": build_patch_op_position_details(left_ops, right_ops),
     }
 
 
@@ -1041,17 +1106,39 @@ def build_explanation_structure(left: Any, right: Any) -> dict:
     )
     left_inferred = normalize_str_list((left or {}).get("inferred_suggestions"))
     right_inferred = normalize_str_list((right or {}).get("inferred_suggestions"))
+    left_evidence_set = set(left_evidence_refs)
+    right_evidence_set = set(right_evidence_refs)
+    right_inferred_set = set(right_inferred)
+    left_inferred_set = set(left_inferred)
     return {
         "left_direct_evidence_count": len(left_evidence_refs),
         "right_direct_evidence_count": len(right_evidence_refs),
         "shared_direct_evidence_count": len(
-            set(left_evidence_refs) & set(right_evidence_refs)
+            left_evidence_set & right_evidence_set
         ),
         "same_direct_evidence_count": len(left_evidence_refs)
         == len(right_evidence_refs),
+        "shared_direct_evidence_refs": [
+            item for item in left_evidence_refs if item in right_evidence_set
+        ],
+        "left_only_direct_evidence_refs": [
+            item for item in left_evidence_refs if item not in right_evidence_set
+        ],
+        "right_only_direct_evidence_refs": [
+            item for item in right_evidence_refs if item not in left_evidence_set
+        ],
         "left_inferred_suggestions_count": len(left_inferred),
         "right_inferred_suggestions_count": len(right_inferred),
         "same_inferred_suggestions_count": len(left_inferred) == len(right_inferred),
+        "shared_inferred_suggestions": [
+            item for item in left_inferred if item in right_inferred_set
+        ],
+        "left_only_inferred_suggestions": [
+            item for item in left_inferred if item not in right_inferred_set
+        ],
+        "right_only_inferred_suggestions": [
+            item for item in right_inferred if item not in left_inferred_set
+        ],
     }
 
 
