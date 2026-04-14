@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import collections
 import itertools
 import json
 import re
@@ -973,6 +974,51 @@ def normalize_optional_str(value: Any) -> Optional[str]:
     return stripped or None
 
 
+def normalize_compact_str_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized = []
+    for item in value:
+        normalized_item = normalize_optional_str(item)
+        if normalized_item is not None:
+            normalized.append(normalized_item)
+    return normalized
+
+
+def build_overlap_lists(left_values: list[str], right_values: list[str]) -> dict[str, list[str]]:
+    right_remaining = collections.Counter(right_values)
+    left_remaining = collections.Counter(left_values)
+    shared = []
+    left_only = []
+    right_only = []
+
+    for item in left_values:
+        if right_remaining[item] > 0:
+            shared.append(item)
+            right_remaining[item] -= 1
+        else:
+            left_only.append(item)
+
+    for item in right_values:
+        if left_remaining[item] > 0:
+            left_remaining[item] -= 1
+        else:
+            right_only.append(item)
+
+    return {
+        "shared": shared,
+        "left_only": left_only,
+        "right_only": right_only,
+    }
+
+
+def safe_overlap_ratio(shared_count: int, left_count: int, right_count: int) -> float:
+    denominator = max(left_count, right_count)
+    if denominator <= 0:
+        return 1.0
+    return shared_count / denominator
+
+
 def build_patch_op_position_details(left_ops: list[dict], right_ops: list[dict]) -> dict:
     aligned_positions = min(len(left_ops), len(right_ops))
     title_match_count = 0
@@ -1033,11 +1079,17 @@ def build_patch_op_position_details(left_ops: list[dict], right_ops: list[dict])
 def build_patch_ops_structure(left: Any, right: Any) -> dict:
     left_ops = normalize_patch_ops(left)
     right_ops = normalize_patch_ops(right)
-    left_titles = [
-        item["title"] for item in left_ops if isinstance(item.get("title"), str)
+    left_titles = [item["title"] for item in left_ops if isinstance(item.get("title"), str)]
+    right_titles = [item["title"] for item in right_ops if isinstance(item.get("title"), str)]
+    normalized_left_titles = [
+        title
+        for item in left_ops
+        if (title := normalize_optional_str(item.get("title"))) is not None
     ]
-    right_titles = [
-        item["title"] for item in right_ops if isinstance(item.get("title"), str)
+    normalized_right_titles = [
+        title
+        for item in right_ops
+        if (title := normalize_optional_str(item.get("title"))) is not None
     ]
     left_kinds = [item["kind"] for item in left_ops if isinstance(item.get("kind"), str)]
     right_kinds = [
@@ -1057,8 +1109,38 @@ def build_patch_ops_structure(left: Any, right: Any) -> dict:
         for item in right_ops
         if isinstance(item.get("body"), str) and item["body"].strip()
     ]
+    normalized_left_bodies = [
+        body
+        for item in left_ops
+        if (body := normalize_optional_str(item.get("body"))) is not None
+    ]
+    normalized_right_bodies = [
+        body
+        for item in right_ops
+        if (body := normalize_optional_str(item.get("body"))) is not None
+    ]
     left_body_count = len(left_bodies)
     right_body_count = len(right_bodies)
+    position_details = build_patch_op_position_details(left_ops, right_ops)
+    title_mismatch_positions = [
+        item["position"]
+        for item in position_details["differing_positions"]
+        if not item["title_match"]
+    ]
+    kind_mismatch_positions = [
+        item["position"]
+        for item in position_details["differing_positions"]
+        if not item["kind_match"]
+    ]
+    body_mismatch_positions = [
+        item["position"]
+        for item in position_details["differing_positions"]
+        if not item["body_match"]
+    ]
+    title_overlap = build_overlap_lists(normalized_left_titles, normalized_right_titles)
+    body_overlap = build_overlap_lists(normalized_left_bodies, normalized_right_bodies)
+    shared_title_count = len(title_overlap["shared"])
+    shared_body_count = len(body_overlap["shared"])
     return {
         "left_count": len(left_ops),
         "right_count": len(right_ops),
@@ -1079,7 +1161,36 @@ def build_patch_ops_structure(left: Any, right: Any) -> dict:
         "right_body_count": right_body_count,
         "shared_body_count": len(set(left_bodies) & set(right_bodies)),
         "same_body_sequence": left_bodies == right_bodies,
-        "position_details": build_patch_op_position_details(left_ops, right_ops),
+        "shape_aligned": (
+            len(left_ops) == len(right_ops)
+            and build_value_counts(left_kinds) == build_value_counts(right_kinds)
+            and build_value_counts(left_types) == build_value_counts(right_types)
+        ),
+        "title_overlap_ratio": safe_overlap_ratio(
+            shared_title_count,
+            len(left_titles),
+            len(right_titles),
+        ),
+        "body_overlap_ratio": safe_overlap_ratio(
+            shared_body_count,
+            left_body_count,
+            right_body_count,
+        ),
+        "field_mismatch_counts": {
+            "title": len(title_mismatch_positions),
+            "kind": len(kind_mismatch_positions),
+            "body": len(body_mismatch_positions),
+            "left_extra": len(position_details["left_extra_positions"]),
+            "right_extra": len(position_details["right_extra_positions"]),
+        },
+        "field_mismatch_positions": {
+            "title": title_mismatch_positions,
+            "kind": kind_mismatch_positions,
+            "body": body_mismatch_positions,
+            "left_extra": position_details["left_extra_positions"],
+            "right_extra": position_details["right_extra_positions"],
+        },
+        "position_details": position_details,
     }
 
 
@@ -1106,39 +1217,69 @@ def build_explanation_structure(left: Any, right: Any) -> dict:
     )
     left_inferred = normalize_str_list((left or {}).get("inferred_suggestions"))
     right_inferred = normalize_str_list((right or {}).get("inferred_suggestions"))
+    normalized_left_inferred = normalize_compact_str_list(
+        (left or {}).get("inferred_suggestions")
+    )
+    normalized_right_inferred = normalize_compact_str_list(
+        (right or {}).get("inferred_suggestions")
+    )
     left_evidence_set = set(left_evidence_refs)
     right_evidence_set = set(right_evidence_refs)
-    right_inferred_set = set(right_inferred)
     left_inferred_set = set(left_inferred)
+    right_inferred_set = set(right_inferred)
+    shared_direct_evidence_refs = [
+        item for item in left_evidence_refs if item in right_evidence_set
+    ]
+    left_only_direct_evidence_refs = [
+        item for item in left_evidence_refs if item not in right_evidence_set
+    ]
+    right_only_direct_evidence_refs = [
+        item for item in right_evidence_refs if item not in left_evidence_set
+    ]
+    shared_inferred_suggestions = [
+        item for item in left_inferred if item in right_inferred_set
+    ]
+    left_only_inferred_suggestions = [
+        item for item in left_inferred if item not in right_inferred_set
+    ]
+    right_only_inferred_suggestions = [
+        item for item in right_inferred if item not in left_inferred_set
+    ]
+    direct_evidence_overlap = build_overlap_lists(left_evidence_refs, right_evidence_refs)
+    inferred_overlap = build_overlap_lists(
+        normalized_left_inferred,
+        normalized_right_inferred,
+    )
     return {
         "left_direct_evidence_count": len(left_evidence_refs),
         "right_direct_evidence_count": len(right_evidence_refs),
-        "shared_direct_evidence_count": len(
-            left_evidence_set & right_evidence_set
-        ),
+        "shared_direct_evidence_count": len(shared_direct_evidence_refs),
         "same_direct_evidence_count": len(left_evidence_refs)
         == len(right_evidence_refs),
-        "shared_direct_evidence_refs": [
-            item for item in left_evidence_refs if item in right_evidence_set
-        ],
-        "left_only_direct_evidence_refs": [
-            item for item in left_evidence_refs if item not in right_evidence_set
-        ],
-        "right_only_direct_evidence_refs": [
-            item for item in right_evidence_refs if item not in left_evidence_set
-        ],
+        "shared_direct_evidence_refs": shared_direct_evidence_refs,
+        "left_only_direct_evidence_refs": left_only_direct_evidence_refs,
+        "right_only_direct_evidence_refs": right_only_direct_evidence_refs,
+        "left_only_direct_evidence_count": len(direct_evidence_overlap["left_only"]),
+        "right_only_direct_evidence_count": len(direct_evidence_overlap["right_only"]),
+        "direct_evidence_overlap_ratio": safe_overlap_ratio(
+            len(direct_evidence_overlap["shared"]),
+            len(left_evidence_refs),
+            len(right_evidence_refs),
+        ),
         "left_inferred_suggestions_count": len(left_inferred),
         "right_inferred_suggestions_count": len(right_inferred),
         "same_inferred_suggestions_count": len(left_inferred) == len(right_inferred),
-        "shared_inferred_suggestions": [
-            item for item in left_inferred if item in right_inferred_set
-        ],
-        "left_only_inferred_suggestions": [
-            item for item in left_inferred if item not in right_inferred_set
-        ],
-        "right_only_inferred_suggestions": [
-            item for item in right_inferred if item not in left_inferred_set
-        ],
+        "shared_inferred_suggestions": shared_inferred_suggestions,
+        "left_only_inferred_suggestions": left_only_inferred_suggestions,
+        "right_only_inferred_suggestions": right_only_inferred_suggestions,
+        "shared_inferred_suggestions_count": len(inferred_overlap["shared"]),
+        "left_only_inferred_suggestions_count": len(inferred_overlap["left_only"]),
+        "right_only_inferred_suggestions_count": len(inferred_overlap["right_only"]),
+        "inferred_overlap_ratio": safe_overlap_ratio(
+            len(inferred_overlap["shared"]),
+            len(normalized_left_inferred),
+            len(normalized_right_inferred),
+        ),
     }
 
 

@@ -117,6 +117,7 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - `difference_details`，用于把成功 pair 的差异继续细化到具体字段和值
 - `structure_details`，用于把 patch ops、explanation shape、response / normalization note categories 继续收口到结构级归因
   当前会继续细化到 patch op 的按 position title / kind / body 差异，以及 direct-evidence ref / inferred-suggestion 的 left/shared/right 结构差异
+  也会直接汇总成 overlap ratio、shape alignment 和 field mismatch counts，方便在真实 runner 波动时先看结构稳定性
 - `comparison_readiness`，用于标记 compare 是 fully ready / partial / blocked
 - `comparison_metrics`，用于汇总 compared pair 数量、differing pair 数量和 difference kind 计数
 - `blocked_comparisons`，用于列出哪些 runner pair 因依赖或鉴权 blocker 无法进入真实 `ai compare`

@@ -269,7 +269,18 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(detail["right_count"], 2)
         self.assertEqual(detail["left_kind_counts"], {"topic": 2})
         self.assertEqual(detail["right_kind_counts"], {"action": 1, "topic": 1})
+        self.assertFalse(detail["shape_aligned"])
+        self.assertEqual(detail["title_overlap_ratio"], 0.5)
+        self.assertEqual(detail["body_overlap_ratio"], 0.0)
         self.assertFalse(detail["same_body_sequence"])
+        self.assertEqual(
+            detail["field_mismatch_counts"],
+            {"title": 1, "kind": 1, "body": 2, "left_extra": 0, "right_extra": 0},
+        )
+        self.assertEqual(
+            detail["field_mismatch_positions"],
+            {"title": [1], "kind": [0], "body": [0, 1], "left_extra": [], "right_extra": []},
+        )
         self.assertEqual(detail["position_details"]["aligned_positions"], 2)
         self.assertEqual(detail["position_details"]["title_match_count"], 1)
         self.assertEqual(detail["position_details"]["kind_match_count"], 1)
@@ -351,6 +362,91 @@ class ProviderToolScriptsTests(unittest.TestCase):
             detail["right_only_inferred_suggestions"],
             ["Capture blocker details."],
         )
+        self.assertEqual(detail["left_only_direct_evidence_count"], 1)
+        self.assertEqual(detail["right_only_direct_evidence_count"], 1)
+        self.assertEqual(detail["direct_evidence_overlap_ratio"], 0.5)
+        self.assertEqual(detail["shared_inferred_suggestions_count"], 1)
+        self.assertEqual(detail["left_only_inferred_suggestions_count"], 1)
+        self.assertEqual(detail["right_only_inferred_suggestions_count"], 1)
+        self.assertEqual(detail["inferred_overlap_ratio"], 0.5)
+
+    def test_build_patch_ops_structure_uses_normalized_multiset_overlap(self) -> None:
+        detail = runner_compare.build_patch_ops_structure(
+            [
+                {
+                    "type": "add_node",
+                    "title": "Repeat",
+                    "kind": "topic",
+                    "body": "Body",
+                },
+                {
+                    "type": "add_node",
+                    "title": "Repeat",
+                    "kind": "topic",
+                    "body": "Body",
+                },
+            ],
+            [
+                {
+                    "type": "add_node",
+                    "title": " Repeat ",
+                    "kind": "topic",
+                    "body": " Body ",
+                },
+                {
+                    "type": "add_node",
+                    "title": "Repeat",
+                    "kind": "topic",
+                    "body": "Body",
+                },
+            ],
+        )
+
+        self.assertTrue(detail["shape_aligned"])
+        self.assertEqual(detail["shared_title_count"], 1)
+        self.assertEqual(detail["shared_body_count"], 1)
+        self.assertEqual(detail["title_overlap_ratio"], 1.0)
+        self.assertEqual(detail["body_overlap_ratio"], 1.0)
+        self.assertEqual(
+            detail["field_mismatch_counts"],
+            {"title": 0, "kind": 0, "body": 0, "left_extra": 0, "right_extra": 0},
+        )
+
+    def test_build_explanation_structure_tracks_duplicate_overlap_counts(self) -> None:
+        detail = runner_compare.build_explanation_structure(
+            {
+                "direct_evidence": [
+                    {"source_id": "source-1", "chunk_id": "chunk-a"},
+                    {"source_id": "source-1", "chunk_id": "chunk-a"},
+                ],
+                "inferred_suggestions": ["Same", "Same"],
+            },
+            {
+                "direct_evidence": [
+                    {"source_id": "source-1", "chunk_id": "chunk-a"},
+                ],
+                "inferred_suggestions": ["Same"],
+            },
+        )
+
+        self.assertEqual(
+            detail["shared_direct_evidence_refs"],
+            ["source-1:chunk-a", "source-1:chunk-a"],
+        )
+        self.assertEqual(
+            detail["left_only_direct_evidence_refs"], []
+        )
+        self.assertEqual(detail["right_only_direct_evidence_refs"], [])
+        self.assertEqual(detail["left_only_direct_evidence_count"], 1)
+        self.assertEqual(detail["right_only_direct_evidence_count"], 0)
+        self.assertEqual(detail["direct_evidence_overlap_ratio"], 0.5)
+        self.assertEqual(detail["shared_inferred_suggestions"], ["Same", "Same"])
+        self.assertEqual(detail["left_only_inferred_suggestions"], [])
+        self.assertEqual(detail["right_only_inferred_suggestions"], [])
+        self.assertEqual(detail["shared_inferred_suggestions_count"], 1)
+        self.assertEqual(detail["left_only_inferred_suggestions_count"], 1)
+        self.assertEqual(detail["right_only_inferred_suggestions_count"], 0)
+        self.assertEqual(detail["inferred_overlap_ratio"], 0.5)
 
     def test_anthropic_runner_coerces_incomplete_direct_evidence(self) -> None:
         request_payload = {
@@ -1884,6 +1980,13 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["right_count"], 4)
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertFalse(patch_ops["shape_aligned"])
+        self.assertEqual(patch_ops["title_overlap_ratio"], 1.0)
+        self.assertEqual(patch_ops["body_overlap_ratio"], 1.0)
+        self.assertEqual(
+            patch_ops["field_mismatch_counts"],
+            {"title": 0, "kind": 1, "body": 0, "left_extra": 0, "right_extra": 0},
+        )
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
         self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
@@ -1902,6 +2005,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(explanation["left_direct_evidence_count"], 1)
         self.assertEqual(explanation["right_direct_evidence_count"], 1)
         self.assertEqual(explanation["shared_direct_evidence_count"], 1)
+        self.assertEqual(explanation["left_only_direct_evidence_count"], 0)
+        self.assertEqual(explanation["right_only_direct_evidence_count"], 0)
+        self.assertEqual(explanation["direct_evidence_overlap_ratio"], 1.0)
         self.assertEqual(len(explanation["shared_direct_evidence_refs"]), 1)
         self.assertEqual(explanation["left_only_direct_evidence_refs"], [])
         self.assertEqual(explanation["right_only_direct_evidence_refs"], [])
@@ -1915,6 +2021,10 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(explanation["left_inferred_suggestions_count"], 3)
         self.assertEqual(explanation["right_inferred_suggestions_count"], 3)
+        self.assertEqual(explanation["shared_inferred_suggestions_count"], 3)
+        self.assertEqual(explanation["left_only_inferred_suggestions_count"], 0)
+        self.assertEqual(explanation["right_only_inferred_suggestions_count"], 0)
+        self.assertEqual(explanation["inferred_overlap_ratio"], 1.0)
         self.assertEqual(
             explanation["left_only_inferred_suggestions"], []
         )
@@ -2020,6 +2130,13 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["right_count"], 4)
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertFalse(patch_ops["shape_aligned"])
+        self.assertEqual(patch_ops["title_overlap_ratio"], 1.0)
+        self.assertEqual(patch_ops["body_overlap_ratio"], 1.0)
+        self.assertEqual(
+            patch_ops["field_mismatch_counts"],
+            {"title": 0, "kind": 1, "body": 0, "left_extra": 0, "right_extra": 0},
+        )
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
         self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
@@ -2028,6 +2145,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
         explanation = openai_pair["structure_details"]["explanation"]
         self.assertEqual(explanation["left_direct_evidence_count"], 0)
         self.assertEqual(explanation["right_direct_evidence_count"], 0)
+        self.assertEqual(explanation["left_only_direct_evidence_count"], 0)
+        self.assertEqual(explanation["right_only_direct_evidence_count"], 0)
+        self.assertEqual(explanation["direct_evidence_overlap_ratio"], 1.0)
         self.assertEqual(explanation["shared_direct_evidence_refs"], [])
         self.assertEqual(
             explanation["shared_inferred_suggestions"],
@@ -2037,6 +2157,10 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "Add LangChain chain topology details under Anthropic Model Configuration if chain structure is relevant.",
             ],
         )
+        self.assertEqual(explanation["shared_inferred_suggestions_count"], 3)
+        self.assertEqual(explanation["left_only_inferred_suggestions_count"], 0)
+        self.assertEqual(explanation["right_only_inferred_suggestions_count"], 0)
+        self.assertEqual(explanation["inferred_overlap_ratio"], 1.0)
         self.assertEqual(
             explanation["left_only_inferred_suggestions"], []
         )
@@ -2164,6 +2288,13 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["right_count"], 4)
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertFalse(patch_ops["shape_aligned"])
+        self.assertEqual(patch_ops["title_overlap_ratio"], 1.0)
+        self.assertEqual(patch_ops["body_overlap_ratio"], 1.0)
+        self.assertEqual(
+            patch_ops["field_mismatch_counts"],
+            {"title": 0, "kind": 1, "body": 0, "left_extra": 0, "right_extra": 0},
+        )
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
         self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
@@ -2220,6 +2351,13 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["right_count"], 4)
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
+        self.assertFalse(patch_ops["shape_aligned"])
+        self.assertEqual(patch_ops["title_overlap_ratio"], 1.0)
+        self.assertEqual(patch_ops["body_overlap_ratio"], 1.0)
+        self.assertEqual(
+            patch_ops["field_mismatch_counts"],
+            {"title": 0, "kind": 1, "body": 0, "left_extra": 0, "right_extra": 0},
+        )
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
         self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)

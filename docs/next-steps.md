@@ -43,7 +43,7 @@
 ## 下一轮最小切口
 
 - 把 compare-only offline lane 继续往真实成功 runner 的标题 / kind / body / notes 语义收口；当前已经有 request-driven 的场景模板，不再只停在共享 4-branch 结构基线
-- 把 compare 输出继续补到更稳定的字段级、结构级差异归因；当前已经有成功 pair detail / metrics / structure details 的 machine-readable 基线，并能按 position 看 patch op title / kind / body 差异
+- 把 compare 输出继续补到更稳定的字段级、结构级差异归因；当前已经有成功 pair detail / metrics / structure details 的 machine-readable 基线，并能按 position 看 patch op title / kind / body 差异、overlap ratio 和 mismatch counts
 - 视本地依赖与凭据情况，补 `langchain-openai` 的可运行 compare 路径
 - 继续避免在主界面回填 run-id、artifact、compare、history 式入口
 

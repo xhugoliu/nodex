@@ -81,6 +81,7 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 - `difference_details` / `comparison_metrics` 这种 machine-readable 的成功 pair 差异细节与汇总
 - `structure_details` 这种 machine-readable 的结构级归因，用来拆 patch ops、explanation shape、response / normalization notes 的差异层
   当前也已经能把 patch op 的按 position title / kind / body 差异，以及 direct-evidence ref / inferred-suggestion 的 left/shared/right 结构差异单独收口出来
+  并额外给出 overlap ratio、shape alignment、field mismatch counts 这类更紧凑的 summary，帮助识别真实 runner 波动下是“结构仍对齐”还是“整体 shape 已变”
 - compare-only offline lane 在 `source-root` / `source-context` 上共享 4-branch 结构基线，并用 request-driven 的场景语义模板收口 title/body/inferred-suggestion，不再额外制造 inferred-op normalization 噪声
 
 下一轮更值得补的仍然是：
