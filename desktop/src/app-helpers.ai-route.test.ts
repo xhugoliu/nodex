@@ -156,6 +156,20 @@ test("deriveContextSelectionDecision keeps review/apply state when returning to 
   assert.equal(decision.shouldClearTransientReviewState, false);
 });
 
+test("deriveContextSelectionDecision keeps the draft workspace visible when refreshing the same node context", () => {
+  const decision = deriveContextSelectionDecision(
+    { nodeId: "node-a", sourceId: null },
+    { nodeId: "node-a", sourceId: null },
+    {
+      currentSelectionPanelTab: "draft",
+      preservePanelTab: true,
+    },
+  );
+
+  assert.equal(decision.nextSelectionPanelTab, "draft");
+  assert.equal(decision.shouldClearTransientReviewState, false);
+});
+
 test("deriveContextSelectionDecision clears review/apply state when opening a different source", () => {
   const decision = deriveContextSelectionDecision(
     { nodeId: "node-a", sourceId: "source-1" },

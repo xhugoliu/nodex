@@ -4,6 +4,7 @@ import {
   buildAiDraftNextSteps,
   describePatchOperation,
   type PatchDraftState,
+  type SelectionPanelTab,
   type Translator,
 } from "../app-helpers";
 import type {
@@ -110,7 +111,7 @@ export function WorkbenchMainPane(props: {
 }
 
 export function WorkbenchSidePane(props: {
-  selectionTab: "context" | "review";
+  selectionTab: SelectionPanelTab;
   aiDraftStatus: DesktopAiStatus | null;
   aiDraftStatusLoading: boolean;
   aiDraftError: string | null;
@@ -123,7 +124,7 @@ export function WorkbenchSidePane(props: {
   reviewDraft: DraftReviewPayload | null;
   patchDraftState: PatchDraftState;
   t: Translator;
-  onSelectSelectionTab: (tab: "context" | "review") => void;
+  onSelectSelectionTab: (tab: SelectionPanelTab) => void;
   onRefreshAiDraftStatus: () => void;
   onTitleChange: (value: string) => void;
   onBodyChange: (value: string) => void;
@@ -131,6 +132,8 @@ export function WorkbenchSidePane(props: {
   onOpenCreatedNode: (nodeId: string) => void;
   onOpenLinkedNode: (nodeId: string) => void;
   onBackToNodeContext: () => void;
+  onDraftAiExpand: () => void;
+  onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
   onDraftUpdate: () => void;
@@ -148,20 +151,18 @@ export function WorkbenchSidePane(props: {
             {props.t("workbench.contextTab")}
           </button>
           <button
+            className={tabButtonClass(props.selectionTab === "draft")}
+            onClick={() => props.onSelectSelectionTab("draft")}
+          >
+            {props.t("workbench.draftTab")}
+          </button>
+          <button
             className={tabButtonClass(props.selectionTab === "review")}
             onClick={() => props.onSelectSelectionTab("review")}
           >
             {props.t("workbench.reviewTab")}
           </button>
         </div>
-
-        <AiDraftRouteSurface
-          draftError={props.aiDraftError}
-          loading={props.aiDraftStatusLoading}
-          status={props.aiDraftStatus}
-          t={props.t}
-          onRefresh={props.onRefreshAiDraftStatus}
-        />
 
         <div className="scroll-panel min-h-0 flex-1 overflow-auto">
           {props.selectionTab === "review" ? (
@@ -171,6 +172,21 @@ export function WorkbenchSidePane(props: {
               t={props.t}
               onPreviewPatch={props.onPreviewPatch}
               onApplyPatch={props.onApplyPatch}
+            />
+          ) : props.selectionTab === "draft" ? (
+            <DraftSurface
+              status={props.aiDraftStatus}
+              loading={props.aiDraftStatusLoading}
+              draftError={props.aiDraftError}
+              nodeContext={props.nodeContext}
+              selectedSourceDetail={props.selectedSourceDetail}
+              reviewDraft={props.reviewDraft}
+              patchDraftState={props.patchDraftState}
+              t={props.t}
+              onRefreshAiDraftStatus={props.onRefreshAiDraftStatus}
+              onDraftAiExpand={props.onDraftAiExpand}
+              onDraftAiExplore={props.onDraftAiExplore}
+              onOpenReview={() => props.onSelectSelectionTab("review")}
             />
           ) : props.selectedSourceDetail ? (
             <SourceContextSurface
@@ -200,6 +216,195 @@ export function WorkbenchSidePane(props: {
         </div>
       </div>
     </section>
+  );
+}
+
+function DraftSurface(props: {
+  status: DesktopAiStatus | null;
+  loading: boolean;
+  draftError: string | null;
+  nodeContext: NodeWorkspaceContext | null;
+  selectedSourceDetail: SourceDetail | null;
+  reviewDraft: DraftReviewPayload | null;
+  patchDraftState: PatchDraftState;
+  t: Translator;
+  onRefreshAiDraftStatus: () => void;
+  onDraftAiExpand: () => void;
+  onDraftAiExplore: (by: "risk" | "question" | "action" | "evidence") => void;
+  onOpenReview: () => void;
+}) {
+  if (!props.nodeContext) {
+    return (
+      <EmptyState
+        title={props.t("workbench.draftEmptyTitle")}
+        body={props.t("workbench.draftEmptyBody")}
+      />
+    );
+  }
+
+  const detail = props.nodeContext.node_detail;
+  const selectedSourceDetail = props.selectedSourceDetail;
+  const citedChunkIds = new Set(
+    detail.evidence.flatMap((source) =>
+      source.citations.map((citation) => citation.chunk.id),
+    ),
+  );
+  const citedChunkCount = selectedSourceDetail
+    ? selectedSourceDetail.chunks.filter((chunk) =>
+        citedChunkIds.has(chunk.chunk.id),
+      ).length
+    : 0;
+  const currentDraftSummary =
+    props.reviewDraft?.patch.summary ??
+    props.reviewDraft?.report.summary ??
+    props.patchDraftState.summary;
+  const visibleDraftOps = props.patchDraftState.ops.slice(0, 2);
+  const hiddenDraftOpCount = Math.max(props.patchDraftState.ops.length - 2, 0);
+
+  return (
+    <div className="space-y-4">
+      <section className={`${cardClass} space-y-3`}>
+        <div className="space-y-1">
+          <div className="text-sm font-medium text-[color:var(--text)]">
+            {props.t("workbench.draftScopeTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {selectedSourceDetail
+              ? props.t("workbench.draftScopeSourceBody", {
+                  title: detail.node.title,
+                  source: selectedSourceDetail.source.original_name,
+                })
+              : props.t("workbench.draftScopeNodeBody", {
+                  title: detail.node.title,
+                })}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {detail.node.title}
+          </span>
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("workbench.childrenStat", {
+              count: detail.children.length,
+            })}
+          </span>
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {props.t("workbench.sourcesStat", {
+              count: detail.sources.length + detail.evidence.length,
+            })}
+          </span>
+          {selectedSourceDetail ? (
+            <>
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {selectedSourceDetail.source.original_name}
+              </span>
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {props.t("detail.sourceContextStatCited", {
+                  count: citedChunkCount,
+                })}
+              </span>
+            </>
+          ) : null}
+        </div>
+      </section>
+
+      <AiDraftRouteSurface
+        draftError={props.draftError}
+        loading={props.loading}
+        status={props.status}
+        t={props.t}
+        onRefresh={props.onRefreshAiDraftStatus}
+      />
+
+      <section className={`${cardClass} space-y-3`}>
+        <div className="space-y-1">
+          <div className="text-sm font-medium text-[color:var(--text)]">
+            {props.t("workbench.draftActionsTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--muted)]">
+            {props.t("workbench.draftActionsBody")}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className={primaryButtonClass} onClick={props.onDraftAiExpand}>
+            {props.t("nodeEditing.draftAiExpand")}
+          </button>
+          <button
+            className={secondaryButtonClass}
+            onClick={() => props.onDraftAiExplore("question")}
+          >
+            {props.t("nodeEditing.draftAiExploreQuestion")}
+          </button>
+          <button
+            className={secondaryButtonClass}
+            onClick={() => props.onDraftAiExplore("risk")}
+          >
+            {props.t("nodeEditing.draftAiExploreRisk")}
+          </button>
+          <button
+            className={secondaryButtonClass}
+            onClick={() => props.onDraftAiExplore("action")}
+          >
+            {props.t("nodeEditing.draftAiExploreAction")}
+          </button>
+          <button
+            className={secondaryButtonClass}
+            onClick={() => props.onDraftAiExplore("evidence")}
+          >
+            {props.t("nodeEditing.draftAiExploreEvidence")}
+          </button>
+        </div>
+      </section>
+
+      {props.patchDraftState.state === "ready" ? (
+        <section className={`${cardClass} space-y-3`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-[color:var(--text)]">
+                {props.t("detail.currentDraft")}
+              </div>
+              <div className="text-sm leading-6 text-[color:var(--muted)]">
+                {props.reviewDraft?.explanation.rationale_summary ||
+                  currentDraftSummary ||
+                  props.t("workbench.reviewBody")}
+              </div>
+            </div>
+            <button className={ghostButtonClass} onClick={props.onOpenReview}>
+              {props.t("workbench.reviewTab")}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+            <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+              {props.t("workbench.draftReadyOps", {
+                count: props.patchDraftState.opCount,
+              })}
+            </span>
+            {currentDraftSummary ? (
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {currentDraftSummary}
+              </span>
+            ) : null}
+          </div>
+          <div className="space-y-2">
+            {visibleDraftOps.map((op, index) => (
+              <div
+                key={`${op.type ?? "op"}-${index}`}
+                className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-3 py-3 text-sm leading-6 text-[color:var(--text)]"
+              >
+                {describePatchOperation(op, props.t)}
+              </div>
+            ))}
+            {hiddenDraftOpCount ? (
+              <div className="text-xs text-[color:var(--muted)]">
+                {props.t("workbench.draftMoreOps", {
+                  count: hiddenDraftOpCount,
+                })}
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+    </div>
   );
 }
 
@@ -260,6 +465,9 @@ export function AiDraftRouteSurface(props: {
     : routeNeedsAttention
     ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.05)]"
     : "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.05)]";
+  const showRouteDetails =
+    Boolean(status) &&
+    (routeNeedsAttention || status.command_source === "override");
   const showNextSteps =
     Boolean(props.draftError) ||
     (!routeIsNeutral && routeNeedsAttention && nextSteps.length > 0);
@@ -297,26 +505,31 @@ export function AiDraftRouteSurface(props: {
         </span>
       </div>
 
-      <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3 text-sm leading-6 text-[color:var(--text)]">
-        <div>
-          {props.t("nodeEditing.aiDraftModel")}: {status?.model || props.t("nodeEditing.aiDraftUnknown")}
+      {showRouteDetails ? (
+        <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3 text-sm leading-6 text-[color:var(--text)]">
+          <div>
+            {props.t("nodeEditing.aiDraftModel")}:{" "}
+            {status?.model || props.t("nodeEditing.aiDraftUnknown")}
+          </div>
+          <div>
+            {props.t("nodeEditing.aiDraftReasoning")}:{" "}
+            {status?.reasoning_effort || props.t("nodeEditing.aiDraftUnknown")}
+          </div>
+          <div>
+            {props.t("nodeEditing.aiDraftAuth")}: {authLabel}
+          </div>
+          <div>
+            {props.t("nodeEditing.aiDraftProcessEnv")}: {processEnvLabel} ·{" "}
+            {props.t("nodeEditing.aiDraftShellEnv")}: {shellEnvLabel}
+          </div>
+          <div>
+            {props.t("nodeEditing.aiDraftUsesProviderDefaults")}:{" "}
+            {status?.uses_provider_defaults
+              ? props.t("nodeEditing.aiDraftAuthReady")
+              : props.t("nodeEditing.aiDraftCustomRunner")}
+          </div>
         </div>
-        <div>
-          {props.t("nodeEditing.aiDraftReasoning")}: {status?.reasoning_effort || props.t("nodeEditing.aiDraftUnknown")}
-        </div>
-        <div>
-          {props.t("nodeEditing.aiDraftAuth")}: {authLabel}
-        </div>
-        <div>
-          {props.t("nodeEditing.aiDraftProcessEnv")}: {processEnvLabel} · {props.t("nodeEditing.aiDraftShellEnv")}: {shellEnvLabel}
-        </div>
-        <div>
-          {props.t("nodeEditing.aiDraftUsesProviderDefaults")}:{" "}
-          {status?.uses_provider_defaults
-            ? props.t("nodeEditing.aiDraftAuthReady")
-            : props.t("nodeEditing.aiDraftCustomRunner")}
-        </div>
-      </div>
+      ) : null}
 
       {status?.command &&
       (routeNeedsAttention || status.command_source === "override") ? (

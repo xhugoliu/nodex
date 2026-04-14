@@ -7,6 +7,7 @@ import { deriveReturnToNodeContextState } from "./app-helpers";
 import { WorkbenchSidePane } from "./components/workbench";
 import type {
   ApplyPatchReport,
+  DesktopAiStatus,
   DraftReviewPayload,
   NodeWorkspaceContext,
   SourceDetail,
@@ -74,6 +75,23 @@ function makeApplyResult(): ApplyPatchReport {
   };
 }
 
+function makeDesktopAiStatus(): DesktopAiStatus {
+  return {
+    command:
+      "python3 scripts/provider_runner.py --provider anthropic --use-default-args",
+    command_source: "default",
+    provider: "anthropic",
+    runner: "provider_runner.py",
+    model: "claude-sonnet",
+    reasoning_effort: null,
+    has_auth: true,
+    has_process_env_conflict: false,
+    has_shell_env_conflict: false,
+    uses_provider_defaults: true,
+    status_error: null,
+  };
+}
+
 function makeReviewDraft(): DraftReviewPayload {
   return {
     run: {
@@ -116,21 +134,25 @@ function makeReviewDraft(): DraftReviewPayload {
 }
 
 function renderSidePane(options: {
-  selectionTab: "context" | "review";
+  selectionTab: "context" | "draft" | "review";
   selectedSourceDetail?: SourceDetail | null;
   applyResult?: ApplyPatchReport | null;
   reviewDraft?: DraftReviewPayload | null;
+  aiDraftStatus?: DesktopAiStatus | null;
+  aiDraftError?: string | null;
 }) {
   return renderToStaticMarkup(
     <WorkbenchSidePane
-      aiDraftError={null}
-      aiDraftStatus={null}
+      aiDraftError={options.aiDraftError ?? null}
+      aiDraftStatus={options.aiDraftStatus ?? makeDesktopAiStatus()}
       aiDraftStatusLoading={false}
       applyResult={options.applyResult ?? null}
       nodeContext={makeNodeContext()}
       onApplyPatch={() => {}}
       onBackToNodeContext={() => {}}
       onBodyChange={() => {}}
+      onDraftAiExpand={() => {}}
+      onDraftAiExplore={() => {}}
       onDraftCiteChunk={() => {}}
       onDraftUnciteChunk={() => {}}
       onDraftUpdate={() => {}}
@@ -171,8 +193,28 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
 
   assert.match(html, /patchEditor\.preview/);
   assert.match(html, /patchEditor\.apply/);
+  assert.doesNotMatch(html, /run-1/);
+  assert.doesNotMatch(html, /\/tmp\/request\.json/);
+  assert.doesNotMatch(html, /\/tmp\/response\.json/);
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
   assert.doesNotMatch(html, /workbench\.applyResultTitle/);
+});
+
+test("WorkbenchSidePane renders Draft as a node-scoped assistant workspace without switching into review or apply surfaces", () => {
+  const html = renderSidePane({
+    selectionTab: "draft",
+  });
+
+  assert.match(html, /workbench\.draftScopeTitle/);
+  assert.match(html, /Authentication/);
+  assert.match(html, /source\.md/);
+  assert.match(html, /nodeEditing\.aiDraftRoute/);
+  assert.match(html, /nodeEditing\.draftAiExpand/);
+  assert.match(html, /detail\.currentDraft/);
+  assert.match(html, /workbench\.draftReadyOps \{&quot;count&quot;:1\}/);
+  assert.doesNotMatch(html, /patchEditor\.preview/);
+  assert.doesNotMatch(html, /workbench\.applyResultTitle/);
+  assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
 });
 
 test("WorkbenchSidePane returns to source context when the context tab is selected with a source open", () => {

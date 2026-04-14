@@ -81,6 +81,8 @@ test("AiDraftRouteSurface keeps command hidden for healthy default route", () =>
 
   assert.match(html, /nodeEditing\.aiDraftReady/);
   assert.match(html, /nodeEditing\.aiDraftSourceDefault/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftAuth:/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftProcessEnv:/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftCommand/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftNextTitle/);
 });

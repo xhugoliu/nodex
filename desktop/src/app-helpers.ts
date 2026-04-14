@@ -175,7 +175,7 @@ export interface SelectionContext {
   sourceId: string | null;
 }
 
-export type SelectionPanelTab = "context" | "review";
+export type SelectionPanelTab = "context" | "draft" | "review";
 
 export interface OverviewFocusDecision {
   nextNodeId: string | null;
@@ -316,8 +316,8 @@ export function deriveContextSelectionDecision(
     nextSelectionPanelTab:
       !shouldResetTransientReviewState &&
       options.preservePanelTab &&
-      options.currentSelectionPanelTab === "review"
-        ? "review"
+      options.currentSelectionPanelTab
+        ? options.currentSelectionPanelTab
         : "context",
     shouldClearTransientReviewState: shouldResetTransientReviewState,
   };

@@ -19,6 +19,7 @@ import {
   renderAiDraftFailure,
   shouldClearTransientReviewState,
   type ConsoleTone,
+  type SelectionPanelTab,
 } from "./app-helpers";
 import {
   LANGUAGE_STORAGE_KEY,
@@ -206,9 +207,8 @@ export default function App(props: AppProps = {}) {
   const [workspacePath, setWorkspacePath] = useState("");
   const [workspaceOverview, setWorkspaceOverview] =
     useState<WorkspaceOverview | null>(null);
-  const [selectionPanelTab, setSelectionPanelTab] = useState<"context" | "review">(
-    "context",
-  );
+  const [selectionPanelTab, setSelectionPanelTab] =
+    useState<SelectionPanelTab>("context");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedNodeContext, setSelectedNodeContext] =
     useState<NodeWorkspaceContext | null>(null);
@@ -387,7 +387,7 @@ export default function App(props: AppProps = {}) {
     nextPatchDraftOrigin: PatchDraftOrigin | null;
     nextReviewDraft: DraftReviewPayload | null;
     nextApplyResult: ApplyPatchReport | null;
-    nextSelectionPanelTab: "context" | "review";
+    nextSelectionPanelTab: SelectionPanelTab;
   }) {
     setPatchEditor(state.nextPatchEditor);
     setPatchDraftOrigin(state.nextPatchDraftOrigin);
@@ -922,6 +922,7 @@ export default function App(props: AppProps = {}) {
     }
 
     try {
+      setSelectionPanelTab("draft");
       setLastAiDraftError(null);
       const result = await invokeCommandFn<DraftReviewPayload>("draft_node_expand", {
         start_path: workspacePath,
@@ -953,6 +954,7 @@ export default function App(props: AppProps = {}) {
     }
 
     try {
+      setSelectionPanelTab("draft");
       setLastAiDraftError(null);
       const result = await invokeCommandFn<DraftReviewPayload>("draft_node_explore", {
         start_path: workspacePath,
@@ -1180,6 +1182,12 @@ export default function App(props: AppProps = {}) {
               }}
               onBackToNodeContext={() => {
                 returnToNodeContext();
+              }}
+              onDraftAiExpand={() => {
+                void draftAiExpandPatch();
+              }}
+              onDraftAiExplore={(by) => {
+                void draftAiExplorePatch(by);
               }}
               onDraftCiteChunk={(chunkId) => {
                 void draftCiteChunkPatch(chunkId);

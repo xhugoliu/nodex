@@ -307,6 +307,19 @@ function makeOverview(): WorkspaceOverview {
           },
           children: [],
         },
+        {
+          node: {
+            id: "node-2",
+            parent_id: "root",
+            title: "Operations",
+            body: null,
+            kind: "topic",
+            position: 1,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [],
+        },
       ],
     },
     sources: [],
@@ -551,6 +564,27 @@ function makeNodeContext(): NodeWorkspaceContext {
   };
 }
 
+function makeSecondNodeContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "node-2",
+        parent_id: "root",
+        title: "Operations",
+        body: "Operational follow-up notes",
+        kind: "topic",
+        position: 1,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      parent: { id: "root", title: "Root" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
 function makeSourceDetail(): SourceDetail {
   return {
     source: {
@@ -732,6 +766,122 @@ test("App clears source detail draft state when returning to node context", asyn
   assert.equal(
     requireSidePaneProps().patchDraftState.state,
     "empty",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App clears transient draft review state when switching to a different node", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (args.node_id === "node-2"
+          ? makeSecondNodeContext()
+          : makeNodeContext()) as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload(String(args.node_id)) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+
+  await act(async () => {
+    requireTreePaneProps().onSelectNode("node-2");
+    await flush(2);
+  });
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-2");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-2");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().reviewDraft, null);
+  assert.equal(requireSidePaneProps().applyResult, null);
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "node-2",
   );
 
   await act(async () => {
