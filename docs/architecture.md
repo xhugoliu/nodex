@@ -44,7 +44,7 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 - `desktop/src-tauri`
   Tauri 命令桥与原生菜单
 - `desktop/src`
-  React workbench：左栏导航、中栏画布、右栏 `Context / Review`
+  React workbench：左栏轻导航、中栏固定画布、右栏节点作用域的 assistant workspace（`Context / Draft / Review`）
 
 ## 当前边界
 
@@ -56,7 +56,7 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 ## 当前推荐路径
 
 - CLI：工作区验证、核心能力回归、provider 调试
-- 桌面端：最小节点工作流验证
+- 桌面端：以画布为主舞台的最小节点工作流验证；右栏承接 assistant 交互，但不抬出底层调试细节
 - AI：Anthropic-compatible LangChain 默认主路 + external runner + 本地 request / response / metadata 审计
 
 ## 当前不做
@@ -64,4 +64,5 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 - 把 provider SDK 直接塞进 Rust core
 - 让桌面端绕过 patch 直接写状态
 - 继续把重型调试面板放在主舞台
+- 把右栏做成全局长聊天记录或底层运行细节面板
 - 现在就展开一轮通用 Intent Layer 重构

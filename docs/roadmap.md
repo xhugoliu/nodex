@@ -49,14 +49,15 @@
 
 - Tauri 命令桥
 - 过渡性 workbench
-- 纯画布 + `Context / Review`
+- 纯画布 + 节点作用域的 assistant workspace
 
 ## 当前优先级
 
-长期路线里，当前最重要的不是再开新阶段，而是两件事同时推进：
+长期路线里，当前最重要的是先把桌面端的信息架构和主路径收口，再让 LangChain 主路为这条桌面默认 draft route 服务：
 
-- 把桌面主路径做顺、做稳、做得更可回归
-- 把 LangChain 主路从脚本层默认路径继续加速推向真正的一线核心能力
+- 把桌面三栏主路径做顺、做稳、做得更可回归
+- 把右栏做成 node-scoped assistant workspace，而不是底层调试台或聊天主界面
+- 把 LangChain 主路继续作为桌面默认 AI draft route 的支撑能力推进，而不是继续优先扩独立的调试表面
 
 具体切口看 [短期执行清单](./next-steps.md)。
 

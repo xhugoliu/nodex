@@ -4,27 +4,43 @@
 
 做一版“节点工作流优先”的桌面端，而不是“调试 / 审计入口优先”的桌面端。
 
+更具体地说：
+
+- 中栏固定为画布主舞台
+- 右栏是节点作用域的 assistant workspace，而不是调试台
+- 左栏先保持轻导航，不急着扩成复杂控制中心
+
 ## 当前主路径
 
 > 打开工作区 -> 选中节点 -> 看懂节点上下文与来源 -> 起草 AI draft -> review -> apply -> 继续进入新增节点
 
 ## 当前桌面 contract
 
-- 左栏：导航轨 + `Import Source`
-- 中栏：纯画布工作区
-- 右栏：只保留 `Context / Review`
+- 左栏：先保持轻导航、`Import Source` 和 source/browser 的最小职责
+- 中栏：固定为纯画布工作区
+- 右栏：节点作用域的 assistant workspace，默认承接 `Context / Draft / Review`
 - 画布高频动作放在节点卡片内
 - 当前默认 AI draft route 以 Anthropic-compatible LangChain 为主路
 - patch 仍然是确认层，不绕过 validate / apply
 
+### 右栏 assistant workspace 的边界
+
+- `Context`：看懂当前节点、来源、证据和“为什么值得看”
+- `Draft`：允许使用更有对话感的 composer 和响应卡片
+- `Review`：仍然回到 patch inspect / apply 的确认层
+- 不是全局聊天窗口
+- 不默认暴露 run id、artifact、history、compare、raw payload 这类底层细节
+
 ## 当前必须保持的语义
 
 - 导入 source 后优先选中导入 root node
+- assistant 交互必须绑定当前节点或当前 source detail，不做全局闲聊
 - 只要节点或打开的 source detail 发生变化，就清掉瞬时 Review/apply 状态并回到 `Context`
 - 只有同一节点、同一 source detail 的刷新，才允许保留当前 Review 可见态
 - `source detail -> node context` 的 handoff 语义已经收口到共享 helper，不应再散回 App 分支
 - apply 成功后优先聚焦新增节点；若没有新增节点，则回到当前节点
 - 右栏来源信息应解释“为什么值得看”，而不只是列 chunk
+- 右栏默认展示用户下一步该做什么，而不是底层运行细节列表
 
 ## 当前回归门
 
@@ -40,16 +56,18 @@
 
 优先顺序：
 
-1. 把 `desktop_flow_smoke.py` 继续补到更多主路径交接语义
-2. 把 source-root 路径继续推到真实 provider 凭据下的手动 / 对照验证
-3. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
+1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
+2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义
+3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
+4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
 ## 当前不做
 
 - 恢复 AI runs / Activity / Run Inspector 到主舞台
 - 把 `AI draft route` 变回厚重调试面板
 - 在画布层引入新的状态边界
-- 把桌面端改成聊天驱动 UI
+- 把右栏做成全局长聊天记录 UI
+- 把 compare / artifact / raw payload 暴露成默认页面内容
 
 ## 技术边界
 

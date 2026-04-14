@@ -29,7 +29,8 @@ cargo run -- export outline
 - CLI 内核已可用：`node` / `patch` / `source` / `snapshot` / `export`
 - AI 主路已可用：Anthropic-compatible LangChain 作为当前默认推荐路径，继续复用 external runner、AI run 审计和 patch replay 边界
 - 桌面端已可验证主路径，但仍是过渡性工作台，不是最终产品形态
-- 当前短期重点是桌面主路径收口，不是继续扩入口或面板
+- 当前短期重点是桌面三栏主路径收口：
+  中栏固定画布，右栏做节点作用域的 assistant workspace，而不是继续扩底层调试入口或面板
 
 ## 文档入口
 

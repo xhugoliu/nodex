@@ -14,13 +14,12 @@
 
 ## 当前优先级
 
-- 守住 Anthropic-compatible LangChain 这条默认 AI 主路
-- 守住共享 LangChain runner helper，不让 OpenAI / Anthropic 的 contract shaping 和 fallback 行为继续分叉
-- 守住左栏 `Import Source` 入口
-- 守住右栏来源上下文、人话摘要和 cite / uncite 工作流
+- 收口桌面三栏 IA：中栏固定画布，右栏改成节点作用域的 assistant workspace
+- 守住右栏 `Context / Draft / Review` 语义，不让它滑回调试台或全局聊天窗口
+- 左栏先维持轻导航、`Import Source` 和 source/browser 的最小职责，不抢中栏/右栏主舞台
 - 守住 apply 后统一的 focus node 语义
 - 守住 `source detail -> node context` 这条高频 handoff，不让 Review/apply 清理语义散回 App 分支
-- 守住右栏轻量 `AI draft route` 状态层，不恢复重型调试面板
+- 守住桌面默认 AI draft route 的可用性，但只把 LangChain 稳定化工作收敛为桌面默认路径的支撑面，不把底层 compare / artifact 细节抬到主舞台
 
 ## 当前回归门
 
@@ -42,10 +41,10 @@
 
 ## 下一轮最小切口
 
-- 把 compare-only offline lane 继续往真实成功 runner 的标题 / kind / body / notes 语义收口；当前已经有 request-driven 的场景模板，不再只停在共享 4-branch 结构基线
-- 把 compare 输出继续补到更稳定的字段级、结构级差异归因；当前已经有成功 pair detail / metrics / structure details 的 machine-readable 基线，并能按 position 看 patch op title / kind / body 差异、overlap ratio 和 mismatch counts
-- 视本地依赖与凭据情况，补 `langchain-openai` 的可运行 compare 路径
-- 继续避免在主界面回填 run-id、artifact、compare、history 式入口
+- 先把右栏 assistant workspace 的 IA 和切换语义写清楚、做轻、测稳
+- 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到三栏主路径的 handoff / draft / review / apply 交接
+- 只在确实影响桌面默认 draft route 稳定性时，再做 LangChain compare / fallback / provider 路径补强
+- 明确哪些底层信息只留在调试/CLI 层，不回填到默认桌面页面
 
 ## 当前不优先
 
