@@ -193,6 +193,11 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
     selectionTab: "review",
   });
 
+  assert.match(html, /workbench\.focusScopeTitle/);
+  assert.match(html, /workbench\.focusScopeNodeLabel/);
+  assert.match(html, /workbench\.focusScopeSourceLabel/);
+  assert.match(html, /Authentication/);
+  assert.match(html, /source\.md/);
   assert.match(html, /patchEditor\.preview/);
   assert.match(html, /patchEditor\.apply/);
   assert.doesNotMatch(html, /run-1/);
@@ -207,6 +212,8 @@ test("WorkbenchSidePane renders Draft as a node-scoped assistant workspace witho
     selectionTab: "draft",
   });
 
+  assert.match(html, /workbench\.focusScopeTitle/);
+  assert.match(html, /workbench\.focusScopeNodeLabel/);
   assert.match(html, /workbench\.draftScopeTitle/);
   assert.match(html, /Authentication/);
   assert.match(html, /nodeEditing\.aiDraftRoute/);
@@ -218,6 +225,7 @@ test("WorkbenchSidePane renders Draft as a node-scoped assistant workspace witho
   assert.doesNotMatch(html, /patchEditor\.preview/);
   assert.doesNotMatch(html, /workbench\.applyResultTitle/);
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
+  assert.doesNotMatch(html, /workbench\.focusScopeSourceLabel/);
 });
 
 test("WorkbenchSidePane returns to source context when the context tab is selected with a source open", () => {
@@ -225,6 +233,11 @@ test("WorkbenchSidePane returns to source context when the context tab is select
     selectionTab: "context",
   });
 
+  assert.match(html, /workbench\.focusScopeTitle/);
+  assert.match(html, /workbench\.focusScopeNodeLabel/);
+  assert.match(html, /workbench\.focusScopeSourceLabel/);
+  assert.match(html, /Authentication/);
+  assert.match(html, /source\.md/);
   assert.match(html, /detail\.sourceContextSummaryTitle/);
   assert.match(html, /Provider Authentication Flow/);
   assert.doesNotMatch(html, /patchEditor\.preview/);
@@ -238,10 +251,14 @@ test("WorkbenchSidePane falls back to node context apply results when no source 
     applyResult: makeApplyResult(),
   });
 
+  assert.match(html, /workbench\.focusScopeTitle/);
+  assert.match(html, /workbench\.focusScopeNodeLabel/);
+  assert.match(html, /Authentication/);
   assert.match(html, /workbench\.applyResultTitle/);
   assert.match(html, /Applied patch summary/);
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
   assert.doesNotMatch(html, /patchEditor\.preview/);
+  assert.doesNotMatch(html, /workbench\.focusScopeSourceLabel/);
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {

@@ -141,9 +141,35 @@ export function WorkbenchSidePane(props: {
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
 }) {
+  const focusNodeTitle = props.nodeContext?.node_detail.node.title?.trim() || null;
+  const focusSourceTitle =
+    props.selectionTab === "draft"
+      ? null
+      : props.selectedSourceDetail?.source.original_name?.trim() || null;
+
   return (
     <section className={`${panelClass} min-h-0 overflow-hidden`}>
       <div className="flex h-full min-h-0 flex-col">
+        {focusNodeTitle || focusSourceTitle ? (
+          <div className="mb-4 rounded-xl border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(243,244,246,0.88))] px-3 py-3">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.focusScopeTitle")}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--text)]">
+              {focusNodeTitle ? (
+                <span className="rounded-full border border-[color:var(--line)] bg-white/90 px-2.5 py-1">
+                  {props.t("workbench.focusScopeNodeLabel")}: {focusNodeTitle}
+                </span>
+              ) : null}
+              {focusSourceTitle ? (
+                <span className="rounded-full border border-[color:var(--line)] bg-white/90 px-2.5 py-1">
+                  {props.t("workbench.focusScopeSourceLabel")}: {focusSourceTitle}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mb-4 flex gap-2">
           <button
             className={tabButtonClass(props.selectionTab === "context")}

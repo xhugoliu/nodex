@@ -1220,6 +1220,8 @@ test("App renders Context CTA and local provenance in the mounted right pane aft
   });
 
   const renderedText = dom.container.textContent;
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Node: Authentication/);
   assert.match(renderedText, /Open Draft/);
   assert.match(renderedText, /source\.md/);
   assert.match(renderedText, /Source file path: \/fixtures\/source\.md/);

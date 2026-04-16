@@ -98,6 +98,9 @@ const translations: Record<Locale, TranslationTree> = {
       contextTab: "Context",
       draftTab: "Draft",
       reviewTab: "Review",
+      focusScopeTitle: "Current focus",
+      focusScopeNodeLabel: "Node",
+      focusScopeSourceLabel: "Source in view",
       contextNextTitle: "Next step",
       contextNextNodeDraft:
         "Move into Draft to turn this node into one candidate patch before you review it.",
@@ -676,6 +679,9 @@ const translations: Record<Locale, TranslationTree> = {
       contextTab: "上下文",
       draftTab: "草案",
       reviewTab: "Review",
+      focusScopeTitle: "当前焦点",
+      focusScopeNodeLabel: "节点",
+      focusScopeSourceLabel: "正在查看的来源",
       contextNextTitle: "下一步",
       contextNextNodeDraft: "进入草案页，先把当前节点收成一个候选 patch，再回来看 Review。",
       contextNextSourceDraft:
