@@ -566,6 +566,39 @@ function makeNodeContext(): NodeWorkspaceContext {
   };
 }
 
+function makeNodeContextWithSource(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "node-1",
+        parent_id: "root",
+        title: "Authentication",
+        body: "Current auth routing notes",
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      parent: { id: "root", title: "Root" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [],
+    },
+  };
+}
+
 function makeSecondNodeContext(): NodeWorkspaceContext {
   return {
     node_detail: {
@@ -1123,6 +1156,81 @@ test("App applies workspace-loaded focus_node_id across tree, canvas, and side p
         call.args.node_id === "node-1",
     ),
     "preferred node id should drive context loading",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App renders Context CTA and local provenance in the mounted right pane after workspace load", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithSource() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const renderedText = dom.container.textContent;
+  assert.match(renderedText, /Open Draft/);
+  assert.match(renderedText, /source\.md/);
+  assert.match(renderedText, /Source file path: \/fixtures\/source\.md/);
+  assert.match(renderedText, /Imported:/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_node_workspace_context" &&
+        call.args.node_id === "node-1",
+    ),
+    "preferred node id should still drive the mounted context load",
   );
 
   await act(async () => {
