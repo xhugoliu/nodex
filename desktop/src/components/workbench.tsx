@@ -433,6 +433,7 @@ export function AiDraftRouteSurface(props: {
     status?.command_source === "override"
       ? props.t("nodeEditing.aiDraftSourceOverride")
       : props.t("nodeEditing.aiDraftSourceDefault");
+  const usesOverrideCommand = status?.command_source === "override";
   const authLabel =
     status?.has_auth === true
       ? props.t("nodeEditing.aiDraftAuthReady")
@@ -465,9 +466,7 @@ export function AiDraftRouteSurface(props: {
     : routeNeedsAttention
     ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.05)]"
     : "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.05)]";
-  const showRouteDetails =
-    Boolean(status) &&
-    (routeNeedsAttention || status.command_source === "override");
+  const showRouteDetails = Boolean(status) && (routeNeedsAttention || usesOverrideCommand);
   const showNextSteps =
     Boolean(props.draftError) ||
     (!routeIsNeutral && routeNeedsAttention && nextSteps.length > 0);
@@ -531,8 +530,7 @@ export function AiDraftRouteSurface(props: {
         </div>
       ) : null}
 
-      {status?.command &&
-      (routeNeedsAttention || status.command_source === "override") ? (
+      {status?.command && (routeNeedsAttention || usesOverrideCommand) ? (
         <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
           <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
             {props.t("nodeEditing.aiDraftCommand")}

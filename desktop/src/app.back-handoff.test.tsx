@@ -477,6 +477,8 @@ function makeDraftReviewPayload(nodeId: string): DraftReviewPayload {
       model: "claude-sonnet",
       provider_run_id: null,
       retry_count: 0,
+      used_plain_json_fallback: false,
+      normalization_notes: [],
       last_error_category: null,
       last_error_message: null,
       last_status_code: null,

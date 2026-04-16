@@ -367,6 +367,8 @@ fn ai_run_record_from_runner_report(report: &ExternalRunnerReport) -> AiRunRecor
         model: report.metadata.model.clone(),
         provider_run_id: report.metadata.provider_run_id.clone(),
         retry_count: report.metadata.retry_count,
+        used_plain_json_fallback: report.metadata.used_plain_json_fallback,
+        normalization_notes: report.metadata.normalization_notes.clone(),
         last_error_category: report.metadata.last_error_category.clone(),
         last_error_message: report.metadata.last_error_message.clone(),
         last_status_code: report.metadata.last_status_code,

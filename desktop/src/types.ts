@@ -72,6 +72,8 @@ export interface AiRunMetadata {
   model: string | null;
   provider_run_id: string | null;
   retry_count: number;
+  used_plain_json_fallback: boolean;
+  normalization_notes: string[];
   last_error_category: string | null;
   last_error_message: string | null;
   last_status_code: number | null;
@@ -96,6 +98,8 @@ export interface AiRunRecord {
   model: string | null;
   provider_run_id: string | null;
   retry_count: number;
+  used_plain_json_fallback: boolean;
+  normalization_notes: string[];
   last_error_category: string | null;
   last_error_message: string | null;
   last_status_code: number | null;
@@ -136,10 +140,13 @@ export interface AiRunCompareSummary {
   same_provider: boolean;
   same_model: boolean;
   same_status: boolean;
+  same_used_plain_json_fallback: boolean;
+  same_normalization_notes: boolean;
   same_rationale_summary: boolean;
   same_patch_summary: boolean;
   same_patch_preview: boolean;
   same_response_notes: boolean;
+  difference_kinds: string[];
 }
 
 export interface AiRunCompareOutput {
