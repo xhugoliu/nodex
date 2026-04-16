@@ -545,6 +545,107 @@ function makeNodeGeneratedContext(): NodeWorkspaceContext {
   };
 }
 
+function makeUpdatedNodeOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "node-1",
+            parent_id: "root",
+            title: "Authentication Updated",
+            body: "Current auth routing notes with one local revision",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000001,
+          },
+          children: [],
+        },
+        {
+          node: {
+            id: "node-2",
+            parent_id: "root",
+            title: "Operations",
+            body: null,
+            kind: "topic",
+            position: 1,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeUpdatedNodeContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "node-1",
+        parent_id: "root",
+        title: "Authentication Updated",
+        body: "Current auth routing notes with one local revision",
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000001,
+      },
+      parent: { id: "root", title: "Root" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeUpdateNodePatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Update Authentication title",
+    ops: [
+      {
+        type: "update_node",
+        id: "node-1",
+        title: "Authentication Updated",
+        body: "Current auth routing notes with one local revision",
+        kind: null,
+      },
+    ],
+  };
+}
+
+function makeUpdateNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-update",
+      summary: "Applied Authentication update",
+      preview: ["Updated node-1 title and body"],
+      created_nodes: [],
+    },
+    overview: makeUpdatedNodeOverview(),
+    preferred_focus_node_id: "node-1",
+    focus_node_context: makeUpdatedNodeContext(),
+  };
+}
+
 function makeNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
   return {
     report: {
@@ -1695,6 +1796,162 @@ test("App refocuses tree, canvas, and right rail onto the applied node after rev
         call.args.focus_node_id === "node-1",
     ),
     "apply should keep the current node as the review focus before moving to the generated node",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tree, canvas, and right rail aligned on the updated node after manual patch apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (args.node_id === "node-1"
+          ? makeNodeContext()
+          : makeSecondNodeContext()) as T;
+      }
+      if (command === "draft_update_node_patch") {
+        return makeUpdateNodePatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeUpdateNodeApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onTitleChange("Authentication Updated");
+    requireSidePaneProps().onBodyChange(
+      "Current auth routing notes with one local revision",
+    );
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftUpdate();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_update_node_patch" &&
+        call.args.node_id === "node-1" &&
+        call.args.title === "Authentication Updated",
+    ),
+    "manual draft update should use the current node and edited title",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.title,
+    "Authentication Updated",
+  );
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied Authentication update",
+  );
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Applied Authentication update/);
+  assert.match(finalSidePaneHtml, /Node: Authentication Updated/);
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "node-1",
+    ),
+    "manual apply should keep the current node as the review focus when no new node is created",
   );
 
   await act(async () => {
