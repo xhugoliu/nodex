@@ -19,6 +19,7 @@
 - 左栏先维持轻导航、`Import Source` 和 source/browser 的最小职责，不抢中栏/右栏主舞台
 - 守住 apply 后统一的 focus node 语义
 - 守住 `source detail -> node context` 这条高频 handoff，不让 Review/apply 清理语义散回 App 分支
+- 把 `Draft` 收紧为 node-scoped surface；`source detail -> Draft` 也走共享 handoff seam，而不是把 source detail 直接带进 Draft
 - 守住桌面默认 AI draft route 的可用性，但只把 LangChain 稳定化工作收敛为桌面默认路径的支撑面，不把底层 compare / artifact 细节抬到主舞台
 
 ## 当前回归门
@@ -33,7 +34,7 @@
   - `AiDraftRouteSurface`
   - `SourceContextSurface`
   - `NodeContextSurface`
-  - `app-helpers` 中 `Context / Review` 判定与 source-detail handoff seam
+  - `app-helpers` 中 `Context / Draft / Review` 判定与 source-detail handoff seam
   - `WorkbenchSidePane` 在 handoff 后回到 node context 的可见态
   - mounted App 级 `back` handoff
   - mounted App 级导入落点后的 tree / main / side 交接
@@ -42,6 +43,7 @@
 ## 下一轮最小切口
 
 - 先把右栏 assistant workspace 的 IA 和切换语义写清楚、做轻、测稳
+- 把 `source detail -> Draft` 的 handoff 收口到 node-scoped Draft，并用 mounted 回归锁住
 - 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到三栏主路径的 handoff / draft / review / apply 交接
 - 只在确实影响桌面默认 draft route 稳定性时，再做 LangChain compare / fallback / provider 路径补强
 - 明确哪些底层信息只留在调试/CLI 层，不回填到默认桌面页面

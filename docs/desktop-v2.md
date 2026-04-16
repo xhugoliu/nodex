@@ -26,7 +26,7 @@
 ### 右栏 assistant workspace 的边界
 
 - `Context`：看懂当前节点、来源、证据和“为什么值得看”
-- `Draft`：允许使用更有对话感的 composer 和响应卡片
+- `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
 - `Review`：仍然回到 patch inspect / apply 的确认层
 - 不是全局聊天窗口
 - 不默认暴露 run id、artifact、history、compare、raw payload 这类底层细节
@@ -34,10 +34,11 @@
 ## 当前必须保持的语义
 
 - 导入 source 后优先选中导入 root node
-- assistant 交互必须绑定当前节点或当前 source detail，不做全局闲聊
+- assistant 交互必须绑定当前节点；source detail 主要服务于 `Context` / cite / uncite 这类阅读与取证动作，不做全局闲聊
 - 只要节点或打开的 source detail 发生变化，就清掉瞬时 Review/apply 状态并回到 `Context`
 - 只有同一节点、同一 source detail 的刷新，才允许保留当前 Review 可见态
 - `source detail -> node context` 的 handoff 语义已经收口到共享 helper，不应再散回 App 分支
+- `source detail -> Draft` 也应先通过共享 helper 收口到 node-scoped Draft，不把打开的 source detail 直接带成新的 Draft 状态边界
 - apply 成功后优先聚焦新增节点；若没有新增节点，则回到当前节点
 - 右栏来源信息应解释“为什么值得看”，而不只是列 chunk
 - 右栏默认展示用户下一步该做什么，而不是底层运行细节列表

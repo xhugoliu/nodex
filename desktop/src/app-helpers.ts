@@ -231,6 +231,21 @@ export interface ReturnToNodeContextResult<
   nextApplyResult: TApplyResult | null;
 }
 
+export interface OpenDraftWorkspaceResult<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+> {
+  nextSelectionPanelTab: SelectionPanelTab;
+  shouldClearTransientReviewState: boolean;
+  nextSelectedSourceId: null;
+  nextSelectedSourceDetail: null;
+  nextPatchEditor: string;
+  nextPatchDraftOrigin: TPatchDraftOrigin | null;
+  nextReviewDraft: TReviewDraft | null;
+  nextApplyResult: TApplyResult | null;
+}
+
 export interface ContextTransitionState<
   TPatchDraftOrigin = unknown,
   TReviewDraft = unknown,
@@ -395,6 +410,37 @@ export function deriveReturnToNodeContextState<
 
   return {
     nextSelectionPanelTab: transitionState.nextSelectionPanelTab,
+    shouldClearTransientReviewState:
+      transitionState.shouldClearTransientReviewState,
+    nextSelectedSourceId: null,
+    nextSelectedSourceDetail: null,
+    nextPatchEditor: transitionState.nextPatchEditor,
+    nextPatchDraftOrigin: transitionState.nextPatchDraftOrigin,
+    nextReviewDraft: transitionState.nextReviewDraft,
+    nextApplyResult: transitionState.nextApplyResult,
+  };
+}
+
+export function deriveOpenDraftWorkspaceState<
+  TPatchDraftOrigin = unknown,
+  TReviewDraft = unknown,
+  TApplyResult = unknown,
+>(
+  state: {
+    currentSelection: SelectionContext;
+    currentSelectionPanelTab: SelectionPanelTab;
+  } & ReturnToNodeContextState<TPatchDraftOrigin, TReviewDraft, TApplyResult>,
+): OpenDraftWorkspaceResult<TPatchDraftOrigin, TReviewDraft, TApplyResult> {
+  const transitionState = deriveContextTransitionState(
+    state,
+    {
+      nodeId: state.currentSelection.nodeId,
+      sourceId: null,
+    },
+  );
+
+  return {
+    nextSelectionPanelTab: "draft",
     shouldClearTransientReviewState:
       transitionState.shouldClearTransientReviewState,
     nextSelectedSourceId: null,

@@ -104,8 +104,6 @@ const translations: Record<Locale, TranslationTree> = {
       draftScopeTitle: "Assistant scope",
       draftScopeNodeBody:
         "Draft the next patch for “{title}” without leaving this node's thread.",
-      draftScopeSourceBody:
-        "Draft the next patch for “{title}” using source “{source}”, then move to review.",
       draftActionsTitle: "Draft next move",
       draftActionsBody:
         "Use one focused assistant action at a time, then inspect the patch before applying.",
@@ -675,8 +673,6 @@ const translations: Record<Locale, TranslationTree> = {
       draftEmptyBody: "先选中一个节点，assistant workspace 才会保持在当前分支作用域内。",
       draftScopeTitle: "Assistant 作用域",
       draftScopeNodeBody: "围绕“{title}”起草下一次 patch，不脱离当前节点线程。",
-      draftScopeSourceBody:
-        "围绕“{title}”并结合来源“{source}”起草下一次 patch，然后再进入 Review。",
       draftActionsTitle: "起草下一步",
       draftActionsBody: "每次只发起一个聚焦的 assistant 动作，然后先看 patch 再应用。",
       draftReadyOps: "已有 {count} 条草案操作",

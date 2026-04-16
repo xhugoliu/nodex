@@ -179,7 +179,6 @@ export function WorkbenchSidePane(props: {
               loading={props.aiDraftStatusLoading}
               draftError={props.aiDraftError}
               nodeContext={props.nodeContext}
-              selectedSourceDetail={props.selectedSourceDetail}
               reviewDraft={props.reviewDraft}
               patchDraftState={props.patchDraftState}
               t={props.t}
@@ -224,7 +223,6 @@ function DraftSurface(props: {
   loading: boolean;
   draftError: string | null;
   nodeContext: NodeWorkspaceContext | null;
-  selectedSourceDetail: SourceDetail | null;
   reviewDraft: DraftReviewPayload | null;
   patchDraftState: PatchDraftState;
   t: Translator;
@@ -243,17 +241,6 @@ function DraftSurface(props: {
   }
 
   const detail = props.nodeContext.node_detail;
-  const selectedSourceDetail = props.selectedSourceDetail;
-  const citedChunkIds = new Set(
-    detail.evidence.flatMap((source) =>
-      source.citations.map((citation) => citation.chunk.id),
-    ),
-  );
-  const citedChunkCount = selectedSourceDetail
-    ? selectedSourceDetail.chunks.filter((chunk) =>
-        citedChunkIds.has(chunk.chunk.id),
-      ).length
-    : 0;
   const currentDraftSummary =
     props.reviewDraft?.patch.summary ??
     props.reviewDraft?.report.summary ??
@@ -269,14 +256,9 @@ function DraftSurface(props: {
             {props.t("workbench.draftScopeTitle")}
           </div>
           <div className="text-sm leading-6 text-[color:var(--muted)]">
-            {selectedSourceDetail
-              ? props.t("workbench.draftScopeSourceBody", {
-                  title: detail.node.title,
-                  source: selectedSourceDetail.source.original_name,
-                })
-              : props.t("workbench.draftScopeNodeBody", {
-                  title: detail.node.title,
-                })}
+            {props.t("workbench.draftScopeNodeBody", {
+              title: detail.node.title,
+            })}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
@@ -293,18 +275,6 @@ function DraftSurface(props: {
               count: detail.sources.length + detail.evidence.length,
             })}
           </span>
-          {selectedSourceDetail ? (
-            <>
-              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-                {selectedSourceDetail.source.original_name}
-              </span>
-              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-                {props.t("detail.sourceContextStatCited", {
-                  count: citedChunkCount,
-                })}
-              </span>
-            </>
-          ) : null}
         </div>
       </section>
 

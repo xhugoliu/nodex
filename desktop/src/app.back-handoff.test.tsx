@@ -777,6 +777,144 @@ test("App clears source detail draft state when returning to node context", asyn
   dom.cleanup();
 });
 
+test("App routes source detail into node-scoped Draft through the shared handoff seam", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.ok(requireSidePaneProps().selectedSourceDetail);
+  const patchEditor = eventHandlers.get("desktop://patch-editor");
+  assert.ok(patchEditor, "patch-editor listener should be registered");
+
+  await act(async () => {
+    patchEditor?.({
+      payload: {
+        patch_json: JSON.stringify({
+          version: 1,
+          summary: "Draft summary",
+          ops: [{ type: "add_node", title: "Follow-up branch" }],
+        } satisfies PatchDocument),
+        message: "draft ready",
+        tone: "success",
+      },
+    });
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  const nodeContextFetchCountBeforeDraft = invokeCalls.filter(
+    (call) => call.command === "get_node_workspace_context",
+  ).length;
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.equal(
+    invokeCalls.filter((call) => call.command === "get_node_workspace_context").length,
+    nodeContextFetchCountBeforeDraft,
+    "switching from source detail into Draft should reuse current node context instead of refetching it",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App clears transient draft review state when switching to a different node", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();

@@ -9,6 +9,7 @@ import {
   deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
   deriveContextTransitionState,
+  deriveOpenDraftWorkspaceState,
   deriveOverviewFocusDecision,
   deriveReturnToNodeContextState,
   filterTree,
@@ -439,6 +440,37 @@ export default function App(props: AppProps = {}) {
     setReviewDraft(options.reviewDraft);
     setApplyResult(null);
     setSelectionPanelTab("review");
+  }
+
+  function openDraftWorkspace() {
+    const nextState = deriveOpenDraftWorkspaceState({
+      currentSelection: {
+        nodeId: selectedNodeId,
+        sourceId: selectedSourceId,
+      },
+      currentSelectionPanelTab: selectionPanelTab,
+      patchEditor,
+      patchDraftOrigin,
+      reviewDraft,
+      applyResult,
+    });
+
+    setPatchEditor(nextState.nextPatchEditor);
+    setPatchDraftOrigin(nextState.nextPatchDraftOrigin);
+    setReviewDraft(nextState.nextReviewDraft);
+    setApplyResult(nextState.nextApplyResult);
+    setSelectedSourceId(nextState.nextSelectedSourceId);
+    setSelectedSourceDetail(nextState.nextSelectedSourceDetail);
+    setSelectionPanelTab(nextState.nextSelectionPanelTab);
+  }
+
+  function selectSelectionPanelTab(tab: SelectionPanelTab) {
+    if (tab === "draft") {
+      openDraftWorkspace();
+      return;
+    }
+
+    setSelectionPanelTab(tab);
   }
 
   function ensureTauri(): boolean {
@@ -1165,7 +1197,7 @@ export default function App(props: AppProps = {}) {
               reviewDraft={reviewDraft}
               patchDraftState={patchDraftState}
               t={t}
-              onSelectSelectionTab={setSelectionPanelTab}
+              onSelectSelectionTab={selectSelectionPanelTab}
               onRefreshAiDraftStatus={() => {
                 void refreshDesktopAiStatus({ clearDraftError: true });
               }}

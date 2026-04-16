@@ -6,6 +6,7 @@ import {
   deriveContextSelectionDecision,
   deriveContextTransitionState,
   buildAiDraftNextSteps,
+  deriveOpenDraftWorkspaceState,
   deriveOverviewFocusDecision,
   deriveReturnToNodeContextState,
   renderAiDraftFailure,
@@ -216,6 +217,44 @@ test("deriveReturnToNodeContextState clears transient review and apply state for
   assert.equal(nextState.nextPatchDraftOrigin, null);
   assert.equal(nextState.nextReviewDraft, null);
   assert.equal(nextState.nextApplyResult, null);
+});
+
+test("deriveOpenDraftWorkspaceState clears source detail before opening Draft", () => {
+  const nextState = deriveOpenDraftWorkspaceState({
+    currentSelection: { nodeId: "node-a", sourceId: "source-1" },
+    currentSelectionPanelTab: "context",
+    patchEditor: "{\"summary\":\"draft\"}",
+    patchDraftOrigin: { kind: "manual" },
+    reviewDraft: { kind: "review-draft" },
+    applyResult: { kind: "apply-result" },
+  });
+
+  assert.equal(nextState.nextSelectionPanelTab, "draft");
+  assert.equal(nextState.shouldClearTransientReviewState, true);
+  assert.equal(nextState.nextSelectedSourceId, null);
+  assert.equal(nextState.nextSelectedSourceDetail, null);
+  assert.equal(nextState.nextPatchEditor, "");
+  assert.equal(nextState.nextPatchDraftOrigin, null);
+  assert.equal(nextState.nextReviewDraft, null);
+  assert.equal(nextState.nextApplyResult, null);
+});
+
+test("deriveOpenDraftWorkspaceState preserves same-node draft state when no source detail is open", () => {
+  const nextState = deriveOpenDraftWorkspaceState({
+    currentSelection: { nodeId: "node-a", sourceId: null },
+    currentSelectionPanelTab: "context",
+    patchEditor: "{\"summary\":\"draft\"}",
+    patchDraftOrigin: { kind: "manual" },
+    reviewDraft: { kind: "review-draft" },
+    applyResult: { kind: "apply-result" },
+  });
+
+  assert.equal(nextState.nextSelectionPanelTab, "draft");
+  assert.equal(nextState.shouldClearTransientReviewState, false);
+  assert.equal(nextState.nextPatchEditor, "{\"summary\":\"draft\"}");
+  assert.deepEqual(nextState.nextPatchDraftOrigin, { kind: "manual" });
+  assert.deepEqual(nextState.nextReviewDraft, { kind: "review-draft" });
+  assert.deepEqual(nextState.nextApplyResult, { kind: "apply-result" });
 });
 
 test("deriveClearedDraftReviewState keeps apply result while clearing the draft payload", () => {
