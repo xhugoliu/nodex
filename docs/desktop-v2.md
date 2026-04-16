@@ -60,14 +60,15 @@
   source context -> review 后的 node/source focus continuity、
   source context -> review -> apply 后的 focus 落点、imported-root apply 后真实 right rail 的 generated-node 落点，
   手工 `update node` patch 路径上的 tree / canvas / right rail 同节点收口，
-  以及 `add child` patch 路径上的 tree / canvas / right rail 新节点收口
+  `add child` patch 路径上的 tree / canvas / right rail 新节点收口，
+  以及 `cite source chunk` 路径上的 tree / canvas / right rail 同节点 + evidence 收口
 
 ## 如果继续推进
 
 优先顺序：
 
 1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
-2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义，尤其是 cite / uncite 这类 evidence patch 路径在 apply 后的收口证据
+2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义，尤其是 `uncite source chunk` 这类 evidence patch 路径在 apply 后的收口证据
 3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
 4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
