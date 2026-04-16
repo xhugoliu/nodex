@@ -1551,10 +1551,12 @@ test("App keeps node and source focus cues visible when source context transitio
   dom.cleanup();
 });
 
-test("App clears the source cue and refocuses on the applied node after review apply", async () => {
+test("App refocuses tree, canvas, and right rail onto the applied node after review apply", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
   const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
   let latestSidePaneProps: SidePaneProps | null = null;
 
   const bindings: Partial<AppBindings> = {
@@ -1589,8 +1591,14 @@ test("App clears the source cue and refocuses on the applied node after review a
       throw new Error(`unexpected command: ${command}`);
     },
     openPath: async () => null,
-    TreePane: () => <div />,
-    WorkbenchMainPane: () => <div />,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
     WorkbenchSidePane: (props) => {
       latestSidePaneProps = props;
       return <WorkbenchSidePane {...props} />;
@@ -1620,6 +1628,14 @@ test("App clears the source cue and refocuses on the applied node after review a
     await flush();
   });
 
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
   const requireSidePaneProps = () => {
     assert.ok(latestSidePaneProps, "side pane props should be available");
     return latestSidePaneProps;
@@ -1657,6 +1673,8 @@ test("App clears the source cue and refocuses on the applied node after review a
   const finalSidePaneHtml = renderToStaticMarkup(
     <WorkbenchSidePane {...requireSidePaneProps()} />,
   );
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-node");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-node");
   assert.equal(requireSidePaneProps().selectionTab, "context");
   assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
   assert.equal(requireSidePaneProps().selectedSourceDetail, null);
@@ -1962,11 +1980,12 @@ test("App drives source import through draft review and apply on the imported ro
   dom.cleanup();
 });
 
-test("App refocuses the real right rail onto the generated node after imported-root apply", async () => {
+test("App refocuses tree, canvas, and real right rail onto the generated node after imported-root apply", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
   const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
   let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
   let latestSidePaneProps: SidePaneProps | null = null;
 
   const bindings: Partial<AppBindings> = {
@@ -2010,7 +2029,10 @@ test("App refocuses the real right rail onto the generated node after imported-r
       latestTreePaneProps = props;
       return <div />;
     },
-    WorkbenchMainPane: () => <div />,
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
     WorkbenchSidePane: (props) => {
       latestSidePaneProps = props;
       return <WorkbenchSidePane {...props} />;
@@ -2044,6 +2066,10 @@ test("App refocuses the real right rail onto the generated node after imported-r
     assert.ok(latestTreePaneProps, "tree pane props should be available");
     return latestTreePaneProps;
   };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
   const requireSidePaneProps = () => {
     assert.ok(latestSidePaneProps, "side pane props should be available");
     return latestSidePaneProps;
@@ -2068,6 +2094,8 @@ test("App refocuses the real right rail onto the generated node after imported-r
   const finalSidePaneHtml = renderToStaticMarkup(
     <WorkbenchSidePane {...requireSidePaneProps()} />,
   );
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-node");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-node");
   assert.equal(requireSidePaneProps().selectionTab, "context");
   assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
   assert.equal(requireSidePaneProps().selectedSourceDetail, null);
