@@ -195,6 +195,7 @@ export function WorkbenchSidePane(props: {
               t={props.t}
               onOpenLinkedNode={props.onOpenLinkedNode}
               onBackToNodeContext={props.onBackToNodeContext}
+              onOpenDraft={() => props.onSelectSelectionTab("draft")}
               onDraftCiteChunk={props.onDraftCiteChunk}
               onDraftUnciteChunk={props.onDraftUnciteChunk}
             />
@@ -209,6 +210,7 @@ export function WorkbenchSidePane(props: {
               onBodyChange={props.onBodyChange}
               onOpenSource={props.onOpenSource}
               onOpenCreatedNode={props.onOpenCreatedNode}
+              onOpenDraft={() => props.onSelectSelectionTab("draft")}
               onDraftUpdate={props.onDraftUpdate}
             />
           )}
@@ -549,6 +551,7 @@ export function NodeContextSurface(props: {
   onBodyChange: (value: string) => void;
   onOpenSource: (sourceId: string) => void;
   onOpenCreatedNode: (nodeId: string) => void;
+  onOpenDraft: () => void;
   onDraftUpdate: () => void;
 }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -706,6 +709,20 @@ export function NodeContextSurface(props: {
         </p>
       </section>
 
+      <section className={`${cardClass} space-y-3`}>
+        <div className="space-y-1">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("workbench.contextNextTitle")}
+          </div>
+          <div className="text-sm leading-6 text-[color:var(--text)]">
+            {props.t("workbench.contextNextNodeDraft")}
+          </div>
+        </div>
+        <button className={primaryButtonClass} onClick={props.onOpenDraft} type="button">
+          {props.t("workbench.openDraft")}
+        </button>
+      </section>
+
       {isEditOpen ? (
         <section className={`${cardClass} space-y-4`}>
           <div className="text-sm font-medium text-[color:var(--text)]">
@@ -784,6 +801,7 @@ export function SourceContextSurface(props: {
   t: Translator;
   onOpenLinkedNode: (nodeId: string) => void;
   onBackToNodeContext: () => void;
+  onOpenDraft: () => void;
   onDraftCiteChunk: (chunkId: string) => void;
   onDraftUnciteChunk: (chunkId: string) => void;
 }) {
@@ -855,6 +873,17 @@ export function SourceContextSurface(props: {
                 })
               : props.t("detail.citationContextMissing")}
           </div>
+        </div>
+        <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/75 px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("workbench.contextNextTitle")}
+          </div>
+          <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+            {props.t("workbench.contextNextSourceDraft")}
+          </div>
+          <button className={`${primaryButtonClass} mt-3`} onClick={props.onOpenDraft} type="button">
+            {props.t("workbench.openDraft")}
+          </button>
         </div>
       </section>
 

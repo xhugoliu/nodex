@@ -74,6 +74,7 @@ function renderSurface(options: {
       applyResult={options.applyResult ?? null}
       nodeContext={options.nodeContext ?? makeNodeContext()}
       onBodyChange={() => {}}
+      onOpenDraft={() => {}}
       onDraftUpdate={() => {}}
       onOpenCreatedNode={() => {}}
       onOpenSource={() => {}}
@@ -124,4 +125,12 @@ test("NodeContextSurface falls back to current-node focus and source-guided next
   assert.match(html, /workbench\.applyResultFocusCurrentNode/);
   assert.match(html, /workbench\.applyResultNextWithSources/);
   assert.doesNotMatch(html, /workbench\.applyResultCreatedNodesLabel/);
+});
+
+test("NodeContextSurface shows the next step into Draft", () => {
+  const html = renderSurface({});
+
+  assert.match(html, /workbench\.contextNextTitle/);
+  assert.match(html, /workbench\.contextNextNodeDraft/);
+  assert.match(html, /workbench\.openDraft/);
 });

@@ -118,6 +118,7 @@ function renderSurface(options: {
         options.nodeContext === undefined ? makeNodeContext() : options.nodeContext
       }
       onBackToNodeContext={() => {}}
+      onOpenDraft={() => {}}
       onDraftCiteChunk={() => {}}
       onDraftUnciteChunk={() => {}}
       onOpenLinkedNode={() => {}}
@@ -133,6 +134,9 @@ test("SourceContextSurface renders rationale summary, continue entries, and cite
   assert.match(html, /detail\.sourceContextSummaryTitle/);
   assert.match(html, /detail\.evidenceWorthReading/);
   assert.match(html, /default auth route/);
+  assert.match(html, /workbench\.contextNextTitle/);
+  assert.match(html, /workbench\.contextNextSourceDraft/);
+  assert.match(html, /workbench\.openDraft/);
   assert.match(html, /detail\.sourceContinueTitle/);
   assert.match(html, /Provider Setup/);
   assert.match(html, /Auth Evidence/);

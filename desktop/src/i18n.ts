@@ -98,6 +98,12 @@ const translations: Record<Locale, TranslationTree> = {
       contextTab: "Context",
       draftTab: "Draft",
       reviewTab: "Review",
+      contextNextTitle: "Next step",
+      contextNextNodeDraft:
+        "Move into Draft to turn this node into one candidate patch before you review it.",
+      contextNextSourceDraft:
+        "Once this source context looks grounded, move into Draft for the current node.",
+      openDraft: "Open Draft",
       draftEmptyTitle: "Open A Node Before Drafting",
       draftEmptyBody:
         "Select one node first so the assistant stays scoped to the current branch.",
@@ -669,6 +675,11 @@ const translations: Record<Locale, TranslationTree> = {
       contextTab: "上下文",
       draftTab: "草案",
       reviewTab: "Review",
+      contextNextTitle: "下一步",
+      contextNextNodeDraft: "进入草案页，先把当前节点收成一个候选 patch，再回来看 Review。",
+      contextNextSourceDraft:
+        "当这份来源上下文已经看清楚后，进入草案页，继续围绕当前节点起草下一步。",
+      openDraft: "进入草案",
       draftEmptyTitle: "先打开一个节点再起草",
       draftEmptyBody: "先选中一个节点，assistant workspace 才会保持在当前分支作用域内。",
       draftScopeTitle: "Assistant 作用域",
