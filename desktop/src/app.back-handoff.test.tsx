@@ -646,6 +646,37 @@ function makeUpdateNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
   };
 }
 
+function makeCiteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Cite Authentication evidence",
+    ops: [
+      {
+        type: "cite_source_chunk",
+        node_id: "node-1",
+        chunk_id: "chunk-1",
+        citation_kind: "direct",
+        rationale:
+          "This section explains why the current node should reuse the default auth route.",
+      },
+    ],
+  };
+}
+
+function makeCiteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-cite",
+      summary: "Applied Authentication evidence citation",
+      preview: ["Cited chunk-1 as direct evidence for node-1"],
+      created_nodes: [],
+    },
+    overview: makeOverview(),
+    preferred_focus_node_id: "node-1",
+    focus_node_context: makeNodeContextWithEvidence(),
+  };
+}
+
 function makeAddedChildOverview(): WorkspaceOverview {
   return {
     root_dir: "/workspace",
@@ -915,6 +946,77 @@ function makeNodeContextWithSource(): NodeWorkspaceContext {
         },
       ],
       evidence: [],
+    },
+  };
+}
+
+function makeNodeContextWithEvidence(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "node-1",
+        parent_id: "root",
+        title: "Authentication",
+        body: "Current auth routing notes",
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000001,
+      },
+      parent: { id: "root", title: "Root" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [
+            {
+              id: "chunk-1",
+              source_id: "source-1",
+              ordinal: 0,
+              label: "Provider Authentication Flow",
+              text: "Anthropic-compatible auth setup and model routing details.",
+              start_line: 5,
+              end_line: 11,
+            },
+          ],
+          citations: [
+            {
+              chunk: {
+                id: "chunk-1",
+                source_id: "source-1",
+                ordinal: 0,
+                label: "Provider Authentication Flow",
+                text: "Anthropic-compatible auth setup and model routing details.",
+                start_line: 5,
+                end_line: 11,
+              },
+              citation_kind: "direct",
+              rationale:
+                "This section explains why the current node should reuse the default auth route.",
+            },
+          ],
+        },
+      ],
     },
   };
 }
@@ -2068,6 +2170,162 @@ test("App keeps tree, canvas, and right rail aligned on the updated node after m
         call.args.focus_node_id === "node-1",
     ),
     "manual apply should keep the current node as the review focus when no new node is created",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tree, canvas, and right rail aligned on the current node after cite patch apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithSource() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "draft_cite_source_chunk_patch") {
+        return makeCiteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeCiteChunkApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftCiteChunk("chunk-1");
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_cite_source_chunk_patch" &&
+        call.args.node_id === "node-1" &&
+        call.args.chunk_id === "chunk-1",
+    ),
+    "cite draft should use the selected node and source chunk",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied Authentication evidence citation",
+  );
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.evidence[0]?.citations[0]?.chunk.id,
+    "chunk-1",
+  );
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Applied Authentication evidence citation/);
+  assert.match(finalSidePaneHtml, /Node: Authentication/);
+  assert.match(finalSidePaneHtml, />Evidence</);
+  assert.match(finalSidePaneHtml, /source\.md/);
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "node-1",
+    ),
+    "cite apply should keep the current node as the review focus",
   );
 
   await act(async () => {
