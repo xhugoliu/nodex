@@ -29,6 +29,8 @@
   同时保留当前来源的本地 provenance（至少文件路径与导入时间），让这块更像稳定工作台而不是会话摘要
 - `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
 - `Review`：仍然回到 patch inspect / apply 的确认层
+- 右栏顶部持续显示当前焦点节点；如果来源上下文仍打开，也应同时标出当前来源
+- `Draft` 仍只显示 node-scoped 焦点，不把来源提示重新暗示成新的执行作用域
 - 不是全局聊天窗口
 - 不默认暴露 run id、artifact、history、compare、raw payload 这类底层细节
 
@@ -43,6 +45,7 @@
 - apply 成功后优先聚焦新增节点；若没有新增节点，则回到当前节点
 - 右栏来源信息应解释“为什么值得看”，而不只是列 chunk
 - 右栏默认展示用户下一步该做什么，而不是底层运行细节列表
+- 右栏在 `Context / Draft / Review` 和 source handoff 间都应继续说明“当前围绕哪个节点行动”
 
 ## 当前回归门
 
@@ -52,14 +55,15 @@
   守 imported root 上的真实材料 draft/apply 路径
 - `cd desktop && npm run test:logic`
   守 helper seam、右栏 surface 和 mounted App 级主路径交接
-  当前也已覆盖 `back` handoff、导入落点后的跨 pane 交接，以及 `source import -> AI expand -> review -> apply`
+  当前也已覆盖 `back` handoff、导入落点后的跨 pane 交接、`source import -> AI expand -> review -> apply`、
+  workspace load 后的 `Context` CTA / provenance / current focus，以及 source open 后的 node/source focus cue
 
 ## 如果继续推进
 
 优先顺序：
 
 1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
-2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义
+2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义，尤其是 source context -> review / apply 后的 focus continuity
 3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
 4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
