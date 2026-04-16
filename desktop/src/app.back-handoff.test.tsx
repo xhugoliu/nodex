@@ -1961,3 +1961,137 @@ test("App drives source import through draft review and apply on the imported ro
   });
   dom.cleanup();
 });
+
+test("App refocuses the real right rail onto the generated node after imported-root apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-node"
+            ? makeGeneratedNodeContext()
+            : args.node_id === "imported-root"
+              ? makeImportedNodeContext()
+              : makeNodeContext()
+        ) as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload(String(args.node_id)) as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "generated-node");
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied generated follow-up branch",
+  );
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Applied generated follow-up branch/);
+  assert.match(finalSidePaneHtml, /Node: Generated Follow-up Branch/);
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "imported-root",
+    ),
+    "apply should keep the imported root as the review focus before moving to the generated node",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
