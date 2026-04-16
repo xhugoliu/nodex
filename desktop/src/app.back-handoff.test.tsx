@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { act } from "react";
 import ReactDOM from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import App, { type AppBindings } from "./App";
 import { WorkbenchSidePane } from "./components/workbench";
@@ -456,6 +457,107 @@ function makeGeneratedNodeContext(): NodeWorkspaceContext {
       sources: [],
       evidence: [],
     },
+  };
+}
+
+function makeNodeGeneratedOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "node-1",
+            parent_id: "root",
+            title: "Authentication",
+            body: "Current auth routing notes",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [
+            {
+              node: {
+                id: "generated-node",
+                parent_id: "node-1",
+                title: "Authentication Follow-up",
+                body: "Generated follow-up body",
+                kind: "action",
+                position: 0,
+                created_at: 1710000000,
+                updated_at: 1710000000,
+              },
+              children: [],
+            },
+          ],
+        },
+        {
+          node: {
+            id: "node-2",
+            parent_id: "root",
+            title: "Operations",
+            body: null,
+            kind: "topic",
+            position: 1,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeNodeGeneratedContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-node",
+        parent_id: "node-1",
+        title: "Authentication Follow-up",
+        body: "Generated follow-up body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      parent: { id: "node-1", title: "Authentication" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-2",
+      summary: "Applied Authentication follow-up branch",
+      preview: ["Added Authentication Follow-up under Authentication"],
+      created_nodes: [
+        { id: "generated-node", title: "Authentication Follow-up" },
+      ],
+    },
+    overview: makeNodeGeneratedOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeNodeGeneratedContext(),
   };
 }
 
@@ -1440,6 +1542,141 @@ test("App keeps node and source focus cues visible when source context transitio
         call.args.source_id === "source-1",
     ),
     "review continuity should still come from a fetched source detail",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App clears the source cue and refocuses on the applied node after review apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-node"
+            ? makeNodeGeneratedContext()
+            : makeNodeContextWithSource()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeNodeApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  const patchEditor = eventHandlers.get("desktop://patch-editor");
+  assert.ok(patchEditor, "patch-editor listener should be registered");
+
+  await act(async () => {
+    patchEditor?.({
+      payload: {
+        patch_json: JSON.stringify({
+          version: 1,
+          summary: "Draft summary",
+          ops: [{ type: "add_node", title: "Authentication Follow-up" }],
+        } satisfies PatchDocument),
+        message: "draft ready",
+        tone: "success",
+      },
+    });
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "generated-node");
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied Authentication follow-up branch",
+  );
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Applied Authentication follow-up branch/);
+  assert.doesNotMatch(renderedText, /Source in view:/);
+  assert.match(finalSidePaneHtml, /Node: Authentication Follow-up/);
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "node-1",
+    ),
+    "apply should keep the current node as the review focus before moving to the generated node",
   );
 
   await act(async () => {
