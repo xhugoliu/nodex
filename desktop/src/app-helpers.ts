@@ -182,6 +182,11 @@ export interface OverviewFocusDecision {
   shouldClearTransientReviewState: boolean;
 }
 
+export interface ApplyFocusDecision<TFocusContext = unknown> {
+  nextNodeId: string | null;
+  nextNodeContext: TFocusContext | null;
+}
+
 export interface ContextSelectionDecision {
   nextSelectionPanelTab: SelectionPanelTab;
   shouldClearTransientReviewState: boolean;
@@ -481,6 +486,30 @@ export function deriveOverviewFocusDecision(
       current,
       nextSelection,
     ),
+  };
+}
+
+export function deriveApplyFocusDecision<
+  TFocusContext extends { node_detail: { node: { id: string } } },
+>(options: {
+  preferredFocusNodeId?: string | null;
+  focusNodeContext: TFocusContext | null;
+  currentNodeId: string | null;
+}): ApplyFocusDecision<TFocusContext> {
+  const providedFocusNodeId =
+    options.focusNodeContext?.node_detail.node.id ?? null;
+  const nextNodeId =
+    options.preferredFocusNodeId ??
+    providedFocusNodeId ??
+    options.currentNodeId ??
+    null;
+
+  return {
+    nextNodeId,
+    nextNodeContext:
+      options.focusNodeContext && nextNodeId === providedFocusNodeId
+        ? options.focusNodeContext
+        : null,
   };
 }
 

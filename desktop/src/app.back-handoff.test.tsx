@@ -1107,6 +1107,93 @@ async function flush(cycles = 1) {
   }
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+interface ApplyContinuityExpectation {
+  focusedNodeId: string;
+  focusedNodeTitle: string;
+  applySummary: string;
+  reviewFocusNodeId: string;
+  visibleSectionLabels?: string[];
+  hiddenSectionLabels?: string[];
+  expectedEvidenceChunkId?: string | null;
+}
+
+function assertApplyContinuityContract(options: {
+  renderedText: string;
+  invokeCalls: Array<{ command: string; args: Record<string, unknown> }>;
+  treePaneProps: TreePaneProps;
+  mainPaneProps: MainPaneProps;
+  sidePaneProps: SidePaneProps;
+  expectation: ApplyContinuityExpectation;
+}) {
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...options.sidePaneProps} />,
+  );
+  const hiddenSectionLabels = options.expectation.hiddenSectionLabels ?? [
+    "Evidence",
+    "Sources",
+  ];
+
+  assert.equal(
+    options.treePaneProps.selectedNodeId,
+    options.expectation.focusedNodeId,
+  );
+  assert.equal(
+    options.mainPaneProps.selectedNodeId,
+    options.expectation.focusedNodeId,
+  );
+  assert.equal(options.sidePaneProps.selectionTab, "context");
+  assert.equal(options.sidePaneProps.patchDraftState.state, "empty");
+  assert.equal(options.sidePaneProps.selectedSourceDetail, null);
+  assert.equal(
+    options.sidePaneProps.nodeContext?.node_detail.node.id,
+    options.expectation.focusedNodeId,
+  );
+  assert.equal(
+    options.sidePaneProps.applyResult?.summary,
+    options.expectation.applySummary,
+  );
+  assert.match(options.renderedText, /Current focus/);
+  assert.match(
+    options.renderedText,
+    new RegExp(escapeRegExp(options.expectation.applySummary)),
+  );
+  assert.doesNotMatch(options.renderedText, /Source in view:/);
+  assert.match(
+    finalSidePaneHtml,
+    new RegExp(`Node: ${escapeRegExp(options.expectation.focusedNodeTitle)}`),
+  );
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+
+  for (const label of options.expectation.visibleSectionLabels ?? []) {
+    assert.match(finalSidePaneHtml, new RegExp(`>${escapeRegExp(label)}<`));
+  }
+
+  for (const label of hiddenSectionLabels) {
+    assert.doesNotMatch(finalSidePaneHtml, new RegExp(`>${escapeRegExp(label)}<`));
+  }
+
+  if (options.expectation.expectedEvidenceChunkId !== undefined) {
+    assert.equal(
+      options.sidePaneProps.nodeContext?.node_detail.evidence[0]?.citations[0]?.chunk.id ??
+        null,
+      options.expectation.expectedEvidenceChunkId,
+    );
+  }
+
+  assert.ok(
+    options.invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === options.expectation.reviewFocusNodeId,
+    ),
+    `apply should keep ${options.expectation.reviewFocusNodeId} as the review focus before the mounted panes settle`,
+  );
+}
+
 test("App clears source detail draft state when returning to node context", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
@@ -2016,33 +2103,19 @@ test("App refocuses tree, canvas, and right rail onto the applied node after rev
     await flush(4);
   });
 
-  const renderedText = dom.container.textContent;
-  const finalSidePaneHtml = renderToStaticMarkup(
-    <WorkbenchSidePane {...requireSidePaneProps()} />,
-  );
-  assert.equal(requireTreePaneProps().selectedNodeId, "generated-node");
-  assert.equal(requireMainPaneProps().selectedNodeId, "generated-node");
-  assert.equal(requireSidePaneProps().selectionTab, "context");
-  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
-  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
-  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "generated-node");
-  assert.equal(
-    requireSidePaneProps().applyResult?.summary,
-    "Applied Authentication follow-up branch",
-  );
-  assert.match(renderedText, /Current focus/);
-  assert.match(renderedText, /Applied Authentication follow-up branch/);
-  assert.doesNotMatch(renderedText, /Source in view:/);
-  assert.match(finalSidePaneHtml, /Node: Authentication Follow-up/);
-  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
-  assert.ok(
-    invokeCalls.some(
-      (call) =>
-        call.command === "apply_reviewed_patch" &&
-        call.args.focus_node_id === "node-1",
-    ),
-    "apply should keep the current node as the review focus before moving to the generated node",
-  );
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Authentication Follow-up",
+      applySummary: "Applied Authentication follow-up branch",
+      reviewFocusNodeId: "node-1",
+    },
+  });
 
   await act(async () => {
     root.unmount();
@@ -2169,35 +2242,22 @@ test("App keeps tree, canvas, and right rail aligned on the updated node after m
     await flush(4);
   });
 
-  const renderedText = dom.container.textContent;
-  const finalSidePaneHtml = renderToStaticMarkup(
-    <WorkbenchSidePane {...requireSidePaneProps()} />,
-  );
-  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
-  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
-  assert.equal(requireSidePaneProps().selectionTab, "context");
-  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
-  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
-  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "node-1",
+      focusedNodeTitle: "Authentication Updated",
+      applySummary: "Applied Authentication update",
+      reviewFocusNodeId: "node-1",
+    },
+  });
   assert.equal(
     requireSidePaneProps().nodeContext?.node_detail.node.title,
     "Authentication Updated",
-  );
-  assert.equal(
-    requireSidePaneProps().applyResult?.summary,
-    "Applied Authentication update",
-  );
-  assert.match(renderedText, /Current focus/);
-  assert.match(renderedText, /Applied Authentication update/);
-  assert.match(finalSidePaneHtml, /Node: Authentication Updated/);
-  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
-  assert.ok(
-    invokeCalls.some(
-      (call) =>
-        call.command === "apply_reviewed_patch" &&
-        call.args.focus_node_id === "node-1",
-    ),
-    "manual apply should keep the current node as the review focus when no new node is created",
   );
 
   await act(async () => {
@@ -2323,37 +2383,25 @@ test("App keeps tree, canvas, and right rail aligned on the current node after c
     await flush(4);
   });
 
-  const renderedText = dom.container.textContent;
-  const finalSidePaneHtml = renderToStaticMarkup(
-    <WorkbenchSidePane {...requireSidePaneProps()} />,
-  );
-  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
-  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
-  assert.equal(requireSidePaneProps().selectionTab, "context");
-  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
-  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
-  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
-  assert.equal(
-    requireSidePaneProps().applyResult?.summary,
-    "Applied Authentication evidence citation",
-  );
-  assert.equal(
-    requireSidePaneProps().nodeContext?.node_detail.evidence[0]?.citations[0]?.chunk.id,
-    "chunk-1",
-  );
-  assert.match(renderedText, /Current focus/);
-  assert.match(renderedText, /Applied Authentication evidence citation/);
-  assert.match(finalSidePaneHtml, /Node: Authentication/);
-  assert.match(finalSidePaneHtml, />Evidence</);
-  assert.match(finalSidePaneHtml, /source\.md/);
-  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
-  assert.ok(
-    invokeCalls.some(
-      (call) =>
-        call.command === "apply_reviewed_patch" &&
-        call.args.focus_node_id === "node-1",
-    ),
-    "cite apply should keep the current node as the review focus",
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "node-1",
+      focusedNodeTitle: "Authentication",
+      applySummary: "Applied Authentication evidence citation",
+      reviewFocusNodeId: "node-1",
+      visibleSectionLabels: ["Sources", "Evidence"],
+      hiddenSectionLabels: [],
+      expectedEvidenceChunkId: "chunk-1",
+    },
+  });
+  assert.match(
+    renderToStaticMarkup(<WorkbenchSidePane {...requireSidePaneProps()} />),
+    /source\.md/,
   );
 
   await act(async () => {
@@ -2479,35 +2527,23 @@ test("App keeps tree, canvas, and right rail aligned on the current node after u
     await flush(4);
   });
 
-  const renderedText = dom.container.textContent;
-  const finalSidePaneHtml = renderToStaticMarkup(
-    <WorkbenchSidePane {...requireSidePaneProps()} />,
-  );
-  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
-  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
-  assert.equal(requireSidePaneProps().selectionTab, "context");
-  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
-  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
-  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
-  assert.equal(
-    requireSidePaneProps().applyResult?.summary,
-    "Applied Authentication evidence removal",
-  );
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "node-1",
+      focusedNodeTitle: "Authentication",
+      applySummary: "Applied Authentication evidence removal",
+      reviewFocusNodeId: "node-1",
+      visibleSectionLabels: ["Sources"],
+      hiddenSectionLabels: ["Evidence"],
+      expectedEvidenceChunkId: null,
+    },
+  });
   assert.equal(requireSidePaneProps().nodeContext?.node_detail.evidence.length, 0);
-  assert.match(renderedText, /Current focus/);
-  assert.match(renderedText, /Applied Authentication evidence removal/);
-  assert.match(finalSidePaneHtml, /Node: Authentication/);
-  assert.match(finalSidePaneHtml, />Sources</);
-  assert.doesNotMatch(finalSidePaneHtml, />Evidence</);
-  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
-  assert.ok(
-    invokeCalls.some(
-      (call) =>
-        call.command === "apply_reviewed_patch" &&
-        call.args.focus_node_id === "node-1",
-    ),
-    "uncite apply should keep the current node as the review focus",
-  );
 
   await act(async () => {
     root.unmount();
@@ -2631,32 +2667,19 @@ test("App refocuses tree, canvas, and right rail onto the created child after ad
     await flush(4);
   });
 
-  const renderedText = dom.container.textContent;
-  const finalSidePaneHtml = renderToStaticMarkup(
-    <WorkbenchSidePane {...requireSidePaneProps()} />,
-  );
-  assert.equal(requireTreePaneProps().selectedNodeId, "child-node-1");
-  assert.equal(requireMainPaneProps().selectedNodeId, "child-node-1");
-  assert.equal(requireSidePaneProps().selectionTab, "context");
-  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
-  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
-  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "child-node-1");
-  assert.equal(
-    requireSidePaneProps().applyResult?.summary,
-    "Applied Authentication child branch",
-  );
-  assert.match(renderedText, /Current focus/);
-  assert.match(renderedText, /Applied Authentication child branch/);
-  assert.match(finalSidePaneHtml, /Node: Authentication Child/);
-  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
-  assert.ok(
-    invokeCalls.some(
-      (call) =>
-        call.command === "apply_reviewed_patch" &&
-        call.args.focus_node_id === "node-1",
-    ),
-    "add-child apply should use the parent node as the review focus before moving to the created child",
-  );
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "child-node-1",
+      focusedNodeTitle: "Authentication Child",
+      applySummary: "Applied Authentication child branch",
+      reviewFocusNodeId: "node-1",
+    },
+  });
 
   await act(async () => {
     root.unmount();
@@ -3051,32 +3074,19 @@ test("App refocuses tree, canvas, and real right rail onto the generated node af
     await flush(4);
   });
 
-  const renderedText = dom.container.textContent;
-  const finalSidePaneHtml = renderToStaticMarkup(
-    <WorkbenchSidePane {...requireSidePaneProps()} />,
-  );
-  assert.equal(requireTreePaneProps().selectedNodeId, "generated-node");
-  assert.equal(requireMainPaneProps().selectedNodeId, "generated-node");
-  assert.equal(requireSidePaneProps().selectionTab, "context");
-  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
-  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
-  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "generated-node");
-  assert.equal(
-    requireSidePaneProps().applyResult?.summary,
-    "Applied generated follow-up branch",
-  );
-  assert.match(renderedText, /Current focus/);
-  assert.match(renderedText, /Applied generated follow-up branch/);
-  assert.match(finalSidePaneHtml, /Node: Generated Follow-up Branch/);
-  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
-  assert.ok(
-    invokeCalls.some(
-      (call) =>
-        call.command === "apply_reviewed_patch" &&
-        call.args.focus_node_id === "imported-root",
-    ),
-    "apply should keep the imported root as the review focus before moving to the generated node",
-  );
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch",
+      applySummary: "Applied generated follow-up branch",
+      reviewFocusNodeId: "imported-root",
+    },
+  });
 
   await act(async () => {
     root.unmount();

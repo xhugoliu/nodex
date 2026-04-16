@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  deriveApplyFocusDecision,
   deriveClearedDraftReviewState,
   deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
@@ -66,6 +67,16 @@ function makeTree(): TreeNode {
   };
 }
 
+function makeFocusContext(nodeId: string) {
+  return {
+    node_detail: {
+      node: {
+        id: nodeId,
+      },
+    },
+  };
+}
+
 test("buildAiDraftNextSteps suggests auth setup when auth is missing", () => {
   const steps = buildAiDraftNextSteps(
     makeStatus({
@@ -122,6 +133,40 @@ test("source import with preferred node hit resolves focus and clears transient 
 
   assert.equal(decision.nextNodeId, "child-1");
   assert.equal(decision.shouldClearTransientReviewState, true);
+});
+
+test("deriveApplyFocusDecision reuses provided focus context when it matches the preferred focus node", () => {
+  const focusContext = makeFocusContext("generated-node");
+  const decision = deriveApplyFocusDecision({
+    preferredFocusNodeId: "generated-node",
+    focusNodeContext: focusContext,
+    currentNodeId: "node-a",
+  });
+
+  assert.equal(decision.nextNodeId, "generated-node");
+  assert.equal(decision.nextNodeContext, focusContext);
+});
+
+test("deriveApplyFocusDecision keeps the preferred focus node but drops stale provided context when ids diverge", () => {
+  const decision = deriveApplyFocusDecision({
+    preferredFocusNodeId: "child-node",
+    focusNodeContext: makeFocusContext("generated-node"),
+    currentNodeId: "node-a",
+  });
+
+  assert.equal(decision.nextNodeId, "child-node");
+  assert.equal(decision.nextNodeContext, null);
+});
+
+test("deriveApplyFocusDecision falls back to the current node when apply output does not provide focus hints", () => {
+  const decision = deriveApplyFocusDecision({
+    preferredFocusNodeId: null,
+    focusNodeContext: null,
+    currentNodeId: "node-a",
+  });
+
+  assert.equal(decision.nextNodeId, "node-a");
+  assert.equal(decision.nextNodeContext, null);
 });
 
 test("same-node overview refresh keeps transient review state", () => {

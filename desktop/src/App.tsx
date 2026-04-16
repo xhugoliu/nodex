@@ -7,6 +7,7 @@ import {
   countNodes,
   deriveClearedDraftReviewState,
   deriveClearedTransientReviewState,
+  deriveApplyFocusDecision,
   deriveContextSelectionDecision,
   deriveContextTransitionState,
   deriveOpenDraftWorkspaceState,
@@ -889,18 +890,16 @@ export default function App(props: AppProps = {}) {
       setSelectedSourceId(null);
       setSelectedSourceDetail(null);
       setApplyResult(output.report);
-      const providedFocusContext = output.focus_node_context;
-      const providedFocusNodeId = providedFocusContext?.node_detail.node.id ?? null;
-      const nextNodeId =
-        output.preferred_focus_node_id ??
-        providedFocusNodeId ??
-        selectedNodeId ??
-        null;
-      if (providedFocusContext && nextNodeId === providedFocusNodeId) {
-        setSelectedNodeId(providedFocusNodeId);
-        setSelectedNodeContext(providedFocusContext);
-      } else if (nextNodeId) {
-        await fetchNodeContext(nextNodeId, output.overview.root_dir, {
+      const focusDecision = deriveApplyFocusDecision({
+        preferredFocusNodeId: output.preferred_focus_node_id,
+        focusNodeContext: output.focus_node_context,
+        currentNodeId: selectedNodeId,
+      });
+      if (focusDecision.nextNodeContext && focusDecision.nextNodeId) {
+        setSelectedNodeId(focusDecision.nextNodeId);
+        setSelectedNodeContext(focusDecision.nextNodeContext);
+      } else if (focusDecision.nextNodeId) {
+        await fetchNodeContext(focusDecision.nextNodeId, output.overview.root_dir, {
           clearTransientReviewState: false,
           silentError: true,
         });

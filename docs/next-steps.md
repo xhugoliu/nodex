@@ -47,14 +47,15 @@
   - mounted App 级 imported-root apply 后真实 right rail 的 generated-node focus
   - mounted App 级手工 `update node` patch 路径上的 tree / main / right rail 同节点收口
   - mounted App 级 `add child` patch 路径上的 tree / main / right rail 新节点收口
-  - mounted App 级 `cite source chunk` patch 路径上的 tree / main / right rail 同节点 + evidence 收口
-  - mounted App 级 `uncite source chunk` patch 路径上的 tree / main / right rail 同节点 + evidence 清理收口
+  - mounted App 级 `cite source chunk` 路径上的 tree / main / right rail 同节点 + evidence 收口
+  - mounted App 级 `uncite source chunk` 路径上的 tree / main / right rail 同节点 + evidence 清理收口
+  - 以上 apply 末态共用一套 mounted continuity contract：focus node 对齐、右栏回到 `Context`、瞬时 Review/source detail 清空、`Current focus` cue 保持成立
 
 ## 下一轮最小切口
 
 - 先把右栏 assistant workspace 的 IA 和切换语义写清楚、做轻、测稳
 - 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到三栏主路径的 handoff / draft / review / apply 交接
-- 把 imported-root 主路和 patch-first 主路在 apply 后的 tree / main / real right rail 收口，继续补成更统一的一体化 mounted 证据，而不是散落在多条专门用例里
+- 在已有共享 mounted apply continuity contract 的基础上，再补同一 mounted session 内连续 apply 的三栏收口证据，不只证明单次 apply 末态
 - 只在确实影响桌面默认 draft route 稳定性时，再做 LangChain compare / fallback / provider 路径补强
 - 明确哪些底层信息只留在调试/CLI 层，不回填到默认桌面页面
 
