@@ -48,12 +48,13 @@
   - mounted App 级手工 `update node` patch 路径上的 tree / main / right rail 同节点收口
   - mounted App 级 `add child` patch 路径上的 tree / main / right rail 新节点收口
   - mounted App 级 `cite source chunk` patch 路径上的 tree / main / right rail 同节点 + evidence 收口
+  - mounted App 级 `uncite source chunk` patch 路径上的 tree / main / right rail 同节点 + evidence 清理收口
 
 ## 下一轮最小切口
 
 - 先把右栏 assistant workspace 的 IA 和切换语义写清楚、做轻、测稳
 - 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到三栏主路径的 handoff / draft / review / apply 交接
-- 把 `uncite source chunk` 这类 evidence patch 路径也补成 mounted App 回归，继续验证 apply 后 tree / main / real right rail 如何围绕当前节点和来源证据收口
+- 把 imported-root 主路和 patch-first 主路在 apply 后的 tree / main / real right rail 收口，继续补成更统一的一体化 mounted 证据，而不是散落在多条专门用例里
 - 只在确实影响桌面默认 draft route 稳定性时，再做 LangChain compare / fallback / provider 路径补强
 - 明确哪些底层信息只留在调试/CLI 层，不回填到默认桌面页面
 
