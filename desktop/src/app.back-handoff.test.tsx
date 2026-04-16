@@ -5,6 +5,7 @@ import { act } from "react";
 import ReactDOM from "react-dom/client";
 
 import App, { type AppBindings } from "./App";
+import { WorkbenchSidePane } from "./components/workbench";
 import type {
   ApplyReviewedPatchOutput,
   DesktopAiStatus,
@@ -1234,6 +1235,99 @@ test("App renders Context CTA and local provenance in the mounted right pane aft
     ),
     "preferred node id should still drive the mounted context load",
   );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps node and source focus cues visible when source context opens", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithSource() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  const renderedText = dom.container.textContent;
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Node: Authentication/);
+  assert.match(renderedText, /Source in view: source\.md/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_source_detail" &&
+        call.args.source_id === "source-1",
+    ),
+    "opening a source should fetch its detail for the mounted side pane",
+  );
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
 
   await act(async () => {
     root.unmount();
