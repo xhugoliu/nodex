@@ -883,6 +883,34 @@ function makeGeneratedCiteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOut
   };
 }
 
+function makeGeneratedUnciteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Uncite Generated Branch evidence",
+    ops: [
+      {
+        type: "uncite_source_chunk",
+        node_id: "generated-node",
+        chunk_id: "chunk-1",
+      },
+    ],
+  };
+}
+
+function makeGeneratedUnciteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-uncite",
+      summary: "Applied generated branch evidence removal",
+      preview: ["Removed chunk-1 evidence citation from generated-node"],
+      created_nodes: [],
+    },
+    overview: makeGeneratedOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeGeneratedNodeContextWithSource(),
+  };
+}
+
 function makeApplyReviewedPatchOutputWithGeneratedSource(): ApplyReviewedPatchOutput {
   return {
     report: {
@@ -896,6 +924,22 @@ function makeApplyReviewedPatchOutputWithGeneratedSource(): ApplyReviewedPatchOu
     overview: makeGeneratedOverview(),
     preferred_focus_node_id: "generated-node",
     focus_node_context: makeGeneratedNodeContextWithSource(),
+  };
+}
+
+function makeApplyReviewedPatchOutputWithGeneratedEvidence(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-1",
+      summary: "Applied generated follow-up branch",
+      preview: ["Added Generated Follow-up Branch"],
+      created_nodes: [
+        { id: "generated-node", title: "Generated Follow-up Branch" },
+      ],
+    },
+    overview: makeGeneratedOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeGeneratedNodeContextWithEvidence(),
   };
 }
 
@@ -4019,6 +4063,195 @@ test("App keeps tri-pane continuity when the generated node immediately enters t
       expectedEvidenceChunkId: "chunk-1",
     },
   });
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity when the generated node immediately clears evidence in the same mounted session", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-node"
+            ? makeGeneratedNodeContextWithEvidence()
+            : args.node_id === "imported-root"
+              ? makeImportedNodeContext()
+              : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload(String(args.node_id)) as T;
+      }
+      if (command === "draft_uncite_source_chunk_patch") {
+        return makeGeneratedUnciteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-node"
+            ? makeGeneratedUnciteChunkApplyReviewedPatchOutput()
+            : makeApplyReviewedPatchOutputWithGeneratedEvidence()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch",
+      applySummary: "Applied generated follow-up branch",
+      reviewFocusNodeId: "imported-root",
+      visibleSectionLabels: ["Sources", "Evidence"],
+      hiddenSectionLabels: [],
+      expectedEvidenceChunkId: "chunk-1",
+    },
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    requireSidePaneProps().onDraftUnciteChunk("chunk-1");
+    await flush(2);
+  });
+
+  const unciteCalls = invokeCalls.filter(
+    (call) => call.command === "draft_uncite_source_chunk_patch",
+  );
+  const latestUnciteCall = unciteCalls[unciteCalls.length - 1];
+  assert.ok(latestUnciteCall, "generated node should draft an uncite patch");
+  assert.equal(latestUnciteCall.args.node_id, "generated-node");
+  assert.equal(latestUnciteCall.args.chunk_id, "chunk-1");
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch",
+      applySummary: "Applied generated branch evidence removal",
+      reviewFocusNodeId: "generated-node",
+      visibleSectionLabels: ["Sources"],
+      hiddenSectionLabels: ["Evidence"],
+      expectedEvidenceChunkId: null,
+    },
+  });
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.evidence.length, 0);
 
   await act(async () => {
     root.unmount();
