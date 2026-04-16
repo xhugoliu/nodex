@@ -41,14 +41,16 @@
   - mounted App 级 workspace load 后的 `Context` CTA / provenance / current focus
   - mounted App 级 source open 后的 node/source focus cue continuity
   - mounted App 级 source context -> review 的 node/source focus continuity
+  - mounted App 级 source context -> review -> apply 的 focus 落点
   - mounted App 级导入落点后的 tree / main / side 交接
   - mounted App 级 `source import -> AI expand -> review -> apply` 闭环
+  - mounted App 级 imported-root apply 后真实 right rail 的 generated-node focus
 
 ## 下一轮最小切口
 
 - 先把右栏 assistant workspace 的 IA 和切换语义写清楚、做轻、测稳
 - 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到三栏主路径的 handoff / draft / review / apply 交接
-- 把 review -> apply 后的 current focus continuity 继续补成 mounted App 回归，而不是只停在 props handoff 或 surface 断言
+- 把 tree / main / real right rail 在 apply 后的同节点收口继续补成更一体的 mounted 证据，而不是分散在 props stub 和单独 side pane render 里
 - 只在确实影响桌面默认 draft route 稳定性时，再做 LangChain compare / fallback / provider 路径补强
 - 明确哪些底层信息只留在调试/CLI 层，不回填到默认桌面页面
 

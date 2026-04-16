@@ -57,14 +57,15 @@
   守 helper seam、右栏 surface 和 mounted App 级主路径交接
   当前也已覆盖 `back` handoff、导入落点后的跨 pane 交接、`source import -> AI expand -> review -> apply`、
   workspace load 后的 `Context` CTA / provenance / current focus、source open 后的 node/source focus cue，
-  以及 source context -> review 后的 node/source focus continuity
+  source context -> review 后的 node/source focus continuity、
+  source context -> review -> apply 后的 focus 落点，以及 imported-root apply 后真实 right rail 的 generated-node 落点
 
 ## 如果继续推进
 
 优先顺序：
 
 1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
-2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义，尤其是 review -> apply 后的 focus continuity
+2. 把 `desktop_flow_smoke.py` 和 `npm run test:logic` 继续补到更多三栏主路径交接语义，尤其是 apply 后 tree / canvas / real right rail 的同节点收口证据
 3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
 4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
