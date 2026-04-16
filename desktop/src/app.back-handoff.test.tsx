@@ -748,6 +748,157 @@ function makeUpdateGeneratedNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOu
   };
 }
 
+function makeGeneratedNodeContextWithSource(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-node",
+        parent_id: "imported-root",
+        title: "Generated Follow-up Branch",
+        body: "Generated body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      parent: { id: "imported-root", title: "Imported Source Root" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [],
+    },
+  };
+}
+
+function makeGeneratedNodeContextWithEvidence(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-node",
+        parent_id: "imported-root",
+        title: "Generated Follow-up Branch",
+        body: "Generated body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000001,
+      },
+      parent: { id: "imported-root", title: "Imported Source Root" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [
+            {
+              id: "chunk-1",
+              source_id: "source-1",
+              ordinal: 0,
+              label: "Provider Authentication Flow",
+              text: "Anthropic-compatible auth setup and model routing details.",
+              start_line: 5,
+              end_line: 11,
+            },
+          ],
+          citations: [
+            {
+              chunk: {
+                id: "chunk-1",
+                source_id: "source-1",
+                ordinal: 0,
+                label: "Provider Authentication Flow",
+                text: "Anthropic-compatible auth setup and model routing details.",
+                start_line: 5,
+                end_line: 11,
+              },
+              citation_kind: "direct",
+              rationale:
+                "This generated branch still depends on the provider authentication flow.",
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
+function makeGeneratedCiteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Cite Generated Branch evidence",
+    ops: [
+      {
+        type: "cite_source_chunk",
+        node_id: "generated-node",
+        chunk_id: "chunk-1",
+        citation_kind: "direct",
+        rationale:
+          "This generated branch still depends on the provider authentication flow.",
+      },
+    ],
+  };
+}
+
+function makeGeneratedCiteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-cite",
+      summary: "Applied generated branch evidence citation",
+      preview: ["Cited chunk-1 as direct evidence for generated-node"],
+      created_nodes: [],
+    },
+    overview: makeGeneratedOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeGeneratedNodeContextWithEvidence(),
+  };
+}
+
+function makeApplyReviewedPatchOutputWithGeneratedSource(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-1",
+      summary: "Applied generated follow-up branch",
+      preview: ["Added Generated Follow-up Branch"],
+      created_nodes: [
+        { id: "generated-node", title: "Generated Follow-up Branch" },
+      ],
+    },
+    overview: makeGeneratedOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeGeneratedNodeContextWithSource(),
+  };
+}
+
 function makeGeneratedChildOverview(): WorkspaceOverview {
   return {
     root_dir: "/workspace",
@@ -3675,6 +3826,197 @@ test("App keeps tri-pane continuity when the generated node immediately branches
       focusedNodeTitle: "Generated Branch Child",
       applySummary: "Applied generated branch child",
       reviewFocusNodeId: "generated-node",
+    },
+  });
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity when the generated node immediately enters the source/evidence flow in the same mounted session", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-node"
+            ? makeGeneratedNodeContextWithSource()
+            : args.node_id === "imported-root"
+              ? makeImportedNodeContext()
+              : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload(String(args.node_id)) as T;
+      }
+      if (command === "draft_cite_source_chunk_patch") {
+        return makeGeneratedCiteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-node"
+            ? makeGeneratedCiteChunkApplyReviewedPatchOutput()
+            : makeApplyReviewedPatchOutputWithGeneratedSource()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch",
+      applySummary: "Applied generated follow-up branch",
+      reviewFocusNodeId: "imported-root",
+      visibleSectionLabels: ["Sources"],
+      hiddenSectionLabels: ["Evidence"],
+    },
+  });
+  assert.match(
+    renderToStaticMarkup(<WorkbenchSidePane {...requireSidePaneProps()} />),
+    /source\.md/,
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    requireSidePaneProps().onDraftCiteChunk("chunk-1");
+    await flush(2);
+  });
+
+  const citeCalls = invokeCalls.filter(
+    (call) => call.command === "draft_cite_source_chunk_patch",
+  );
+  const latestCiteCall = citeCalls[citeCalls.length - 1];
+  assert.ok(latestCiteCall, "generated node should draft a cite patch");
+  assert.equal(latestCiteCall.args.node_id, "generated-node");
+  assert.equal(latestCiteCall.args.chunk_id, "chunk-1");
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch",
+      applySummary: "Applied generated branch evidence citation",
+      reviewFocusNodeId: "generated-node",
+      visibleSectionLabels: ["Sources", "Evidence"],
+      hiddenSectionLabels: [],
+      expectedEvidenceChunkId: "chunk-1",
     },
   });
 
