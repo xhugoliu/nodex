@@ -646,6 +646,108 @@ function makeUpdateNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
   };
 }
 
+function makeUpdatedGeneratedNodeOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "imported-root",
+            parent_id: "root",
+            title: "Imported Source Root",
+            body: "Imported body",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [
+            {
+              node: {
+                id: "generated-node",
+                parent_id: "imported-root",
+                title: "Generated Follow-up Branch Revised",
+                body: "Generated body with one local revision",
+                kind: "action",
+                position: 0,
+                created_at: 1710000000,
+                updated_at: 1710000001,
+              },
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeUpdatedGeneratedNodeContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-node",
+        parent_id: "imported-root",
+        title: "Generated Follow-up Branch Revised",
+        body: "Generated body with one local revision",
+        kind: "action",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000001,
+      },
+      parent: { id: "imported-root", title: "Imported Source Root" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeUpdateGeneratedNodePatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Update Generated Follow-up Branch title",
+    ops: [
+      {
+        type: "update_node",
+        id: "generated-node",
+        title: "Generated Follow-up Branch Revised",
+        body: "Generated body with one local revision",
+        kind: null,
+      },
+    ],
+  };
+}
+
+function makeUpdateGeneratedNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-update-generated",
+      summary: "Applied generated branch update",
+      preview: ["Updated generated-node title and body"],
+      created_nodes: [],
+    },
+    overview: makeUpdatedGeneratedNodeOverview(),
+    preferred_focus_node_id: "generated-node",
+    focus_node_context: makeUpdatedGeneratedNodeContext(),
+  };
+}
+
 function makeCiteChunkPatchDocument(): PatchDocument {
   return {
     version: 1,
@@ -3087,6 +3189,198 @@ test("App refocuses tree, canvas, and real right rail onto the generated node af
       reviewFocusNodeId: "imported-root",
     },
   });
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity through a second patch-first apply after imported-root apply lands on the generated node", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-node" &&
+          invokeCalls.some(
+            (call) =>
+              call.command === "apply_reviewed_patch" &&
+              call.args.focus_node_id === "generated-node",
+          )
+            ? makeUpdatedGeneratedNodeContext()
+            : args.node_id === "generated-node"
+              ? makeGeneratedNodeContext()
+              : args.node_id === "imported-root"
+                ? makeImportedNodeContext()
+                : makeNodeContext()
+        ) as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload(String(args.node_id)) as T;
+      }
+      if (command === "draft_update_node_patch") {
+        return makeUpdateGeneratedNodePatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-node"
+            ? makeUpdateGeneratedNodeApplyReviewedPatchOutput()
+            : makeApplyReviewedPatchOutput()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch",
+      applySummary: "Applied generated follow-up branch",
+      reviewFocusNodeId: "imported-root",
+    },
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onTitleChange("Generated Follow-up Branch Revised");
+    requireSidePaneProps().onBodyChange("Generated body with one local revision");
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftUpdate();
+    await flush(2);
+  });
+
+  const draftUpdateCalls = invokeCalls.filter(
+    (call) => call.command === "draft_update_node_patch",
+  );
+  const latestDraftUpdateCall = draftUpdateCalls[draftUpdateCalls.length - 1];
+  assert.ok(latestDraftUpdateCall, "generated node update should draft a patch");
+  assert.equal(latestDraftUpdateCall.args.node_id, "generated-node");
+  assert.equal(
+    latestDraftUpdateCall.args.title,
+    "Generated Follow-up Branch Revised",
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-node",
+      focusedNodeTitle: "Generated Follow-up Branch Revised",
+      applySummary: "Applied generated branch update",
+      reviewFocusNodeId: "generated-node",
+    },
+  });
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.body,
+    "Generated body with one local revision",
+  );
 
   await act(async () => {
     root.unmount();

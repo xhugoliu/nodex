@@ -62,7 +62,8 @@
   手工 `update node` patch 路径上的 tree / canvas / right rail 同节点收口，
   `add child` patch 路径上的 tree / canvas / right rail 新节点收口，
   `cite source chunk` 路径上的 tree / canvas / right rail 同节点 + evidence 收口，
-  以及 `uncite source chunk` 路径上的 tree / canvas / right rail 同节点 + evidence 清理收口；
+  `uncite source chunk` 路径上的 tree / canvas / right rail 同节点 + evidence 清理收口，
+  以及同一 mounted session 内 `imported-root apply -> generated node -> 手工 update -> apply` 的连续收口；
   这些 apply 末态现在也共用一套 mounted continuity contract：
   tree / canvas / right rail 对齐同一 focus node，右栏回到 `Context`，瞬时 Review/source detail 清空，`Current focus` cue 继续成立
 
@@ -71,8 +72,8 @@
 优先顺序：
 
 1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
-2. 把这套共享 mounted apply continuity contract 继续推进到更贴近真实工作节奏的连续路径，
-   尤其是同一 mounted session 内从 imported-root apply 进入生成节点、再继续下一步 patch-first 操作的收口
+2. 在已经覆盖连续 `imported-root apply -> generated node -> patch-first apply` 的基础上，
+   继续补同一 mounted session 内从生成节点进入 source/evidence 或 child 分支的三栏收口
 3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
 4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
