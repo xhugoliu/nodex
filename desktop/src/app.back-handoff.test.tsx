@@ -646,6 +646,122 @@ function makeUpdateNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
   };
 }
 
+function makeAddedChildOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "node-1",
+            parent_id: "root",
+            title: "Authentication",
+            body: "Current auth routing notes",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [
+            {
+              node: {
+                id: "child-node-1",
+                parent_id: "node-1",
+                title: "Authentication Child",
+                body: null,
+                kind: "topic",
+                position: 0,
+                created_at: 1710000001,
+                updated_at: 1710000001,
+              },
+              children: [],
+            },
+          ],
+        },
+        {
+          node: {
+            id: "node-2",
+            parent_id: "root",
+            title: "Operations",
+            body: null,
+            kind: "topic",
+            position: 1,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeAddedChildContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "child-node-1",
+        parent_id: "node-1",
+        title: "Authentication Child",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000001,
+        updated_at: 1710000001,
+      },
+      parent: { id: "node-1", title: "Authentication" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeAddChildPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Add Authentication child",
+    ops: [
+      {
+        type: "add_node",
+        parent_id: "node-1",
+        title: "Authentication Child",
+        kind: "topic",
+        body: null,
+        position: null,
+      },
+    ],
+  };
+}
+
+function makeAddChildApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-add-child",
+      summary: "Applied Authentication child branch",
+      preview: ["Added Authentication Child under Authentication"],
+      created_nodes: [{ id: "child-node-1", title: "Authentication Child" }],
+    },
+    overview: makeAddedChildOverview(),
+    preferred_focus_node_id: "child-node-1",
+    focus_node_context: makeAddedChildContext(),
+  };
+}
+
 function makeNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
   return {
     report: {
@@ -1952,6 +2068,155 @@ test("App keeps tree, canvas, and right rail aligned on the updated node after m
         call.args.focus_node_id === "node-1",
     ),
     "manual apply should keep the current node as the review focus when no new node is created",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App refocuses tree, canvas, and right rail onto the created child after add-child patch apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (args.node_id === "child-node-1"
+          ? makeAddedChildContext()
+          : makeNodeContext()) as T;
+      }
+      if (command === "draft_add_node_patch") {
+        return makeAddChildPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeAddChildApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onAddChildTitleChange("Authentication Child");
+    await flush();
+  });
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAddChild();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_add_node_patch" &&
+        call.args.parent_id === "node-1" &&
+        call.args.title === "Authentication Child",
+    ),
+    "add-child draft should use the selected node as parent and the typed title",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireTreePaneProps().selectedNodeId, "child-node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "child-node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "child-node-1");
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied Authentication child branch",
+  );
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Applied Authentication child branch/);
+  assert.match(finalSidePaneHtml, /Node: Authentication Child/);
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "node-1",
+    ),
+    "add-child apply should use the parent node as the review focus before moving to the created child",
   );
 
   await act(async () => {
