@@ -26,6 +26,7 @@
 ### 右栏 assistant workspace 的边界
 
 - `Context`：看懂当前节点、来源、证据和“为什么值得看”，并明确提示下一步如何进入 `Draft`
+  同时保留当前来源的本地 provenance（至少文件路径与导入时间），让这块更像稳定工作台而不是会话摘要
 - `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
 - `Review`：仍然回到 patch inspect / apply 的确认层
 - 不是全局聊天窗口

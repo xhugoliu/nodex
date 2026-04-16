@@ -103,6 +103,7 @@ const translations: Record<Locale, TranslationTree> = {
         "Move into Draft to turn this node into one candidate patch before you review it.",
       contextNextSourceDraft:
         "Once this source context looks grounded, move into Draft for the current node.",
+      localProvenanceTitle: "Local provenance",
       openDraft: "Open Draft",
       draftEmptyTitle: "Open A Node Before Drafting",
       draftEmptyBody:
@@ -679,6 +680,7 @@ const translations: Record<Locale, TranslationTree> = {
       contextNextNodeDraft: "进入草案页，先把当前节点收成一个候选 patch，再回来看 Review。",
       contextNextSourceDraft:
         "当这份来源上下文已经看清楚后，进入草案页，继续围绕当前节点起草下一步。",
+      localProvenanceTitle: "本地来源落点",
       openDraft: "进入草案",
       draftEmptyTitle: "先打开一个节点再起草",
       draftEmptyBody: "先选中一个节点，assistant workspace 才会保持在当前分支作用域内。",

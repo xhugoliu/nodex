@@ -21,6 +21,7 @@
 - 守住 `source detail -> node context` 这条高频 handoff，不让 Review/apply 清理语义散回 App 分支
 - 把 `Draft` 收紧为 node-scoped surface；`source detail -> Draft` 也走共享 handoff seam，而不是把 source detail 直接带进 Draft
 - 让 `Context` surface 明确给出进入 `Draft` 的下一步引导，而不是只停在说明态
+- 在 `Context` surface 里继续补稳定的本地 provenance，让用户随时看见这份来源来自哪条本地路径、何时导入
 - 守住桌面默认 AI draft route 的可用性，但只把 LangChain 稳定化工作收敛为桌面默认路径的支撑面，不把底层 compare / artifact 细节抬到主舞台
 
 ## 当前回归门

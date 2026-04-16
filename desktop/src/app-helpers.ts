@@ -959,7 +959,7 @@ function renderPatchDraftOriginLines(
   ].filter(Boolean) as string[];
 }
 
-function formatTimestamp(timestampSeconds: number): string {
+export function formatTimestamp(timestampSeconds: number): string {
   if (!Number.isFinite(timestampSeconds)) {
     return String(timestampSeconds);
   }

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   buildAiDraftNextSteps,
   describePatchOperation,
+  formatTimestamp,
   type PatchDraftState,
   type SelectionPanelTab,
   type Translator,
@@ -760,6 +761,7 @@ export function NodeContextSurface(props: {
                 title={source.source.original_name}
                 summary={summarizeSourceReason(source, props.t)}
                 meta={summarizeChunkMeta(source.chunks, props.t)}
+                provenanceLines={summarizeSourceProvenance(source.source, props.t)}
                 onClick={() => props.onOpenSource(source.source.id)}
               />
             ))}
@@ -779,6 +781,7 @@ export function NodeContextSurface(props: {
                 title={source.source.original_name}
                 summary={summarizeEvidenceReason(source, props.t)}
                 meta={summarizeChunkMeta(source.chunks, props.t)}
+                provenanceLines={summarizeSourceProvenance(source.source, props.t)}
                 tone="evidence"
                 onClick={() => props.onOpenSource(source.source.id)}
               />
@@ -872,6 +875,18 @@ export function SourceContextSurface(props: {
                   total: props.detail.chunks.length,
                 })
               : props.t("detail.citationContextMissing")}
+          </div>
+        </div>
+        <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/75 px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("workbench.localProvenanceTitle")}
+          </div>
+          <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
+            {summarizeSourceProvenance(props.detail.source, props.t).map((line) => (
+              <div key={line} className="break-all">
+                {line}
+              </div>
+            ))}
           </div>
         </div>
         <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/75 px-3 py-3">
@@ -1059,6 +1074,7 @@ function SourceCard(props: {
   title: string;
   summary: string;
   meta: string;
+  provenanceLines?: string[];
   tone?: "neutral" | "evidence";
   onClick: () => void;
 }) {
@@ -1075,6 +1091,15 @@ function SourceCard(props: {
       <div className="text-sm font-medium text-[color:var(--text)]">{props.title}</div>
       <div className="mt-1 text-sm leading-6 text-[color:var(--text)]">{props.summary}</div>
       <div className="mt-2 text-xs text-[color:var(--muted)]">{props.meta}</div>
+      {props.provenanceLines?.length ? (
+        <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
+          {props.provenanceLines.map((line) => (
+            <div key={line} className="break-all">
+              {line}
+            </div>
+          ))}
+        </div>
+      ) : null}
     </button>
   );
 }
@@ -1222,6 +1247,18 @@ function summarizeChunkMeta(
     .slice(0, 2)
     .map((chunk) => chunk.label || `${chunk.start_line}-${chunk.end_line}`)
     .join(" · ");
+}
+
+function summarizeSourceProvenance(
+  source: { original_path: string; imported_at: number },
+  t: Translator,
+): string[] {
+  return [
+    `${t("sourceImport.pathLabel")}: ${source.original_path}`,
+    t("detail.importedAt", {
+      value: formatTimestamp(source.imported_at),
+    }),
+  ];
 }
 
 function summarizeSourceDetailReason(detail: SourceDetail, t: Translator): string {

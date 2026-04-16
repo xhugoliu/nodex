@@ -134,6 +134,10 @@ test("SourceContextSurface renders rationale summary, continue entries, and cite
   assert.match(html, /detail\.sourceContextSummaryTitle/);
   assert.match(html, /detail\.evidenceWorthReading/);
   assert.match(html, /default auth route/);
+  assert.match(html, /workbench\.localProvenanceTitle/);
+  assert.match(html, /sourceImport\.pathLabel/);
+  assert.match(html, /\/fixtures\/source\.md/);
+  assert.match(html, /detail\.importedAt/);
   assert.match(html, /workbench\.contextNextTitle/);
   assert.match(html, /workbench\.contextNextSourceDraft/);
   assert.match(html, /workbench\.openDraft/);
@@ -171,6 +175,7 @@ test("SourceContextSurface hides citation actions and shows empty continue state
 
   assert.match(html, /detail\.citationContextMissing/);
   assert.match(html, /detail\.sourceContinueEmpty/);
+  assert.match(html, /workbench\.localProvenanceTitle/);
   assert.doesNotMatch(html, /detail\.draftCite/);
   assert.doesNotMatch(html, /detail\.draftUncite/);
 });
