@@ -677,6 +677,34 @@ function makeCiteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
   };
 }
 
+function makeUnciteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Uncite Authentication evidence",
+    ops: [
+      {
+        type: "uncite_source_chunk",
+        node_id: "node-1",
+        chunk_id: "chunk-1",
+      },
+    ],
+  };
+}
+
+function makeUnciteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-uncite",
+      summary: "Applied Authentication evidence removal",
+      preview: ["Removed chunk-1 evidence citation from node-1"],
+      created_nodes: [],
+    },
+    overview: makeOverview(),
+    preferred_focus_node_id: "node-1",
+    focus_node_context: makeNodeContextWithSource(),
+  };
+}
+
 function makeAddedChildOverview(): WorkspaceOverview {
   return {
     root_dir: "/workspace",
@@ -2326,6 +2354,159 @@ test("App keeps tree, canvas, and right rail aligned on the current node after c
         call.args.focus_node_id === "node-1",
     ),
     "cite apply should keep the current node as the review focus",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tree, canvas, and right rail aligned on the current node after uncite patch apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithEvidence() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "draft_uncite_source_chunk_patch") {
+        return makeUnciteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return makeUnciteChunkApplyReviewedPatchOutput() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftUnciteChunk("chunk-1");
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_uncite_source_chunk_patch" &&
+        call.args.node_id === "node-1" &&
+        call.args.chunk_id === "chunk-1",
+    ),
+    "uncite draft should use the selected node and source chunk",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.equal(
+    requireSidePaneProps().applyResult?.summary,
+    "Applied Authentication evidence removal",
+  );
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.evidence.length, 0);
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Applied Authentication evidence removal/);
+  assert.match(finalSidePaneHtml, /Node: Authentication/);
+  assert.match(finalSidePaneHtml, />Sources</);
+  assert.doesNotMatch(finalSidePaneHtml, />Evidence</);
+  assert.doesNotMatch(finalSidePaneHtml, /Source in view/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "apply_reviewed_patch" &&
+        call.args.focus_node_id === "node-1",
+    ),
+    "uncite apply should keep the current node as the review focus",
   );
 
   await act(async () => {
