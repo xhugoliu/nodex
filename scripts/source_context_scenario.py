@@ -12,7 +12,7 @@ DEFAULT_FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smok
 DEFAULT_TARGET_LABEL = "Provider Authentication Flow"
 DEFAULT_CITATION_KIND = "direct"
 DEFAULT_CITATION_RATIONALE = (
-    "This imported section defines the Anthropic-compatible runner setup."
+    "This imported section defines the OpenAI-compatible runner setup."
 )
 DEFAULT_FIXTURE_SET = "anthropic-default"
 
@@ -23,7 +23,7 @@ FIXTURE_SET_CASES = {
             "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md",
             "target_label": "Provider Authentication Flow",
             "citation_rationale": (
-                "This imported section defines the Anthropic-compatible runner setup."
+                "This imported section defines the OpenAI-compatible runner setup."
             ),
         },
         {

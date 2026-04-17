@@ -1,12 +1,12 @@
-# Anthropic LangChain Regression
+# OpenAI LangChain Regression
 
 This fixture is used to exercise a realistic source-backed AI draft path in Nodex.
 
 ## Provider Authentication Flow
 
-The desktop default route now prefers the Anthropic-compatible LangChain runner.
-Local configuration is expected to define `ANTHROPIC_AUTH_TOKEN`,
-`ANTHROPIC_BASE_URL`, and `ANTHROPIC_MODEL`.
+The desktop default route now prefers the OpenAI-compatible LangChain runner.
+Local configuration is expected to define `OPENAI_API_KEY`,
+`OPENAI_BASE_URL`, and `OPENAI_MODEL`.
 
 ## Evidence Mapping Strategy
 

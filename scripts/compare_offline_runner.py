@@ -292,7 +292,7 @@ def build_source_context_branch_blueprint(request_payload: dict) -> list[dict]:
             {
                 "title": route_title,
                 "body": (
-                    "The desktop default now prefers the Anthropic-compatible "
+                    "The desktop default now prefers the OpenAI-compatible "
                     "LangChain runner over other providers"
                 ),
             }
@@ -328,7 +328,7 @@ def build_source_root_branch_blueprint(request_payload: dict) -> list[dict]:
             ),
         },
         {
-            "title": "Anthropic Model Configuration",
+            "title": "OpenAI Model Configuration",
             "body": "Model parameters and provider settings used in this regression run",
         },
     ]
@@ -368,7 +368,7 @@ def build_inferred_suggestions(
         ]
     return [
         f"Review how {variant} reacts to the {scenario} request payload.",
-        f"Compare {variant} against the Anthropic default route for {target_title}.",
+        f"Compare {variant} against the OpenAI default route for {target_title}.",
     ]
 
 
@@ -383,13 +383,20 @@ def extract_env_vars(text: str) -> list[str]:
 
 
 def describe_env_var(env_var: str) -> str:
+    provider_label = (
+        "OpenAI-compatible"
+        if env_var.startswith("OPENAI_")
+        else "Anthropic-compatible"
+        if env_var.startswith("ANTHROPIC_")
+        else "default-provider"
+    )
     if env_var.endswith("_TOKEN") or env_var.endswith("_KEY"):
-        return "Secret token used to authenticate requests to the Anthropic-compatible runner"
+        return f"Secret token used to authenticate requests to the {provider_label} runner"
     if env_var.endswith("_BASE_URL"):
-        return "Base URL for routing requests to the Anthropic-compatible API endpoint"
+        return f"Base URL for routing requests to the {provider_label} API endpoint"
     if env_var.endswith("_MODEL"):
-        return "Model identifier passed to the Anthropic-compatible LangChain runner"
-    return f"Configuration value required for the Anthropic-compatible runner: {env_var}"
+        return f"Model identifier passed to the {provider_label} LangChain runner"
+    return f"Configuration value required for the {provider_label} runner: {env_var}"
 
 
 def branch_title_prefix(variant: str) -> str:

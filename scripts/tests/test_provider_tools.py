@@ -154,8 +154,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
         request_payload["target_node"]["title"] = "Provider Authentication Flow"
         request_payload["target_node"]["body"] = (
             "Local configuration is expected to define "
-            "`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, and `ANTHROPIC_MODEL`. "
-            "The desktop default route now prefers the Anthropic-compatible LangChain runner."
+            "`OPENAI_API_KEY`, `OPENAI_BASE_URL`, and `OPENAI_MODEL`. "
+            "The desktop default route now prefers the OpenAI-compatible LangChain runner."
         )
         request_payload["cited_evidence"] = [
             {
@@ -181,33 +181,33 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(
             [item["title"] for item in response["patch"]["ops"]],
             [
-                "ANTHROPIC_AUTH_TOKEN",
-                "ANTHROPIC_BASE_URL",
-                "ANTHROPIC_MODEL",
+                "OPENAI_API_KEY",
+                "OPENAI_BASE_URL",
+                "OPENAI_MODEL",
                 "Desktop Default Route",
             ],
         )
         self.assertEqual(
             [item["body"] for item in response["patch"]["ops"]],
             [
-                "Secret token used to authenticate requests to the Anthropic-compatible runner",
-                "Base URL for routing requests to the Anthropic-compatible API endpoint",
-                "Model identifier passed to the Anthropic-compatible LangChain runner",
-                "The desktop default now prefers the Anthropic-compatible LangChain runner over other providers",
+                "Secret token used to authenticate requests to the OpenAI-compatible runner",
+                "Base URL for routing requests to the OpenAI-compatible API endpoint",
+                "Model identifier passed to the OpenAI-compatible LangChain runner",
+                "The desktop default now prefers the OpenAI-compatible LangChain runner over other providers",
             ],
         )
         self.assertEqual(
             response["explanation"]["inferred_suggestions"],
             [
                 "Add a node for fallback behavior when any of the three variables are missing.",
-                "Document how to rotate or refresh ANTHROPIC_AUTH_TOKEN in local environments.",
+                "Document how to rotate or refresh OPENAI_API_KEY in local environments.",
                 "Capture any environment-specific overrides (dev vs staging vs production) for the base URL or model.",
             ],
         )
 
     def test_compare_offline_runner_source_root_builds_regression_blueprint(self) -> None:
         request_payload = build_request_payload(node_id="node-1")
-        request_payload["target_node"]["title"] = "Anthropic LangChain Regression"
+        request_payload["target_node"]["title"] = "OpenAI LangChain Regression"
         request_payload["target_node"]["body"] = (
             "This fixture is used to exercise a realistic source-backed AI draft "
             "path in Nodex."
@@ -225,7 +225,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "Draft Path Trigger Conditions",
                 "Source-Backed Chunk Resolution",
                 "Regression Scope And Assertions",
-                "Anthropic Model Configuration",
+                "OpenAI Model Configuration",
             ],
         )
         self.assertEqual(
@@ -233,7 +233,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
             [
                 "Expand Draft Path Trigger Conditions with specific input payloads or environment flags that activate the path.",
                 "Populate Regression Scope And Assertions with concrete pass/fail criteria once test specs are available.",
-                "Add LangChain chain topology details under Anthropic Model Configuration if chain structure is relevant.",
+                "Add LangChain chain topology details under OpenAI Model Configuration if chain structure is relevant.",
             ],
         )
 
@@ -608,7 +608,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "explore_by": "question",
             "target_node": {
                 "id": "imported-root",
-                "title": "Anthropic LangChain Regression",
+                "title": "OpenAI LangChain Regression",
                 "body": "Research notes, evidence gaps, and open follow-up questions.",
             },
             "contract": {
@@ -646,7 +646,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(normalized["request_node_id"], "imported-root")
         self.assertEqual(
             normalized["summary"],
-            "Explore Anthropic LangChain Regression by question with 1 branches",
+            "Explore OpenAI LangChain Regression by question with 1 branches",
         )
         self.assertEqual(
             normalized["generator"],
@@ -1752,7 +1752,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(
             payload["scenario_context"]["target_node"]["title"],
-            "Anthropic LangChain Regression",
+            "OpenAI LangChain Regression",
         )
 
     def test_runner_compare_fixture_set_runs_multiple_cases(self) -> None:
@@ -2049,7 +2049,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
             explanation["shared_inferred_suggestions"],
             [
                 "Add a node for fallback behavior when any of the three variables are missing.",
-                "Document how to rotate or refresh ANTHROPIC_AUTH_TOKEN in local environments.",
+                "Document how to rotate or refresh OPENAI_API_KEY in local environments.",
                 "Capture any environment-specific overrides (dev vs staging vs production) for the base URL or model.",
             ],
         )
@@ -2188,7 +2188,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
             [
                 "Expand Draft Path Trigger Conditions with specific input payloads or environment flags that activate the path.",
                 "Populate Regression Scope And Assertions with concrete pass/fail criteria once test specs are available.",
-                "Add LangChain chain topology details under Anthropic Model Configuration if chain structure is relevant.",
+                "Add LangChain chain topology details under OpenAI Model Configuration if chain structure is relevant.",
             ],
         )
         self.assertEqual(explanation["shared_inferred_suggestions_count"], 3)
@@ -2571,7 +2571,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(
             result["scenario_context"]["imported_root_node"]["title"],
-            "Anthropic LangChain Regression",
+            "OpenAI LangChain Regression",
         )
         self.assertEqual(
             result["scenario_context"]["target_node"]["id"],
@@ -2942,7 +2942,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(imported_root["id"])
         self.assertEqual(
             imported_root["title"],
-            "Anthropic LangChain Regression",
+            "OpenAI LangChain Regression",
         )
         self.assertEqual(payload["desktop_flow"]["predicted_node_count"], 1)
         self.assertEqual(payload["desktop_flow"]["created_node_count"], 0)
@@ -3036,7 +3036,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertTrue(imported_root["id"])
         self.assertEqual(
             imported_root["title"],
-            "Anthropic LangChain Regression",
+            "OpenAI LangChain Regression",
         )
         self.assertEqual(payload["desktop_flow"]["predicted_node_count"], 1)
         self.assertEqual(payload["desktop_flow"]["created_node_count"], 1)
