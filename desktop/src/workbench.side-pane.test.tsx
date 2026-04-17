@@ -54,7 +54,7 @@ function makeSourceDetail(): SourceDetail {
           source_id: "source-1",
           ordinal: 0,
           label: "Provider Authentication Flow",
-          text: "Anthropic-compatible auth setup and model routing details.",
+          text: "OpenAI-compatible auth setup and model routing details.",
           start_line: 5,
           end_line: 11,
         },

@@ -20,7 +20,7 @@
 - 中栏：固定为纯画布工作区
 - 右栏：节点作用域的 assistant workspace，默认承接 `Context / Draft / Review`
 - 画布高频动作放在节点卡片内
-- 当前默认 AI draft route 以 Anthropic-compatible LangChain 为主路
+- 当前默认 AI draft route 以 OpenAI-compatible LangChain 为主路
 - patch 仍然是确认层，不绕过 validate / apply
 
 ### 右栏 assistant workspace 的边界

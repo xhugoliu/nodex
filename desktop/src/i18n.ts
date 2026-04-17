@@ -367,7 +367,7 @@ const translations: Record<Locale, TranslationTree> = {
       startBody: "Add the first branch.",
       aiDraftRoute: "AI Draft Route",
       aiDraftRouteMeta:
-        "Desktop drafts resolve one runner command before any patch is generated. The default route now prefers the Anthropic-compatible LangChain runner and reads model/auth from local ANTHROPIC_* settings.",
+        "Desktop drafts resolve one runner command before any patch is generated. The default route now prefers the OpenAI-compatible LangChain runner and reads model/auth from local OPENAI_* settings.",
       aiDraftSourceDefault: "default route",
       aiDraftSourceOverride: "env override",
       aiDraftUsesProviderDefaults: "provider defaults",
@@ -939,7 +939,7 @@ const translations: Record<Locale, TranslationTree> = {
       startBody: "先新增第一层分支。",
       aiDraftRoute: "AI 草案路径",
       aiDraftRouteMeta:
-        "桌面端会先解析一条 draft runner 命令，然后才生成 patch 草案。当前默认路径优先走 Anthropic-compatible 的 LangChain runner，并从本地 ANTHROPIC_* 配置读取模型与认证。",
+        "桌面端会先解析一条 draft runner 命令，然后才生成 patch 草案。当前默认路径优先走 OpenAI-compatible 的 LangChain runner，并从本地 OPENAI_* 配置读取模型与认证。",
       aiDraftSourceDefault: "默认路径",
       aiDraftSourceOverride: "环境变量覆盖",
       aiDraftUsesProviderDefaults: "provider 默认参数",

@@ -14,35 +14,39 @@ DEFAULT_CITATION_KIND = "direct"
 DEFAULT_CITATION_RATIONALE = (
     "This imported section defines the OpenAI-compatible runner setup."
 )
-DEFAULT_FIXTURE_SET = "anthropic-default"
+DEFAULT_FIXTURE_SET = "openai-default"
+
+OPENAI_DEFAULT_FIXTURE_SET_CASES = [
+    {
+        "id": "config",
+        "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md",
+        "target_label": "Provider Authentication Flow",
+        "citation_rationale": (
+            "This imported section defines the OpenAI-compatible runner setup."
+        ),
+    },
+    {
+        "id": "research",
+        "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "research-context-smoke.md",
+        "target_label": "Key Findings",
+        "citation_rationale": (
+            "This imported section captures the primary findings that the draft should build on."
+        ),
+    },
+    {
+        "id": "plan",
+        "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "plan-context-smoke.md",
+        "target_label": "Immediate Milestones",
+        "citation_rationale": (
+            "This imported section defines the near-term delivery plan that the draft should extend."
+        ),
+    },
+]
 
 FIXTURE_SET_CASES = {
-    "anthropic-default": [
-        {
-            "id": "config",
-            "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md",
-            "target_label": "Provider Authentication Flow",
-            "citation_rationale": (
-                "This imported section defines the OpenAI-compatible runner setup."
-            ),
-        },
-        {
-            "id": "research",
-            "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "research-context-smoke.md",
-            "target_label": "Key Findings",
-            "citation_rationale": (
-                "This imported section captures the primary findings that the draft should build on."
-            ),
-        },
-        {
-            "id": "plan",
-            "fixture_path": REPO_ROOT / "scripts" / "fixtures" / "plan-context-smoke.md",
-            "target_label": "Immediate Milestones",
-            "citation_rationale": (
-                "This imported section defines the near-term delivery plan that the draft should extend."
-            ),
-        },
-    ]
+    "openai-default": OPENAI_DEFAULT_FIXTURE_SET_CASES,
+    # Backward-compatible alias for older scripts/tests that still pass the legacy name.
+    "anthropic-default": OPENAI_DEFAULT_FIXTURE_SET_CASES,
 }
 
 

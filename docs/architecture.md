@@ -57,7 +57,7 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 
 - CLI：工作区验证、核心能力回归、provider 调试
 - 桌面端：以画布为主舞台的最小节点工作流验证；右栏承接 assistant 交互，但不抬出底层调试细节
-- AI：Anthropic-compatible LangChain 默认主路 + external runner + 本地 request / response / metadata 审计
+- AI：OpenAI-compatible LangChain 默认主路 + external runner + 本地 request / response / metadata 审计
 
 ## 当前不做
 

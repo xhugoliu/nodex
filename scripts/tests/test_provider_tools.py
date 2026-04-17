@@ -1808,7 +1808,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "scripts/runner_compare.py",
                 "--json",
                 "--fixture-set",
-                "anthropic-default",
+                "openai-default",
                 "--runner",
                 f"left={command}",
                 "--runner",
@@ -1818,7 +1818,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["fixture_set"], "anthropic-default")
+        self.assertEqual(payload["fixture_set"], "openai-default")
         self.assertEqual(len(payload["cases"]), 3)
         self.assertEqual(payload["aggregate"]["total_cases"], 3)
         self.assertEqual(payload["aggregate"]["compared_pairs"], 3)
@@ -1889,7 +1889,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "scripts/runner_compare.py",
                 "--json",
                 "--fixture-set",
-                "anthropic-default",
+                "openai-default",
                 "--runner",
                 f"success={success_command}",
                 "--runner",
@@ -2629,15 +2629,15 @@ class ProviderToolScriptsTests(unittest.TestCase):
             result = run_fixture_set_smoke(
                 manifest_path=REPO_ROOT / "Cargo.toml",
                 workspace_root_dir=Path(tmp_dir),
-                fixture_set_name="anthropic-default",
-                fixture_cases=fixture_set_cases("anthropic-default"),
+                fixture_set_name="openai-default",
+                fixture_cases=fixture_set_cases("openai-default"),
                 runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
                 apply=False,
                 json_mode=True,
             )
 
         self.assertTrue(result["ok"])
-        self.assertEqual(result["fixture_set"], "anthropic-default")
+        self.assertEqual(result["fixture_set"], "openai-default")
         self.assertEqual(result["metrics"]["total_cases"], 3)
         self.assertEqual(result["metrics"]["verification_ok_cases"], 3)
 
@@ -2856,8 +2856,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
             result = run_fixture_set_smoke(
                 manifest_path=REPO_ROOT / "Cargo.toml",
                 workspace_root_dir=Path(tmp_dir),
-                fixture_set_name="anthropic-default",
-                fixture_cases=fixture_set_cases("anthropic-default"),
+                fixture_set_name="openai-default",
+                fixture_cases=fixture_set_cases("openai-default"),
                 runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
                 apply=True,
                 json_mode=True,
