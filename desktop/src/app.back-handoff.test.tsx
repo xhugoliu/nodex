@@ -3412,6 +3412,209 @@ test("App clears stale AI draft errors when a new manual draft replaces the fail
   dom.cleanup();
 });
 
+test("App surfaces draft_node_explore failures inside the node-scoped Draft route", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "draft_node_explore") {
+        throw new Error("[schema_error] explore contract normalization failed");
+      }
+      throw new Error(`unexpected command: ${command} ${JSON.stringify(args)}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExplore("risk");
+    await flush(3);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.match(requireSidePaneProps().aiDraftError ?? "", /\[schema_error\]/);
+  const renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Needs attention/);
+  assert.match(renderedText, /explore contract normalization failed/);
+  assert.match(
+    renderedText,
+    /Inspect the Response and Meta artifacts, then compare them with the expected contract fields to find the schema mismatch\./,
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps review state intact when apply_reviewed_patch fails", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload("node-1") as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        throw new Error("patch validation failed: duplicate position");
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+  assert.equal(requireSidePaneProps().applyResult, null);
+  const renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Preview Patch/);
+  assert.match(renderedText, /Apply Patch/);
+  assert.match(renderedText, /Expand the imported root into one next action branch\./);
+  assert.match(renderedText, /Generated Follow-up Branch/);
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App applies workspace-loaded focus_node_id across tree, canvas, and side pane", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
