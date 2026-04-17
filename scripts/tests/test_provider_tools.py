@@ -18,7 +18,7 @@ FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 from ai_contract import RunnerFailure, validate_contract_response
 from anthropic_context import AnthropicContext
 import compare_offline_runner
-from desktop_flow_smoke import build_ai_status
+from desktop_flow_smoke import DEFAULT_DESKTOP_FLOW_PROVIDER, build_ai_status
 import langchain_anthropic_runner as langchain_anthropic_runner_module
 import langchain_openai_runner as langchain_openai_runner_module
 from langchain_runner_common import (
@@ -146,6 +146,9 @@ def build_anthropic_context() -> AnthropicContext:
 
 
 class ProviderToolScriptsTests(unittest.TestCase):
+    def test_desktop_flow_smoke_defaults_to_openai_provider_route(self) -> None:
+        self.assertEqual(DEFAULT_DESKTOP_FLOW_PROVIDER, "openai")
+
     def test_compare_offline_runner_source_context_builds_semantic_env_var_blueprint(self) -> None:
         request_payload = build_request_payload(node_id="node-1")
         request_payload["target_node"]["title"] = "Provider Authentication Flow"

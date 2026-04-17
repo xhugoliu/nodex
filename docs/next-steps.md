@@ -79,6 +79,15 @@
 - 只在确实影响桌面默认 draft route 稳定性时，再做 LangChain compare / fallback / provider 路径补强
 - 明确哪些底层信息只留在调试/CLI 层，不回填到默认桌面页面
 
+## 后续推进顺序
+
+- 第一优先级：继续收口桌面三栏 IA，让中栏画布、右栏 `Context / Draft / Review` 和左栏轻导航的职责更稳定、更可回归
+- 第二优先级：继续稳定桌面默认 AI draft route，把 LangChain + external runner 的失败分类、凭据诊断、重试与 smoke 回归收紧到默认路径服务面
+- 第三优先级：提升 patch review 可读性，让 inspect / apply 更清楚地说明影响范围、evidence 变化和 apply 后 focus 落点
+- 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性
+- 第五优先级：把 snapshot、patch history、AI replay 继续做成次级但好用的恢复入口，不回填成主舞台
+- 横向持续项：继续补 `desktop_flow_smoke.py`、`provider_smoke.py`、`runner_compare.py` 和 `npm run test:logic`，把回归能力当成核心资产而不是收尾工作
+
 ## 当前不优先
 
 - PNG / PDF 导出

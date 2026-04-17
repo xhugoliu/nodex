@@ -20,6 +20,8 @@ from source_context_scenario import (
     DEFAULT_TARGET_LABEL,
 )
 
+DEFAULT_DESKTOP_FLOW_PROVIDER = "openai"
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -31,7 +33,7 @@ def main() -> int:
     parser.add_argument(
         "--provider",
         choices=runnable_provider_names(),
-        default="anthropic",
+        default=DEFAULT_DESKTOP_FLOW_PROVIDER,
         help="Provider preset to use when --runner-command is not set.",
     )
     parser.add_argument(
