@@ -3726,6 +3726,263 @@ test("App clears stale continuity when a preferred-node reload fails during work
   dom.cleanup();
 });
 
+test("App keeps review continuity when native refresh reports a console failure", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let mainPaneRenderCount = 0;
+  let sidePaneRenderCount = 0;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload("node-1") as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: (props) => {
+      mainPaneRenderCount += 1;
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      sidePaneRenderCount += 1;
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush(4);
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+  const consoleEvent = eventHandlers.get("desktop://console");
+  assert.ok(consoleEvent, "console listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(2);
+  });
+
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  const renderCountBeforeConsoleFailure = {
+    main: mainPaneRenderCount,
+    side: sidePaneRenderCount,
+  };
+
+  await act(async () => {
+    consoleEvent?.({
+      payload: {
+        message: "refresh failed: workspace lock missing",
+        tone: "error",
+      },
+    });
+    await flush(3);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+  assert.equal(requireSidePaneProps().applyResult, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.ok(
+    mainPaneRenderCount > renderCountBeforeConsoleFailure.main,
+    "native console failure should trigger an App rerender",
+  );
+  assert.ok(
+    sidePaneRenderCount > renderCountBeforeConsoleFailure.side,
+    "native console failure should refresh the mounted side pane without clearing review continuity",
+  );
+  const renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Preview Patch/);
+  assert.match(renderedText, /Apply Patch/);
+  assert.match(renderedText, /Generated Follow-up Branch/);
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps node context continuity when opening source detail fails", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let treePaneRenderCount = 0;
+  let mainPaneRenderCount = 0;
+  let sidePaneRenderCount = 0;
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithSource() as T;
+      }
+      if (command === "get_source_detail") {
+        throw new Error("source detail failed: missing source-1");
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      treePaneRenderCount += 1;
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      mainPaneRenderCount += 1;
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      sidePaneRenderCount += 1;
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush(4);
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(2);
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+
+  const renderCountBeforeFailure = {
+    tree: treePaneRenderCount,
+    main: mainPaneRenderCount,
+    side: sidePaneRenderCount,
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush(3);
+  });
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.ok(
+    treePaneRenderCount > renderCountBeforeFailure.tree,
+    "source detail failure should rerender the tree pane without changing selection",
+  );
+  assert.ok(
+    mainPaneRenderCount > renderCountBeforeFailure.main,
+    "source detail failure should rerender the main pane without breaking current focus",
+  );
+  assert.ok(
+    sidePaneRenderCount > renderCountBeforeFailure.side,
+    "source detail failure should rerender the side pane while keeping node context visible",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App keeps review state intact when apply_reviewed_patch fails", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
