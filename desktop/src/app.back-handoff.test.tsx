@@ -6,6 +6,7 @@ import ReactDOM from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import App, { type AppBindings } from "./App";
+import { WorkspaceStartPane } from "./components/panes";
 import { WorkbenchSidePane } from "./components/workbench";
 import type {
   ApplyReviewedPatchOutput,
@@ -21,6 +22,7 @@ import type {
 type TreePaneProps = Parameters<AppBindings["TreePane"]>[0];
 type MainPaneProps = Parameters<AppBindings["WorkbenchMainPane"]>[0];
 type SidePaneProps = Parameters<AppBindings["WorkbenchSidePane"]>[0];
+type StartPaneProps = Parameters<AppBindings["WorkspaceStartPane"]>[0];
 
 class FakeNode {
   parentNode: FakeNode | null = null;
@@ -3500,6 +3502,222 @@ test("App surfaces draft_node_explore failures inside the node-scoped Draft rout
     renderedText,
     /Inspect the Response and Meta artifacts, then compare them with the expected contract fields to find the schema mismatch\./,
   );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App stays on the workspace start pane when opening a workspace fails from the start shortcut", async () => {
+  const dom = installFakeDom();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestStartPaneProps: StartPaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async () => () => {},
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "open_or_init_workspace") {
+        throw new Error("workspace init failed: missing .nodex/project.db");
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/new-workspace",
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: () => <div />,
+    WorkspaceStartPane: (props) => {
+      latestStartPaneProps = props;
+      return <WorkspaceStartPane {...props} />;
+    },
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const requireStartPaneProps = () => {
+    assert.ok(latestStartPaneProps, "start pane props should be available");
+    return latestStartPaneProps;
+  };
+
+  assert.equal(requireStartPaneProps().showStatus, false);
+
+  await act(async () => {
+    requireStartPaneProps().onOpenWorkspace();
+    await flush(2);
+  });
+
+  assert.equal(requireStartPaneProps().showStatus, true);
+  assert.equal(requireStartPaneProps().tone, "error");
+  assert.match(
+    requireStartPaneProps().message,
+    /workspace init failed: missing \.nodex\/project\.db/,
+  );
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "open_or_init_workspace" &&
+        call.args.root_path === "/tmp/new-workspace",
+    ),
+    "start pane should call open_or_init_workspace with the selected path",
+  );
+  const renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Open A Workspace/);
+  assert.match(renderedText, /Choose Folder/);
+  assert.match(renderedText, /workspace init failed: missing \.nodex\/project\.db/);
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App clears stale continuity when a preferred-node reload fails during workspace handoff", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        if (args.node_id === "node-2") {
+          throw new Error("context reload failed: missing node-2");
+        }
+        return makeNodeContext() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "draft_node_expand") {
+        return makeDraftReviewPayload("node-1") as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.ok(requireSidePaneProps().reviewDraft);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace reloaded",
+        tone: "success",
+        focus_node_id: "node-2",
+      },
+    });
+    await flush(2);
+  });
+
+  assert.equal(requireTreePaneProps().selectedNodeId, null);
+  assert.equal(requireMainPaneProps().selectedNodeId, null);
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireSidePaneProps().reviewDraft, null);
+  assert.equal(requireSidePaneProps().applyResult, null);
+  assert.equal(requireSidePaneProps().nodeContext, null);
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_node_workspace_context" && call.args.node_id === "node-2",
+    ),
+    "workspace handoff should attempt to reload the preferred node context",
+  );
+  const renderedText = dom.container.textContent ?? "";
+  assert.doesNotMatch(renderedText, /context reload failed: missing node-2/);
+  assert.doesNotMatch(renderedText, /Preview Patch/);
 
   await act(async () => {
     root.unmount();
