@@ -1920,6 +1920,199 @@ function makeUpdateGeneratedThirdBranchApplyReviewedPatchOutput(): ApplyReviewed
   };
 }
 
+function makeGeneratedFourthBranchOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "imported-root",
+            parent_id: "root",
+            title: "Imported Source Root",
+            body: "Imported body",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [
+            {
+              node: {
+                id: "generated-node",
+                parent_id: "imported-root",
+                title: "Generated Follow-up Branch",
+                body: "Generated body",
+                kind: "action",
+                position: 0,
+                created_at: 1710000000,
+                updated_at: 1710000000,
+              },
+              children: [
+                {
+                  node: {
+                    id: "generated-deep-node-1",
+                    parent_id: "generated-node",
+                    title: "Generated Branch Follow-up Revised",
+                    body: "Second-level generated branch body with one local revision",
+                    kind: "action",
+                    position: 0,
+                    created_at: 1710000001,
+                    updated_at: 1710000002,
+                  },
+                  children: [
+                    {
+                      node: {
+                        id: "generated-third-node-1",
+                        parent_id: "generated-deep-node-1",
+                        title: "Generated Branch Execution Detail",
+                        body: "Third-level generated branch body",
+                        kind: "action",
+                        position: 0,
+                        created_at: 1710000003,
+                        updated_at: 1710000003,
+                      },
+                      children: [
+                        {
+                          node: {
+                            id: "generated-fourth-node-1",
+                            parent_id: "generated-third-node-1",
+                            title: "Generated Branch Execution Follow-up",
+                            body: "Fourth-level generated branch body",
+                            kind: "action",
+                            position: 0,
+                            created_at: 1710000004,
+                            updated_at: 1710000004,
+                          },
+                          children: [],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeGeneratedFourthBranchContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-fourth-node-1",
+        parent_id: "generated-third-node-1",
+        title: "Generated Branch Execution Follow-up",
+        body: "Fourth-level generated branch body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000004,
+        updated_at: 1710000004,
+      },
+      parent: { id: "generated-third-node-1", title: "Generated Branch Execution Detail" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeGeneratedThirdBranchDraftReviewPayload(): DraftReviewPayload {
+  return {
+    run: {
+      id: "run-generated-third-node",
+      capability: "expand",
+      explore_by: null,
+      node_id: "generated-third-node-1",
+      command: "python3 scripts/provider_runner.py",
+      dry_run: true,
+      status: "completed",
+      started_at: 1710000004,
+      finished_at: 1710000005,
+      request_path: "/tmp/request-generated-third.json",
+      response_path: "/tmp/response-generated-third.json",
+      exit_code: 0,
+      provider: "anthropic",
+      model: "claude-sonnet",
+      provider_run_id: null,
+      retry_count: 0,
+      used_plain_json_fallback: false,
+      normalization_notes: [],
+      last_error_category: null,
+      last_error_message: null,
+      last_status_code: null,
+      patch_run_id: null,
+      patch_summary: "Deepen Generated Branch Execution Detail",
+    },
+    explanation: {
+      rationale_summary:
+        "Turn the third-level generated branch into one concrete follow-up execution node.",
+      direct_evidence: [],
+      inferred_suggestions: [],
+    },
+    response_notes: [],
+    patch: {
+      version: 1,
+      summary: "Deepen Generated Branch Execution Detail",
+      ops: [
+        {
+          type: "add_node",
+          parent_id: "generated-third-node-1",
+          title: "Generated Branch Execution Follow-up",
+          kind: "action",
+          body: "Fourth-level generated branch body",
+        },
+      ],
+    },
+    patch_preview: [
+      "Add Generated Branch Execution Follow-up under Generated Branch Execution Detail",
+    ],
+    report: {
+      run_id: null,
+      summary: "Deepen Generated Branch Execution Detail",
+      preview: ["Preview fourth-level generated branch"],
+      created_nodes: [
+        { id: "generated-fourth-node-1", title: "Generated Branch Execution Follow-up" },
+      ],
+    },
+  };
+}
+
+function makeGeneratedFourthBranchApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-fourth-node",
+      summary: "Applied fourth-level generated branch",
+      preview: [
+        "Added Generated Branch Execution Follow-up under Generated Branch Execution Detail",
+      ],
+      created_nodes: [
+        { id: "generated-fourth-node-1", title: "Generated Branch Execution Follow-up" },
+      ],
+    },
+    overview: makeGeneratedFourthBranchOverview(),
+    preferred_focus_node_id: "generated-fourth-node-1",
+    focus_node_context: makeGeneratedFourthBranchContext(),
+  };
+}
+
 function makeGeneratedChildOverview(): WorkspaceOverview {
   return {
     root_dir: "/workspace",
@@ -7156,6 +7349,333 @@ test("App keeps tri-pane continuity when the third-level generated node immediat
     },
   });
   assert.equal(requireSidePaneProps().nodeContext?.node_detail.evidence.length, 0);
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps node and source focus cues visible when the third-level generated node source context transitions into review", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-third-node-1"
+            ? makeGeneratedThirdBranchContextWithSource()
+            : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeGeneratedThirdBranchOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "generated-third-node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "generated-third-node-1");
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  const patchEditor = eventHandlers.get("desktop://patch-editor");
+  assert.ok(patchEditor, "patch-editor listener should be registered");
+
+  await act(async () => {
+    patchEditor?.({
+      payload: {
+        patch_json: JSON.stringify({
+          version: 1,
+          summary: "Third-level generated node draft summary",
+          ops: [{ type: "add_node", title: "Generated branch execution follow-up" }],
+        } satisfies PatchDocument),
+        message: "draft ready",
+        tone: "success",
+      },
+    });
+    await flush(2);
+  });
+
+  const renderedText = dom.container.textContent;
+  const finalSidePaneHtml = renderToStaticMarkup(
+    <WorkbenchSidePane {...requireSidePaneProps()} />,
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+  assert.match(renderedText, /Current focus/);
+  assert.match(finalSidePaneHtml, /Node: Generated Branch Execution Detail/);
+  assert.match(finalSidePaneHtml, /Source in view: source\.md/);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_source_detail" &&
+        call.args.source_id === "source-1",
+    ),
+    "third-level review continuity should still come from a fetched source detail",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity through third-level generated node source detail into Draft and then review/apply", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-fourth-node-1"
+            ? makeGeneratedFourthBranchContext()
+            : args.node_id === "generated-third-node-1"
+              ? makeGeneratedThirdBranchContextWithSource()
+              : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "draft_node_expand") {
+        return (
+          args.node_id === "generated-third-node-1"
+            ? makeGeneratedThirdBranchDraftReviewPayload()
+            : makeDraftReviewPayload(String(args.node_id))
+        ) as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-third-node-1"
+            ? makeGeneratedFourthBranchApplyReviewedPatchOutput()
+            : makeGeneratedThirdBranchApplyReviewedPatchOutputWithSource()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeGeneratedThirdBranchOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "generated-third-node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  const patchEditor = eventHandlers.get("desktop://patch-editor");
+  assert.ok(patchEditor, "patch-editor listener should be registered");
+
+  await act(async () => {
+    patchEditor?.({
+      payload: {
+        patch_json: JSON.stringify({
+          version: 1,
+          summary: "Third-level generated node draft summary",
+          ops: [{ type: "add_node", title: "Generated branch execution follow-up" }],
+        } satisfies PatchDocument),
+        message: "draft ready",
+        tone: "success",
+      },
+    });
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  const nodeContextFetchCountBeforeDraft = invokeCalls.filter(
+    (call) => call.command === "get_node_workspace_context",
+  ).length;
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "generated-third-node-1",
+  );
+  assert.equal(
+    invokeCalls.filter((call) => call.command === "get_node_workspace_context").length,
+    nodeContextFetchCountBeforeDraft,
+    "switching from third-level generated node source detail into Draft should reuse current node context instead of refetching it",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_node_expand" &&
+        call.args.node_id === "generated-third-node-1",
+    ),
+    "third-level generated node Draft step should draft from the current third-level generated node after the source-detail handoff",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-fourth-node-1",
+      focusedNodeTitle: "Generated Branch Execution Follow-up",
+      applySummary: "Applied fourth-level generated branch",
+      reviewFocusNodeId: "generated-third-node-1",
+    },
+  });
 
   await act(async () => {
     root.unmount();
