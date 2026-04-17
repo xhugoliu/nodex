@@ -1512,6 +1512,110 @@ function makeGeneratedThirdBranchContext(): NodeWorkspaceContext {
   };
 }
 
+function makeGeneratedThirdBranchContextWithSource(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-third-node-1",
+        parent_id: "generated-deep-node-1",
+        title: "Generated Branch Execution Detail",
+        body: "Third-level generated branch body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000003,
+        updated_at: 1710000003,
+      },
+      parent: { id: "generated-deep-node-1", title: "Generated Branch Follow-up Revised" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [],
+    },
+  };
+}
+
+function makeGeneratedThirdBranchContextWithEvidence(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-third-node-1",
+        parent_id: "generated-deep-node-1",
+        title: "Generated Branch Execution Detail",
+        body: "Third-level generated branch body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000003,
+        updated_at: 1710000004,
+      },
+      parent: { id: "generated-deep-node-1", title: "Generated Branch Follow-up Revised" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [
+            {
+              id: "chunk-1",
+              source_id: "source-1",
+              ordinal: 0,
+              label: "Provider Authentication Flow",
+              text: "Anthropic-compatible auth setup and model routing details.",
+              start_line: 5,
+              end_line: 11,
+            },
+          ],
+          citations: [
+            {
+              chunk: {
+                id: "chunk-1",
+                source_id: "source-1",
+                ordinal: 0,
+                label: "Provider Authentication Flow",
+                text: "Anthropic-compatible auth setup and model routing details.",
+                start_line: 5,
+                end_line: 11,
+              },
+              citation_kind: "direct",
+              rationale:
+                "This third-level generated branch still depends on the provider authentication flow.",
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 function makeGeneratedSecondBranchDraftReviewPayload(): DraftReviewPayload {
   return {
     run: {
@@ -1588,6 +1692,101 @@ function makeGeneratedThirdBranchApplyReviewedPatchOutput(): ApplyReviewedPatchO
     overview: makeGeneratedThirdBranchOverview(),
     preferred_focus_node_id: "generated-third-node-1",
     focus_node_context: makeGeneratedThirdBranchContext(),
+  };
+}
+
+function makeGeneratedThirdBranchApplyReviewedPatchOutputWithSource(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-third-node",
+      summary: "Applied third-level generated branch",
+      preview: [
+        "Added Generated Branch Execution Detail under Generated Branch Follow-up Revised",
+      ],
+      created_nodes: [
+        { id: "generated-third-node-1", title: "Generated Branch Execution Detail" },
+      ],
+    },
+    overview: makeGeneratedThirdBranchOverview(),
+    preferred_focus_node_id: "generated-third-node-1",
+    focus_node_context: makeGeneratedThirdBranchContextWithSource(),
+  };
+}
+
+function makeGeneratedThirdBranchApplyReviewedPatchOutputWithEvidence(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-third-node",
+      summary: "Applied third-level generated branch",
+      preview: [
+        "Added Generated Branch Execution Detail under Generated Branch Follow-up Revised",
+      ],
+      created_nodes: [
+        { id: "generated-third-node-1", title: "Generated Branch Execution Detail" },
+      ],
+    },
+    overview: makeGeneratedThirdBranchOverview(),
+    preferred_focus_node_id: "generated-third-node-1",
+    focus_node_context: makeGeneratedThirdBranchContextWithEvidence(),
+  };
+}
+
+function makeGeneratedThirdCiteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Cite Generated Branch Execution Detail evidence",
+    ops: [
+      {
+        type: "cite_source_chunk",
+        node_id: "generated-third-node-1",
+        chunk_id: "chunk-1",
+        citation_kind: "direct",
+        rationale:
+          "This third-level generated branch still depends on the provider authentication flow.",
+      },
+    ],
+  };
+}
+
+function makeGeneratedThirdCiteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-third-cite",
+      summary: "Applied third-level generated branch evidence citation",
+      preview: ["Cited chunk-1 as direct evidence for generated-third-node-1"],
+      created_nodes: [],
+    },
+    overview: makeGeneratedThirdBranchOverview(),
+    preferred_focus_node_id: "generated-third-node-1",
+    focus_node_context: makeGeneratedThirdBranchContextWithEvidence(),
+  };
+}
+
+function makeGeneratedThirdUnciteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Uncite Generated Branch Execution Detail evidence",
+    ops: [
+      {
+        type: "uncite_source_chunk",
+        node_id: "generated-third-node-1",
+        chunk_id: "chunk-1",
+      },
+    ],
+  };
+}
+
+function makeGeneratedThirdUnciteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-third-uncite",
+      summary: "Applied third-level generated branch evidence removal",
+      preview: ["Removed chunk-1 evidence citation from generated-third-node-1"],
+      created_nodes: [],
+    },
+    overview: makeGeneratedThirdBranchOverview(),
+    preferred_focus_node_id: "generated-third-node-1",
+    focus_node_context: makeGeneratedThirdBranchContextWithSource(),
   };
 }
 
@@ -6622,6 +6821,341 @@ test("App keeps tri-pane continuity through second-level generated node source d
     requireSidePaneProps().nodeContext?.node_detail.node.body,
     "Third-level generated branch body with one local revision",
   );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity when the third-level generated node immediately enters the source/evidence flow in the same mounted session", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-third-node-1"
+            ? makeGeneratedThirdBranchContextWithSource()
+            : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_cite_source_chunk_patch") {
+        return makeGeneratedThirdCiteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-third-node-1"
+            ? makeGeneratedThirdCiteChunkApplyReviewedPatchOutput()
+            : makeGeneratedThirdBranchApplyReviewedPatchOutputWithSource()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeGeneratedThirdBranchOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "generated-third-node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "generated-third-node-1",
+  );
+  assert.match(dom.container.textContent ?? "", /Current focus/);
+  assert.match(
+    renderToStaticMarkup(<WorkbenchSidePane {...requireSidePaneProps()} />),
+    /source\.md/,
+  );
+  assert.match(
+    renderToStaticMarkup(<WorkbenchSidePane {...requireSidePaneProps()} />),
+    /source\.md/,
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    requireSidePaneProps().onDraftCiteChunk("chunk-1");
+    await flush(2);
+  });
+
+  const citeCalls = invokeCalls.filter(
+    (call) => call.command === "draft_cite_source_chunk_patch",
+  );
+  const latestCiteCall = citeCalls[citeCalls.length - 1];
+  assert.ok(latestCiteCall, "third-level generated node should draft a cite patch");
+  assert.equal(latestCiteCall.args.node_id, "generated-third-node-1");
+  assert.equal(latestCiteCall.args.chunk_id, "chunk-1");
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-third-node-1",
+      focusedNodeTitle: "Generated Branch Execution Detail",
+      applySummary: "Applied third-level generated branch evidence citation",
+      reviewFocusNodeId: "generated-third-node-1",
+      visibleSectionLabels: ["Sources", "Evidence"],
+      hiddenSectionLabels: [],
+      expectedEvidenceChunkId: "chunk-1",
+    },
+  });
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity when the third-level generated node immediately clears evidence in the same mounted session", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-third-node-1"
+            ? makeGeneratedThirdBranchContextWithEvidence()
+            : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_uncite_source_chunk_patch") {
+        return makeGeneratedThirdUnciteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-third-node-1"
+            ? makeGeneratedThirdUnciteChunkApplyReviewedPatchOutput()
+            : makeGeneratedThirdBranchApplyReviewedPatchOutputWithEvidence()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeGeneratedThirdBranchOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "generated-third-node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-third-node-1");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "generated-third-node-1",
+  );
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.evidence[0]?.citations[0]?.chunk.id ?? null,
+    "chunk-1",
+  );
+  assert.match(dom.container.textContent ?? "", /Current focus/);
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    requireSidePaneProps().onDraftUnciteChunk("chunk-1");
+    await flush(2);
+  });
+
+  const unciteCalls = invokeCalls.filter(
+    (call) => call.command === "draft_uncite_source_chunk_patch",
+  );
+  const latestUnciteCall = unciteCalls[unciteCalls.length - 1];
+  assert.ok(latestUnciteCall, "third-level generated node should draft an uncite patch");
+  assert.equal(latestUnciteCall.args.node_id, "generated-third-node-1");
+  assert.equal(latestUnciteCall.args.chunk_id, "chunk-1");
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-third-node-1",
+      focusedNodeTitle: "Generated Branch Execution Detail",
+      applySummary: "Applied third-level generated branch evidence removal",
+      reviewFocusNodeId: "generated-third-node-1",
+      visibleSectionLabels: ["Sources"],
+      hiddenSectionLabels: ["Evidence"],
+      expectedEvidenceChunkId: null,
+    },
+  });
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.evidence.length, 0);
 
   await act(async () => {
     root.unmount();
