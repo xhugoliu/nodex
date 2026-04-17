@@ -1029,6 +1029,110 @@ function makeGeneratedSecondBranchContext(): NodeWorkspaceContext {
   };
 }
 
+function makeGeneratedSecondBranchContextWithSource(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-deep-node-1",
+        parent_id: "generated-node",
+        title: "Generated Branch Follow-up",
+        body: "Second-level generated branch body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000001,
+        updated_at: 1710000001,
+      },
+      parent: { id: "generated-node", title: "Generated Follow-up Branch" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [],
+    },
+  };
+}
+
+function makeGeneratedSecondBranchContextWithEvidence(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-deep-node-1",
+        parent_id: "generated-node",
+        title: "Generated Branch Follow-up",
+        body: "Second-level generated branch body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000001,
+        updated_at: 1710000002,
+      },
+      parent: { id: "generated-node", title: "Generated Follow-up Branch" },
+      children: [],
+      sources: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [],
+        },
+      ],
+      evidence: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [
+            {
+              id: "chunk-1",
+              source_id: "source-1",
+              ordinal: 0,
+              label: "Provider Authentication Flow",
+              text: "Anthropic-compatible auth setup and model routing details.",
+              start_line: 5,
+              end_line: 11,
+            },
+          ],
+          citations: [
+            {
+              chunk: {
+                id: "chunk-1",
+                source_id: "source-1",
+                ordinal: 0,
+                label: "Provider Authentication Flow",
+                text: "Anthropic-compatible auth setup and model routing details.",
+                start_line: 5,
+                end_line: 11,
+              },
+              citation_kind: "direct",
+              rationale:
+                "This second-level generated branch still depends on the provider authentication flow.",
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 function makeGeneratedNodeDraftReviewPayload(): DraftReviewPayload {
   return {
     run: {
@@ -1098,6 +1202,53 @@ function makeGeneratedNodeApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
     overview: makeGeneratedSecondBranchOverview(),
     preferred_focus_node_id: "generated-deep-node-1",
     focus_node_context: makeGeneratedSecondBranchContext(),
+  };
+}
+
+function makeGeneratedNodeApplyReviewedPatchOutputWithSecondLevelSource(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-node",
+      summary: "Applied generated branch follow-up",
+      preview: ["Added Generated Branch Follow-up under Generated Follow-up Branch"],
+      created_nodes: [
+        { id: "generated-deep-node-1", title: "Generated Branch Follow-up" },
+      ],
+    },
+    overview: makeGeneratedSecondBranchOverview(),
+    preferred_focus_node_id: "generated-deep-node-1",
+    focus_node_context: makeGeneratedSecondBranchContextWithSource(),
+  };
+}
+
+function makeGeneratedSecondCiteChunkPatchDocument(): PatchDocument {
+  return {
+    version: 1,
+    summary: "Cite Generated Branch Follow-up evidence",
+    ops: [
+      {
+        type: "cite_source_chunk",
+        node_id: "generated-deep-node-1",
+        chunk_id: "chunk-1",
+        citation_kind: "direct",
+        rationale:
+          "This second-level generated branch still depends on the provider authentication flow.",
+      },
+    ],
+  };
+}
+
+function makeGeneratedSecondCiteChunkApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-deep-cite",
+      summary: "Applied second-level generated branch evidence citation",
+      preview: ["Cited chunk-1 as direct evidence for generated-deep-node-1"],
+      created_nodes: [],
+    },
+    overview: makeGeneratedSecondBranchOverview(),
+    preferred_focus_node_id: "generated-deep-node-1",
+    focus_node_context: makeGeneratedSecondBranchContextWithEvidence(),
   };
 }
 
@@ -5357,6 +5508,225 @@ test("App keeps tri-pane continuity through generated node source detail into Dr
       focusedNodeTitle: "Generated Branch Execution Detail",
       applySummary: "Applied third-level generated branch",
       reviewFocusNodeId: "generated-deep-node-1",
+    },
+  });
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps tri-pane continuity when the second-level generated node immediately enters the source/evidence flow in the same mounted session", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (
+          args.node_id === "generated-deep-node-1"
+            ? makeGeneratedSecondBranchContextWithSource()
+            : args.node_id === "generated-node"
+              ? makeGeneratedNodeContextWithSource()
+              : args.node_id === "imported-root"
+                ? makeImportedNodeContext()
+                : makeNodeContext()
+        ) as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "import_source") {
+        return makeSourceImportOutput() as T;
+      }
+      if (command === "draft_node_expand") {
+        return (
+          args.node_id === "generated-node"
+            ? makeGeneratedNodeDraftReviewPayload()
+            : makeDraftReviewPayload(String(args.node_id))
+        ) as T;
+      }
+      if (command === "draft_cite_source_chunk_patch") {
+        return makeGeneratedSecondCiteChunkPatchDocument() as T;
+      }
+      if (command === "apply_reviewed_patch") {
+        return (
+          args.focus_node_id === "generated-deep-node-1"
+            ? makeGeneratedSecondCiteChunkApplyReviewedPatchOutput()
+            : args.focus_node_id === "generated-node"
+              ? makeGeneratedNodeApplyReviewedPatchOutputWithSecondLevelSource()
+              : makeApplyReviewedPatchOutputWithGeneratedSource()
+        ) as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => "/tmp/imported.md",
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireTreePaneProps().onImportSource();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-deep-node-1",
+      focusedNodeTitle: "Generated Branch Follow-up",
+      applySummary: "Applied generated branch follow-up",
+      reviewFocusNodeId: "generated-node",
+      visibleSectionLabels: ["Sources"],
+      hiddenSectionLabels: ["Evidence"],
+    },
+  });
+  assert.match(
+    renderToStaticMarkup(<WorkbenchSidePane {...requireSidePaneProps()} />),
+    /source\.md/,
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    requireSidePaneProps().onDraftCiteChunk("chunk-1");
+    await flush(2);
+  });
+
+  const citeCalls = invokeCalls.filter(
+    (call) => call.command === "draft_cite_source_chunk_patch",
+  );
+  const latestCiteCall = citeCalls[citeCalls.length - 1];
+  assert.ok(latestCiteCall, "second-level generated node should draft a cite patch");
+  assert.equal(latestCiteCall.args.node_id, "generated-deep-node-1");
+  assert.equal(latestCiteCall.args.chunk_id, "chunk-1");
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-deep-node-1",
+      focusedNodeTitle: "Generated Branch Follow-up",
+      applySummary: "Applied second-level generated branch evidence citation",
+      reviewFocusNodeId: "generated-deep-node-1",
+      visibleSectionLabels: ["Sources", "Evidence"],
+      hiddenSectionLabels: [],
+      expectedEvidenceChunkId: "chunk-1",
     },
   });
 
