@@ -417,12 +417,15 @@ export function AiDraftRouteSurface(props: {
   const status = props.status;
   const routeStatusMissing = !status;
   const routeUnavailable = Boolean(status?.status_error);
+  const envConflictsNeedAttention =
+    status?.provider === "codex" &&
+    (status.has_process_env_conflict === true ||
+      status.has_shell_env_conflict === true);
   const routeNeedsAttention =
     Boolean(props.draftError) ||
     routeUnavailable ||
     status?.has_auth === false ||
-    status?.has_process_env_conflict === true ||
-    status?.has_shell_env_conflict === true;
+    envConflictsNeedAttention;
   const routeIsNeutral =
     props.loading || (routeStatusMissing && !props.draftError);
   const nextSteps = buildAiDraftNextSteps(

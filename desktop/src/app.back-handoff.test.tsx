@@ -2677,7 +2677,9 @@ function makeSourceDetail(): SourceDetail {
   };
 }
 
-function makeDesktopAiStatus(): DesktopAiStatus {
+function makeDesktopAiStatus(
+  overrides: Partial<DesktopAiStatus> = {},
+): DesktopAiStatus {
   return {
     command: "python3 scripts/provider_runner.py --provider openai --use-default-args",
     command_source: "default",
@@ -2690,6 +2692,7 @@ function makeDesktopAiStatus(): DesktopAiStatus {
     has_shell_env_conflict: false,
     uses_provider_defaults: true,
     status_error: null,
+    ...overrides,
   };
 }
 
@@ -4662,6 +4665,94 @@ test("App recovers the node-scoped Draft route after a manual desktop AI status 
   renderedText = dom.container.textContent ?? "";
   assert.match(renderedText, /Provider: openai/);
   assert.doesNotMatch(renderedText, /desktop AI status probe timed out/);
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App keeps the default openai Draft route ready when only process env diagnostics are populated", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, _args: Record<string, unknown>) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus({
+          has_process_env_conflict: true,
+        }) as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(3);
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.equal(requireSidePaneProps().aiDraftStatus?.provider, "openai");
+  assert.equal(
+    requireSidePaneProps().aiDraftStatus?.has_process_env_conflict,
+    true,
+  );
+
+  const renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Route ready/);
+  assert.doesNotMatch(renderedText, /Needs attention/);
+  assert.doesNotMatch(renderedText, /Run `cargo run -- ai doctor/);
 
   await act(async () => {
     root.unmount();

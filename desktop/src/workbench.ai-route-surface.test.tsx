@@ -88,6 +88,35 @@ test("AiDraftRouteSurface keeps command hidden for healthy default route", () =>
   assert.doesNotMatch(html, /nodeEditing\.aiDraftNextTitle/);
 });
 
+test("AiDraftRouteSurface keeps the default openai route ready when only process env is populated", () => {
+  const html = renderSurface({
+    status: makeStatus({
+      has_process_env_conflict: true,
+    }),
+  });
+
+  assert.match(html, /nodeEditing\.aiDraftReady/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftNeedsAttention/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftCommand/);
+  assert.doesNotMatch(html, /nodeEditing\.aiDraftNextTitle/);
+});
+
+test("AiDraftRouteSurface still marks codex env conflicts as needing attention", () => {
+  const html = renderSurface({
+    status: makeStatus({
+      command: "codex --model gpt-5.4-mini",
+      provider: "codex",
+      runner: "custom",
+      uses_provider_defaults: false,
+      has_process_env_conflict: true,
+    }),
+  });
+
+  assert.match(html, /nodeEditing\.aiDraftNeedsAttention/);
+  assert.match(html, /nodeEditing\.aiDraftCommand/);
+  assert.match(html, /messages\.aiDraftNextCheckCodexEnv/);
+});
+
 test("AiDraftRouteSurface keeps a neutral checking state while status is still loading", () => {
   const html = renderSurface({
     status: null,
