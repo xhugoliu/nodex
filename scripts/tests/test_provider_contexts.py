@@ -21,7 +21,7 @@ def write_env_file(path: Path, values: dict[str, str]) -> None:
 
 
 class ProviderContextTests(unittest.TestCase):
-    def test_openai_context_prefers_overrides_then_process_env_then_env_local(self) -> None:
+    def test_openai_context_prefers_overrides_then_env_local_then_process_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             repo_root = Path(tmp_dir).resolve()
             scripts_dir = repo_root / "scripts"
@@ -64,7 +64,7 @@ class ProviderContextTests(unittest.TestCase):
 
         self.assertEqual(context.repo_root, repo_root)
         self.assertEqual(context.env_file_path, repo_root / ".env.local")
-        self.assertEqual(context.api_key, "process-openai-key-abcdef123456")
+        self.assertEqual(context.api_key, "local-openai-key-123456789012")
         self.assertEqual(context.model, "override-model")
         self.assertEqual(context.base_url, "https://override.example/v1")
         self.assertEqual(context.timeout_seconds, 15)
@@ -74,7 +74,7 @@ class ProviderContextTests(unittest.TestCase):
             "process-openai-key-abcdef123456",
         )
 
-    def test_anthropic_context_prefers_auth_token_and_timeout_seconds(self) -> None:
+    def test_anthropic_context_prefers_env_local_auth_and_timeout_over_process_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             repo_root = Path(tmp_dir).resolve()
             scripts_dir = repo_root / "scripts"
@@ -82,9 +82,11 @@ class ProviderContextTests(unittest.TestCase):
             write_env_file(
                 repo_root / ".env.local",
                 {
+                    "ANTHROPIC_AUTH_TOKEN": "local-auth-token-123456789012",
                     "ANTHROPIC_API_KEY": "local-anthropic-key-123456789012",
                     "ANTHROPIC_MODEL": "local-claude",
                     "ANTHROPIC_BASE_URL": "https://local.anthropic.example",
+                    "ANTHROPIC_TIMEOUT_SECONDS": "5",
                     "API_TIMEOUT_MS": "5000",
                 },
             )
@@ -110,10 +112,10 @@ class ProviderContextTests(unittest.TestCase):
 
         self.assertEqual(context.repo_root, repo_root)
         self.assertEqual(context.env_file_path, repo_root / ".env.local")
-        self.assertEqual(context.api_key, "process-auth-token-abcdef123456")
+        self.assertEqual(context.api_key, "local-auth-token-123456789012")
         self.assertEqual(context.model, "local-claude")
         self.assertEqual(context.base_url, "https://local.anthropic.example")
-        self.assertEqual(context.timeout_seconds, 7)
+        self.assertEqual(context.timeout_seconds, 5)
         self.assertEqual(
             context.process_anthropic_env["ANTHROPIC_AUTH_TOKEN"],
             "process-auth-token-abcdef123456",

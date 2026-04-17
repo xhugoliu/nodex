@@ -59,7 +59,7 @@ PROVIDER_ENTRIES: tuple[ProviderEntry, ...] = (
     ProviderEntry(
         name="openai",
         diagnostics_loader=_load_openai,
-        runner_script="openai_runner.py",
+        runner_script="langchain_openai_runner.py",
     ),
     ProviderEntry(
         name="gemini",

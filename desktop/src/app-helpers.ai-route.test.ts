@@ -22,9 +22,9 @@ const t: Translator = (key, vars) =>
 
 function makeStatus(overrides: Partial<DesktopAiStatus>): DesktopAiStatus {
   return {
-    command: "python3 scripts/provider_runner.py --provider anthropic --use-default-args",
+    command: "python3 scripts/provider_runner.py --provider openai --use-default-args",
     command_source: "default",
-    provider: "anthropic",
+    provider: "openai",
     runner: "provider_runner.py",
     model: null,
     reasoning_effort: null,
@@ -80,7 +80,7 @@ function makeFocusContext(nodeId: string) {
 test("buildAiDraftNextSteps suggests auth setup when auth is missing", () => {
   const steps = buildAiDraftNextSteps(
     makeStatus({
-      provider: "anthropic",
+      provider: "openai",
       has_auth: false,
     }),
     t,

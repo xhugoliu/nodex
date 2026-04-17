@@ -51,7 +51,7 @@
 
 - `python3 scripts/desktop_flow_smoke.py`
   守主流程闭环、`next_focus_candidate`、`ai_status`
-- `python3 scripts/provider_smoke.py --provider anthropic --scenario source-root --json`
+- `python3 scripts/provider_smoke.py --provider openai --scenario source-root --json`
   守 imported root 上的真实材料 draft/apply 路径
 - `cd desktop && npm run test:logic`
   守 helper seam、右栏 surface 和 mounted App 级主路径交接

@@ -9,24 +9,32 @@ def resolve_repo_root(script_path: Path) -> Path:
     return script_path.resolve().parent.parent
 
 
-def load_env_defaults(candidates: list[Path]) -> Optional[Path]:
-    import os
-
+def load_env_defaults(candidates: list[Path]) -> tuple[Optional[Path], dict[str, str]]:
     loaded_path: Optional[Path] = None
-    for candidate in candidates:
-        if not candidate.exists():
-            continue
-        for raw_line in candidate.read_text().splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip().strip('"').strip("'")
-            os.environ.setdefault(key, value)
+    loaded_values: dict[str, str] = {}
+
+    existing_candidates = [candidate for candidate in candidates if candidate.exists()]
+    for candidate in reversed(existing_candidates):
+        loaded_values.update(parse_env_file(candidate))
+
+    for candidate in existing_candidates:
         if loaded_path is None:
             loaded_path = candidate
-    return loaded_path
+
+    return loaded_path, loaded_values
+
+
+def parse_env_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        values[key] = value
+    return values
 
 
 def mask_value(value: str) -> str:

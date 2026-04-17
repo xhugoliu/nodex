@@ -571,7 +571,7 @@ fn desktop_ai_runner_command() -> Result<String> {
 
 fn desktop_default_ai_runner_command(script_path: &Path) -> String {
     format!(
-        "python3 {} --provider anthropic --use-default-args",
+        "python3 {} --provider openai --use-default-args",
         shell_quote(&display_path(script_path))
     )
 }
@@ -724,6 +724,7 @@ fn detected_provider_from_command(command: &str) -> Option<&'static str> {
         Some("anthropic")
     } else if command.contains("--provider openai")
         || command.contains("--provider=openai")
+        || command.contains("langchain_openai_runner.py")
         || command.contains("openai_runner.py")
     {
         Some("openai")
@@ -1529,7 +1530,7 @@ mod tests {
         let command = desktop_default_ai_runner_command(Path::new("/tmp/provider_runner.py"));
         assert_eq!(
             command,
-            "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
+            "python3 '/tmp/provider_runner.py' --provider openai --use-default-args"
         );
     }
 
@@ -1537,12 +1538,12 @@ mod tests {
     fn detects_provider_from_supported_runner_commands() {
         assert_eq!(
             detected_provider_from_command(
-                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
+                "python3 '/tmp/provider_runner.py' --provider openai --use-default-args"
             ),
-            Some("anthropic")
+            Some("openai")
         );
         assert_eq!(
-            detected_provider_from_command("python3 scripts/openai_runner.py"),
+            detected_provider_from_command("python3 scripts/langchain_openai_runner.py"),
             Some("openai")
         );
         assert_eq!(
@@ -1592,11 +1593,11 @@ mod tests {
     }
 
     #[test]
-    fn effective_reasoning_ignores_provider_defaults_for_desktop_anthropic_route() {
+    fn effective_reasoning_ignores_provider_defaults_for_desktop_openai_route() {
         assert_eq!(
             effective_reasoning_for_command(
-                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args",
-                Some("anthropic"),
+                "python3 '/tmp/provider_runner.py' --provider openai --use-default-args",
+                Some("openai"),
                 true,
                 Some("medium".to_string())
             )

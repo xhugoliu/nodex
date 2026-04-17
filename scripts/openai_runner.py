@@ -28,6 +28,8 @@ DEFAULT_MAX_RETRIES = 3
 DEFAULT_BACKOFF_SECONDS = 2.0
 DEFAULT_MAX_BACKOFF_SECONDS = 20.0
 RETRYABLE_HTTP_CODES = {408, 409, 429, 500, 502, 503, 504}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Minimal OpenAI runner for Nodex AI request/response contract."
@@ -50,7 +52,10 @@ def main() -> int:
     parser.add_argument(
         "--base-url",
         default=None,
-        help="Responses API URL. Defaults to OPENAI_BASE_URL or the official Responses endpoint.",
+        help=(
+            "Responses API URL or OpenAI-compatible base URL. Defaults to "
+            "OPENAI_BASE_URL or the official OpenAI /v1 root."
+        ),
     )
     parser.add_argument(
         "--timeout",
@@ -78,7 +83,7 @@ def main() -> int:
         )
 
     model = context.model
-    base_url = context.base_url
+    base_url = normalize_responses_base_url(context.base_url)
     timeout = context.timeout_seconds
     max_retries = int(os.environ.get("OPENAI_MAX_RETRIES", str(DEFAULT_MAX_RETRIES)))
     backoff_seconds = float(
@@ -170,6 +175,15 @@ def main() -> int:
         metadata["last_status_code"] = exc.status_code
         write_runner_metadata(metadata_path, metadata)
         raise SystemExit(format_failure(exc))
+
+
+def normalize_responses_base_url(base_url: str) -> str:
+    trimmed = base_url.rstrip("/")
+    if trimmed.endswith("/responses"):
+        return trimmed
+    return f"{trimmed}/responses"
+
+
 def post_responses_request(
     *,
     base_url: str,

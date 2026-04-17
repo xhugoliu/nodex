@@ -412,6 +412,7 @@ def detected_provider_from_command(command: str) -> Optional[str]:
     if (
         "--provider openai" in command
         or "--provider=openai" in command
+        or "langchain_openai_runner.py" in command
         or "openai_runner.py" in command
     ):
         return "openai"

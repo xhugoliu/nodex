@@ -255,11 +255,21 @@ def build_chat_openai_client(
 
 
 def build_structured_llm(llm):
-    schema = build_response_schema()
+    schema = build_openai_response_schema()
     try:
         return llm.with_structured_output(schema, method="json_schema")
     except TypeError:
         return llm.with_structured_output(schema)
+
+
+def build_openai_response_schema() -> dict[str, Any]:
+    schema = build_response_schema()
+    schema.setdefault("title", "NodexAiPatchResponse")
+    schema.setdefault(
+        "description",
+        "Structured Nodex AI patch response contract for patch-first local editing.",
+    )
+    return schema
 
 
 def load_langchain_openai_class():

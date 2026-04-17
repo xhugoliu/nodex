@@ -32,6 +32,10 @@ class ProviderRegistryTests(unittest.TestCase):
         entry = get_provider_entry("anthropic")
         self.assertEqual(entry.runner_script, "langchain_anthropic_runner.py")
 
+    def test_openai_entry_uses_langchain_runner(self) -> None:
+        entry = get_provider_entry("openai")
+        self.assertEqual(entry.runner_script, "langchain_openai_runner.py")
+
     def test_build_diagnostics_summary_uses_common_flags(self) -> None:
         entry = get_provider_entry("openai")
         summary = build_diagnostics_summary(

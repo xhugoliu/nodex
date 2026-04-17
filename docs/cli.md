@@ -64,14 +64,17 @@ nodex export
 
 ## 当前推荐 AI 流
 
-当前默认推荐 AI 主路是 `anthropic` provider 对应的 Anthropic-compatible LangChain 路径。
+当前默认推荐 AI 主路是 `openai` provider 对应的 OpenAI-compatible LangChain 路径。
 
 ### 配置检查
 
 ```bash
-cargo run -- ai doctor --provider anthropic --format json
-cargo run -- ai smoke --provider anthropic --format json
+cargo run -- ai doctor --provider openai --format json
+cargo run -- ai smoke --provider openai --format json
 ```
+
+当前 provider loader 会优先读取仓库内的 `.env.local` / `.env`，再回退到继承的 shell 环境变量；
+`ai doctor` 仍会把继承进程里的 `OPENAI_*` / `ANTHROPIC_*` 等变量单独列出来，便于排查全局旧配置污染。
 
 ### dry-run 请求
 
@@ -83,14 +86,14 @@ cargo run -- ai explore <node-id> --by risk --dry-run
 ### 外部 runner
 
 ```bash
-cargo run -- ai run-external <node-id> "python3 scripts/provider_runner.py --provider anthropic --use-default-args" --dry-run
+cargo run -- ai run-external <node-id> "python3 scripts/provider_runner.py --provider openai --use-default-args" --dry-run
 ```
 
 ### provider smoke
 
 ```bash
-python3 scripts/provider_smoke.py --provider anthropic --scenario source-root --json
-python3 scripts/provider_smoke.py --provider anthropic --scenario source-context --json
+python3 scripts/provider_smoke.py --provider openai --scenario source-root --json
+python3 scripts/provider_smoke.py --provider openai --scenario source-context --json
 ```
 
 ### 审计与回放

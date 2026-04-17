@@ -27,7 +27,7 @@
 
 - `python3 scripts/desktop_flow_smoke.py`
   作用：守桌面主流程闭环、`next_focus_candidate`、`ai_status`
-- `python3 scripts/provider_smoke.py --provider anthropic --scenario source-root --json`
+- `python3 scripts/provider_smoke.py --provider openai --scenario source-root --json`
   作用：守真实材料路径里的 imported root draft/apply 闭环
 - `cd desktop && npm run test:logic`
   作用：守右栏和相关 helper 的轻量语义

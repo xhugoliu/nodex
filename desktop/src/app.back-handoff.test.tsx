@@ -2670,9 +2670,9 @@ function makeSourceDetail(): SourceDetail {
 
 function makeDesktopAiStatus(): DesktopAiStatus {
   return {
-    command: "python3 scripts/provider_runner.py --provider anthropic --use-default-args",
+    command: "python3 scripts/provider_runner.py --provider openai --use-default-args",
     command_source: "default",
-    provider: "anthropic",
+    provider: "openai",
     runner: "provider_runner.py",
     model: null,
     reasoning_effort: null,

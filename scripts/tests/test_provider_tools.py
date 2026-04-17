@@ -28,6 +28,7 @@ from langchain_runner_common import (
     normalize_expand_like_patch,
 )
 from openai_context import OpenAIContext
+import openai_runner as openai_runner_module
 from provider_smoke import run_fixture_set_smoke, run_smoke
 from provider_runner import build_runner_command
 import runner_compare
@@ -1083,6 +1084,36 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(ctx.exception.category, "runner_error")
         self.assertIn("socket closed", ctx.exception.message)
         self.assertFalse(metadata["used_plain_json_fallback"])
+
+    def test_openai_runner_normalizes_root_base_url_to_responses_endpoint(self) -> None:
+        self.assertEqual(
+            openai_runner_module.normalize_responses_base_url("https://openai.example/v1"),
+            "https://openai.example/v1/responses",
+        )
+        self.assertEqual(
+            openai_runner_module.normalize_responses_base_url(
+                "https://openai.example/v1/responses"
+            ),
+            "https://openai.example/v1/responses",
+        )
+
+    def test_openai_structured_schema_includes_title_and_description(self) -> None:
+        captured = {}
+
+        class FakeLlm:
+            def with_structured_output(self, schema, method=None):
+                captured["schema"] = schema
+                captured["method"] = method
+                return object()
+
+        langchain_openai_runner_module.build_structured_llm(FakeLlm())
+
+        self.assertEqual(captured["method"], "json_schema")
+        self.assertEqual(captured["schema"]["title"], "NodexAiPatchResponse")
+        self.assertIn(
+            "Structured Nodex AI patch response contract",
+            captured["schema"]["description"],
+        )
 
     def test_anthropic_invoke_preserves_auth_failure_without_plain_json_fallback(self) -> None:
         class FakeStructuredLlm:
@@ -2402,7 +2433,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn(
             "anthropic: runner=langchain_anthropic_runner.py", result.stdout
         )
-        self.assertIn("openai: runner=openai_runner.py", result.stdout)
+        self.assertIn("openai: runner=langchain_openai_runner.py", result.stdout)
         self.assertIn("gemini: runner=gemini_runner.py", result.stdout)
 
     def test_provider_smoke_can_prepare_source_context_scenario(self) -> None:
@@ -3025,13 +3056,13 @@ class ProviderToolScriptsTests(unittest.TestCase):
     def test_desktop_flow_ai_status_uses_provider_preflight_for_default_route(self) -> None:
         ai_status = build_ai_status(
             runner_command_text=(
-                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
+                "python3 '/tmp/provider_runner.py' --provider openai --use-default-args"
             ),
             command_source="default",
             smoke_result={
                 "run_external_json": {
                     "metadata": {
-                        "model": "claude-sonnet",
+                        "model": "gpt-5.4-mini",
                     }
                 }
             },
@@ -3040,17 +3071,17 @@ class ProviderToolScriptsTests(unittest.TestCase):
                 "has_process_env_conflict": False,
                 "has_shell_env_conflict": True,
             },
-            provider="anthropic",
+            provider="openai",
         )
 
         self.assertEqual(
             ai_status["command"],
-            "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args",
+            "python3 '/tmp/provider_runner.py' --provider openai --use-default-args",
         )
         self.assertEqual(ai_status["command_source"], "default")
-        self.assertEqual(ai_status["provider"], "anthropic")
+        self.assertEqual(ai_status["provider"], "openai")
         self.assertEqual(ai_status["runner"], "provider_runner.py")
-        self.assertEqual(ai_status["model"], "claude-sonnet")
+        self.assertEqual(ai_status["model"], "gpt-5.4-mini")
         self.assertIsNone(ai_status["reasoning_effort"])
         self.assertTrue(ai_status["has_auth"])
         self.assertFalse(ai_status["has_process_env_conflict"])
@@ -3079,16 +3110,16 @@ class ProviderToolScriptsTests(unittest.TestCase):
 
         ai_status = build_ai_status(
             runner_command_text=(
-                "python3 '/tmp/provider_runner.py' --provider anthropic --use-default-args"
+                "python3 '/tmp/provider_runner.py' --provider openai --use-default-args"
             ),
             command_source="default",
-            smoke_result={"run_external_json": {"metadata": {"model": "claude-sonnet"}}},
+            smoke_result={"run_external_json": {"metadata": {"model": "gpt-5.4-mini"}}},
             preflight_summary={
                 "has_auth": True,
                 "has_process_env_conflict": False,
                 "has_shell_env_conflict": True,
             },
-            provider="anthropic",
+            provider="openai",
         )
         python_keys = set(ai_status.keys())
 

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -48,15 +47,24 @@ def load_gemini_context(
     base_url_override: Optional[str] = None,
 ) -> GeminiContext:
     repo_root = resolve_repo_root(script_path)
-    env_file_path = load_env_defaults([repo_root / ".env.local", repo_root / ".env"])
-    api_key = os.environ.get("GEMINI_API_KEY")
-    model = model_override or os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL
-    base_url = (
-        base_url_override
-        or os.environ.get("GOOGLE_GEMINI_BASE_URL")
-        or DEFAULT_BASE_URL
+    env_file_path, env_defaults = load_env_defaults(
+        [repo_root / ".env.local", repo_root / ".env"]
     )
     prefixes = ("GEMINI_", "GOOGLE_GEMINI_")
+    process_gemini_env = collect_prefixed_process_env(prefixes)
+    api_key = env_defaults.get("GEMINI_API_KEY") or process_gemini_env.get("GEMINI_API_KEY")
+    model = (
+        model_override
+        or env_defaults.get("GEMINI_MODEL")
+        or process_gemini_env.get("GEMINI_MODEL")
+        or DEFAULT_MODEL
+    )
+    base_url = (
+        base_url_override
+        or env_defaults.get("GOOGLE_GEMINI_BASE_URL")
+        or process_gemini_env.get("GOOGLE_GEMINI_BASE_URL")
+        or DEFAULT_BASE_URL
+    )
 
     return GeminiContext(
         repo_root=repo_root,
@@ -64,6 +72,6 @@ def load_gemini_context(
         api_key=api_key,
         model=model,
         base_url=base_url,
-        process_gemini_env=collect_prefixed_process_env(prefixes),
+        process_gemini_env=process_gemini_env,
         shell_gemini_env_candidates=detect_shell_env_conflicts(prefixes),
     )

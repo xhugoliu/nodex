@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -14,7 +13,7 @@ from provider_runtime import (
 )
 
 
-DEFAULT_BASE_URL = "https://api.openai.com/v1/responses"
+DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-5.4-mini"
 DEFAULT_TIMEOUT_SECONDS = 120
 
@@ -54,16 +53,31 @@ def load_openai_context(
     timeout_override: Optional[int] = None,
 ) -> OpenAIContext:
     repo_root = resolve_repo_root(script_path)
-    env_file_path = load_env_defaults([repo_root / ".env.local", repo_root / ".env"])
-    api_key = os.environ.get("OPENAI_API_KEY")
-    model = model_override or os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
+    env_file_path, env_defaults = load_env_defaults(
+        [repo_root / ".env.local", repo_root / ".env"]
+    )
+    process_openai_env = collect_prefixed_process_env(("OPENAI_",))
+    api_key = env_defaults.get("OPENAI_API_KEY") or process_openai_env.get("OPENAI_API_KEY")
+    model = (
+        model_override
+        or env_defaults.get("OPENAI_MODEL")
+        or process_openai_env.get("OPENAI_MODEL")
+        or DEFAULT_MODEL
+    )
     base_url = (
-        base_url_override or os.environ.get("OPENAI_BASE_URL") or DEFAULT_BASE_URL
+        base_url_override
+        or env_defaults.get("OPENAI_BASE_URL")
+        or process_openai_env.get("OPENAI_BASE_URL")
+        or DEFAULT_BASE_URL
     )
     timeout_seconds = timeout_override or int(
-        os.environ.get("OPENAI_TIMEOUT_SECONDS", str(DEFAULT_TIMEOUT_SECONDS))
+        env_defaults.get("OPENAI_TIMEOUT_SECONDS")
+        or process_openai_env.get("OPENAI_TIMEOUT_SECONDS")
+        or str(DEFAULT_TIMEOUT_SECONDS)
     )
-    reasoning_effort = os.environ.get("OPENAI_REASONING_EFFORT")
+    reasoning_effort = env_defaults.get("OPENAI_REASONING_EFFORT") or process_openai_env.get(
+        "OPENAI_REASONING_EFFORT"
+    )
 
     return OpenAIContext(
         repo_root=repo_root,
@@ -73,6 +87,6 @@ def load_openai_context(
         base_url=base_url,
         reasoning_effort=reasoning_effort,
         timeout_seconds=timeout_seconds,
-        process_openai_env=collect_prefixed_process_env(("OPENAI_",)),
+        process_openai_env=process_openai_env,
         shell_openai_env_candidates=detect_shell_env_conflicts(("OPENAI_",)),
     )

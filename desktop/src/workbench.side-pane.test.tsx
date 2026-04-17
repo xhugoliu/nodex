@@ -78,11 +78,11 @@ function makeApplyResult(): ApplyPatchReport {
 function makeDesktopAiStatus(): DesktopAiStatus {
   return {
     command:
-      "python3 scripts/provider_runner.py --provider anthropic --use-default-args",
+      "python3 scripts/provider_runner.py --provider openai --use-default-args",
     command_source: "default",
-    provider: "anthropic",
+    provider: "openai",
     runner: "provider_runner.py",
-    model: "claude-sonnet",
+    model: "gpt-5.4-mini",
     reasoning_effort: null,
     has_auth: true,
     has_process_env_conflict: false,
