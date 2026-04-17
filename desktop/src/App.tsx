@@ -1109,6 +1109,20 @@ export default function App(props: AppProps = {}) {
     <div className="flex h-screen w-full flex-col gap-3 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.96),rgba(243,244,246,0.98),rgba(229,231,235,0.92))] px-3 py-3">
       {workspaceOverview ? (
         <main className="flex min-h-0 flex-1 flex-col gap-3">
+          {consoleEntry ? (
+            <div
+              className={[
+                "rounded-2xl border px-4 py-3 text-sm leading-6",
+                consoleTone === "error"
+                  ? "border-[rgba(180,35,24,0.18)] bg-[rgba(180,35,24,0.08)] text-[color:var(--danger)]"
+                  : consoleTone === "success"
+                    ? "border-[rgba(15,118,110,0.18)] bg-[rgba(15,118,110,0.08)] text-[color:var(--text)]"
+                    : "border-[color:var(--line)] bg-white/70 text-[color:var(--muted)]",
+              ].join(" ")}
+            >
+              {consoleMessage}
+            </div>
+          ) : null}
           <div
             className={[
               "grid min-h-0 flex-1 gap-3",
