@@ -82,6 +82,9 @@
   现在也已覆盖同一 mounted session 内
   `... -> second-level generated node(with evidence) -> source open/uncite -> apply`
   的连续收口；
+  现在也已覆盖 second-level generated node 上的 `source detail -> Review` focus continuity、
+  `source detail -> Draft` shared handoff seam，
+  以及 `source detail -> Draft -> review/apply` 闭环；
   这些 apply 末态现在也共用一套 mounted continuity contract：
   tree / canvas / right rail 对齐同一 focus node，右栏回到 `Context`，瞬时 Review/source detail 清空，`Current focus` cue 继续成立
 
@@ -90,8 +93,8 @@
 优先顺序：
 
 1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
-2. 在已经覆盖 second-level generated node 的 source/evidence apply 主路基础上，
-   继续补它的 `source detail -> Review / Draft` handoff mounted 证据
+2. 在已经覆盖 second-level generated node 的 source-detail handoff 和 source/evidence apply 主路基础上，
+   继续补 third-level 新焦点节点的直接承接证据
 3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
 4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
