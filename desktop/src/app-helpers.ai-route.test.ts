@@ -124,6 +124,36 @@ test("rate limit status error maps to retry guidance and is rendered in failure 
   assert.match(message, /messages\.aiDraftNextRateLimit/);
 });
 
+test("buildAiDraftNextSteps can infer timeout guidance even when desktop status is unavailable", () => {
+  const steps = buildAiDraftNextSteps(
+    null,
+    t,
+    new Error("[timeout] request exceeded local timeout"),
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextNetwork"));
+
+  const message = renderAiDraftFailure(
+    new Error("[timeout] request exceeded local timeout"),
+    null,
+    t,
+  );
+  assert.match(message, /nodeEditing\.aiDraftNextTitle/);
+  assert.match(message, /messages\.aiDraftNextNetwork/);
+});
+
+test("buildAiDraftNextSteps surfaces auth-check guidance for explicit auth failures", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      has_auth: true,
+    }),
+    t,
+    new Error("[auth] HTTP 401: invalid api key"),
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextCheckAuth"));
+});
+
 test("source import with preferred node hit resolves focus and clears transient review state", () => {
   const decision = deriveOverviewFocusDecision(
     makeTree(),

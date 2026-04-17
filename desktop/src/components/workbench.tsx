@@ -418,11 +418,13 @@ export function AiDraftRouteSurface(props: {
   const routeStatusMissing = !status;
   const routeUnavailable = Boolean(status?.status_error);
   const routeNeedsAttention =
+    Boolean(props.draftError) ||
     routeUnavailable ||
     status?.has_auth === false ||
     status?.has_process_env_conflict === true ||
     status?.has_shell_env_conflict === true;
-  const routeIsNeutral = props.loading || routeStatusMissing;
+  const routeIsNeutral =
+    props.loading || (routeStatusMissing && !props.draftError);
   const nextSteps = buildAiDraftNextSteps(
     status,
     props.t,
@@ -453,13 +455,15 @@ export function AiDraftRouteSurface(props: {
         : props.t("nodeEditing.aiDraftUnknown");
   const statusLabel = props.loading
     ? props.t("nodeEditing.aiDraftChecking")
-    : routeUnavailable
-      ? props.t("nodeEditing.aiDraftUnavailable")
-      : routeStatusMissing
-        ? props.t("nodeEditing.aiDraftChecking")
-      : routeNeedsAttention
-        ? props.t("nodeEditing.aiDraftNeedsAttention")
-        : props.t("nodeEditing.aiDraftReady");
+    : props.draftError
+      ? props.t("nodeEditing.aiDraftNeedsAttention")
+      : routeUnavailable
+        ? props.t("nodeEditing.aiDraftUnavailable")
+        : routeStatusMissing
+          ? props.t("nodeEditing.aiDraftChecking")
+          : routeNeedsAttention
+            ? props.t("nodeEditing.aiDraftNeedsAttention")
+            : props.t("nodeEditing.aiDraftReady");
   const toneClass = routeIsNeutral
     ? "border-[color:var(--line-soft)] bg-white/75"
     : routeNeedsAttention

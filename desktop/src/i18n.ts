@@ -545,6 +545,8 @@ const translations: Record<Locale, TranslationTree> = {
         "Check whether NODEX_DESKTOP_AI_COMMAND points to a supported provider runner, or remove it to fall back to the default route.",
       aiDraftNextSetupAuth:
         "Run `cargo run -- ai doctor --provider {provider} --format json` and finish local auth first.",
+      aiDraftNextCheckAuth:
+        "Check the local provider credentials, rerun the doctor command if needed, then retry the draft.",
       aiDraftNextCheckCodexEnv:
         "For Codex, clear conflicting OPENAI_* environment variables or inspect the doctor output before retrying.",
       aiDraftNextRateLimit:
@@ -1110,6 +1112,8 @@ const translations: Record<Locale, TranslationTree> = {
         "请检查 NODEX_DESKTOP_AI_COMMAND 是否指向受支持的 provider runner；如果不需要覆盖，可以移除后回退到默认路径。",
       aiDraftNextSetupAuth:
         "先运行 `cargo run -- ai doctor --provider {provider} --format json`，确认本机认证已经配置完成。",
+      aiDraftNextCheckAuth:
+        "请检查本地 provider 凭据，必要时重跑 doctor，再重新起草。",
       aiDraftNextCheckCodexEnv:
         "如果当前走的是 Codex，请先清理冲突的 OPENAI_* 环境变量，或先查看 doctor 输出再重试。",
       aiDraftNextRateLimit:

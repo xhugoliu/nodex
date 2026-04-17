@@ -3185,6 +3185,233 @@ test("App clears transient draft review state when switching to a different node
   dom.cleanup();
 });
 
+test("App clears stale AI draft errors when switching to a different node", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return (args.node_id === "node-2"
+          ? makeSecondNodeContext()
+          : makeNodeContext()) as T;
+      }
+      if (command === "draft_node_expand") {
+        throw new Error("[timeout] request exceeded local timeout");
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(3);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.match(requireSidePaneProps().aiDraftError ?? "", /\[timeout\]/);
+
+  await act(async () => {
+    requireTreePaneProps().onSelectNode("node-2");
+    await flush(2);
+  });
+
+  assert.equal(requireTreePaneProps().selectedNodeId, "node-2");
+  assert.equal(requireMainPaneProps().selectedNodeId, "node-2");
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().aiDraftError, null);
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "node-2",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App clears stale AI draft errors when a new manual draft replaces the failed route", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestMainPaneProps: MainPaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, _args: Record<string, unknown>) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "draft_node_expand") {
+        throw new Error("[auth] HTTP 401: invalid api key");
+      }
+      if (command === "draft_update_node_patch") {
+        return {
+          version: 1,
+          summary: "Manual recovery patch",
+          ops: [
+            {
+              type: "update_node",
+              id: "node-1",
+              title: "Authentication recovery plan",
+            },
+          ],
+        } as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: (props) => {
+      latestMainPaneProps = props;
+      return <div />;
+    },
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireMainPaneProps = () => {
+    assert.ok(latestMainPaneProps, "main pane props should be available");
+    return latestMainPaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireMainPaneProps().onDraftAiExpand();
+    await flush(3);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.match(requireSidePaneProps().aiDraftError ?? "", /\[auth\]/);
+
+  await act(async () => {
+    requireSidePaneProps().onTitleChange("Authentication recovery plan");
+    await flush();
+  });
+
+  await act(async () => {
+    requireSidePaneProps().onDraftUpdate();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().aiDraftError, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App applies workspace-loaded focus_node_id across tree, canvas, and side pane", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
@@ -3355,6 +3582,89 @@ test("App renders Context CTA and local provenance in the mounted right pane aft
     ),
     "preferred node id should still drive the mounted context load",
   );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App surfaces desktop AI status refresh failures inside the node-scoped Draft route", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        throw new Error("[timeout] desktop AI status probe timed out");
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      throw new Error(`unexpected command: ${command} ${JSON.stringify(args)}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(3);
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush();
+  });
+
+  assert.match(requireSidePaneProps().aiDraftError ?? "", /\[timeout\]/);
+  const renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Needs attention/);
+  assert.match(renderedText, /desktop AI status probe timed out/);
+  assert.match(renderedText, /Check local network and provider reachability, then retry the draft\./);
 
   await act(async () => {
     root.unmount();

@@ -693,30 +693,40 @@ export function buildAiDraftNextSteps(
   t: Translator,
   error?: unknown,
 ): string[] {
-  if (!status) {
-    return [];
-  }
-
-  const detail = [formatError(error ?? ""), status.status_error ?? "", status.command]
+  const detail = [
+    formatError(error ?? ""),
+    status?.status_error ?? "",
+    status?.command ?? "",
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-  const provider = status.provider ?? t("nodeEditing.aiDraftUnknown");
+  const provider = status?.provider ?? t("nodeEditing.aiDraftUnknown");
   const actions = new Array<string>();
 
-  if (status.command_source === "override" && status.provider === null) {
+  if (status?.command_source === "override" && status.provider === null) {
     actions.push(t("messages.aiDraftNextCustomOverride"));
   }
 
-  if (status.has_auth === false) {
+  if (status?.has_auth === false) {
     actions.push(t("messages.aiDraftNextSetupAuth", { provider }));
   }
 
   if (
-    status.provider === "codex" &&
+    status?.provider === "codex" &&
     (status.has_process_env_conflict || status.has_shell_env_conflict)
   ) {
     actions.push(t("messages.aiDraftNextCheckCodexEnv"));
+  }
+
+  if (
+    detail.includes("[auth]") ||
+    detail.includes("invalid api key") ||
+    detail.includes("authentication required") ||
+    detail.includes("unauthorized") ||
+    detail.includes("401")
+  ) {
+    actions.push(t("messages.aiDraftNextCheckAuth"));
   }
 
   if (detail.includes("[rate_limit]") || detail.includes("rate limit")) {
@@ -748,7 +758,7 @@ export function buildAiDraftNextSteps(
     actions.push(t("messages.aiDraftNextParse"));
   }
 
-  if (!actions.length && status.provider) {
+  if (!actions.length && status?.provider) {
     actions.push(t("messages.aiDraftNextRunDoctor", { provider: status.provider }));
   }
 

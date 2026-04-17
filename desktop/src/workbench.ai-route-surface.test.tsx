@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { translate } from "./i18n";
 import { AiDraftRouteSurface } from "./components/workbench";
 import type { DesktopAiStatus } from "./types";
 
@@ -96,4 +97,30 @@ test("AiDraftRouteSurface keeps a neutral checking state while status is still l
   assert.match(html, /nodeEditing\.aiDraftChecking/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftUnavailable/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftNextTitle/);
+});
+
+test("AiDraftRouteSurface shows actionable next steps for draft errors even when status is unavailable", () => {
+  const html = renderSurface({
+    status: null,
+    draftError: "[timeout] request exceeded local timeout",
+  });
+
+  assert.match(html, /nodeEditing\.aiDraftNeedsAttention/);
+  assert.match(html, /nodeEditing\.aiDraftNextTitle/);
+  assert.match(html, /messages\.aiDraftNextNetwork/);
+});
+
+test("AiDraftRouteSurface uses translated auth guidance when the runner reports an auth failure", () => {
+  const html = renderToStaticMarkup(
+    <AiDraftRouteSurface
+      draftError="[auth] HTTP 401: invalid api key"
+      loading={false}
+      onRefresh={() => {}}
+      status={makeStatus({})}
+      t={(key, vars) => translate("en-US", key, vars)}
+    />,
+  );
+
+  assert.match(html, /Check the local provider credentials/);
+  assert.doesNotMatch(html, /messages\.aiDraftNextCheckAuth/);
 });

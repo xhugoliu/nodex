@@ -224,6 +224,7 @@ export default function App(props: AppProps = {}) {
   const [applyResult, setApplyResult] = useState<ApplyPatchReport | null>(null);
   const [desktopAiStatus, setDesktopAiStatus] = useState<DesktopAiStatus | null>(null);
   const [isDesktopAiStatusLoading, setIsDesktopAiStatusLoading] = useState(false);
+  const [desktopAiStatusError, setDesktopAiStatusError] = useState<string | null>(null);
   const [lastAiDraftError, setLastAiDraftError] = useState<string | null>(null);
   const [updateNodeTitle, setUpdateNodeTitle] = useState("");
   const [updateNodeBody, setUpdateNodeBody] = useState("");
@@ -390,12 +391,15 @@ export default function App(props: AppProps = {}) {
     nextReviewDraft: DraftReviewPayload | null;
     nextApplyResult: ApplyPatchReport | null;
     nextSelectionPanelTab: SelectionPanelTab;
-  }) {
+  }, options: { clearDraftError?: boolean } = {}) {
     setPatchEditor(state.nextPatchEditor);
     setPatchDraftOrigin(state.nextPatchDraftOrigin);
     setReviewDraft(state.nextReviewDraft);
     setApplyResult(state.nextApplyResult);
     setSelectionPanelTab(state.nextSelectionPanelTab);
+    if (options.clearDraftError) {
+      setLastAiDraftError(null);
+    }
   }
 
   function clearDraftReviewState() {
@@ -412,6 +416,7 @@ export default function App(props: AppProps = {}) {
     setPatchEditor(nextState.patchEditor);
     setPatchDraftOrigin(nextState.patchDraftOrigin);
     setReviewDraft(nextState.reviewDraft);
+    setLastAiDraftError(null);
   }
 
   function resetTransientReviewState() {
@@ -429,6 +434,7 @@ export default function App(props: AppProps = {}) {
     setPatchDraftOrigin(nextState.patchDraftOrigin);
     setReviewDraft(nextState.reviewDraft);
     setApplyResult(nextState.applyResult);
+    setLastAiDraftError(null);
   }
 
   function openReviewDraftState(options: {
@@ -441,6 +447,7 @@ export default function App(props: AppProps = {}) {
     setReviewDraft(options.reviewDraft);
     setApplyResult(null);
     setSelectionPanelTab("review");
+    setLastAiDraftError(null);
   }
 
   function openDraftWorkspace() {
@@ -456,13 +463,11 @@ export default function App(props: AppProps = {}) {
       applyResult,
     });
 
-    setPatchEditor(nextState.nextPatchEditor);
-    setPatchDraftOrigin(nextState.nextPatchDraftOrigin);
-    setReviewDraft(nextState.nextReviewDraft);
-    setApplyResult(nextState.nextApplyResult);
+    applyContextTransitionState(nextState, {
+      clearDraftError: nextState.shouldClearTransientReviewState,
+    });
     setSelectedSourceId(nextState.nextSelectedSourceId);
     setSelectedSourceDetail(nextState.nextSelectedSourceDetail);
-    setSelectionPanelTab(nextState.nextSelectionPanelTab);
   }
 
   function selectSelectionPanelTab(tab: SelectionPanelTab) {
@@ -581,6 +586,7 @@ export default function App(props: AppProps = {}) {
     setPatchDraftOrigin(null);
     setReviewDraft(null);
     setApplyResult(null);
+    setLastAiDraftError(null);
   }
 
   async function openWorkspaceCommand(path: string) {
@@ -632,12 +638,14 @@ export default function App(props: AppProps = {}) {
     try {
       const status = await invokeCommandFn<DesktopAiStatus>("get_desktop_ai_status", {});
       setDesktopAiStatus(status);
+      setDesktopAiStatusError(null);
       if (options.clearDraftError) {
         setLastAiDraftError(null);
       }
       return status;
     } catch (error) {
       setDesktopAiStatus(null);
+      setDesktopAiStatusError(formatError(error));
       if (!options.silentError) {
         setConsoleMessage(formatError(error), "error");
       }
@@ -725,7 +733,9 @@ export default function App(props: AppProps = {}) {
         },
         options,
       );
-      applyContextTransitionState(transitionState);
+      applyContextTransitionState(transitionState, {
+        clearDraftError: transitionState.shouldClearTransientReviewState,
+      });
       setSelectedNodeId(nodeId);
       setSelectedNodeContext(context);
       setSelectedSourceId(null);
@@ -775,7 +785,9 @@ export default function App(props: AppProps = {}) {
         },
         options,
       );
-      applyContextTransitionState(transitionState);
+      applyContextTransitionState(transitionState, {
+        clearDraftError: transitionState.shouldClearTransientReviewState,
+      });
       setSelectedSourceId(sourceId);
       setSelectedSourceDetail(detail);
       return true;
@@ -806,13 +818,11 @@ export default function App(props: AppProps = {}) {
       options,
     );
 
-    setPatchEditor(nextState.nextPatchEditor);
-    setPatchDraftOrigin(nextState.nextPatchDraftOrigin);
-    setReviewDraft(nextState.nextReviewDraft);
-    setApplyResult(nextState.nextApplyResult);
+    applyContextTransitionState(nextState, {
+      clearDraftError: nextState.shouldClearTransientReviewState,
+    });
     setSelectedSourceId(nextState.nextSelectedSourceId);
     setSelectedSourceDetail(nextState.nextSelectedSourceDetail);
-    setSelectionPanelTab(nextState.nextSelectionPanelTab);
   }
 
   async function refreshWorkspace() {
@@ -1186,7 +1196,7 @@ export default function App(props: AppProps = {}) {
               selectionTab={selectionPanelTab}
               aiDraftStatus={desktopAiStatus}
               aiDraftStatusLoading={isDesktopAiStatusLoading}
-              aiDraftError={lastAiDraftError}
+              aiDraftError={lastAiDraftError ?? desktopAiStatusError}
               nodeContext={selectedNodeContext}
               applyResult={applyResult}
               updateNodeTitle={updateNodeTitle}
