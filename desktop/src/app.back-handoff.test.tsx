@@ -1217,6 +1217,185 @@ function makeUpdateGeneratedSecondBranchApplyReviewedPatchOutput(): ApplyReviewe
   };
 }
 
+function makeGeneratedThirdBranchOverview(): WorkspaceOverview {
+  return {
+    root_dir: "/workspace",
+    workspace_name: "workspace",
+    tree: {
+      node: {
+        id: "root",
+        parent_id: null,
+        title: "Root",
+        body: null,
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000000,
+      },
+      children: [
+        {
+          node: {
+            id: "imported-root",
+            parent_id: "root",
+            title: "Imported Source Root",
+            body: "Imported body",
+            kind: "topic",
+            position: 0,
+            created_at: 1710000000,
+            updated_at: 1710000000,
+          },
+          children: [
+            {
+              node: {
+                id: "generated-node",
+                parent_id: "imported-root",
+                title: "Generated Follow-up Branch",
+                body: "Generated body",
+                kind: "action",
+                position: 0,
+                created_at: 1710000000,
+                updated_at: 1710000000,
+              },
+              children: [
+                {
+                  node: {
+                    id: "generated-deep-node-1",
+                    parent_id: "generated-node",
+                    title: "Generated Branch Follow-up Revised",
+                    body: "Second-level generated branch body with one local revision",
+                    kind: "action",
+                    position: 0,
+                    created_at: 1710000001,
+                    updated_at: 1710000002,
+                  },
+                  children: [
+                    {
+                      node: {
+                        id: "generated-third-node-1",
+                        parent_id: "generated-deep-node-1",
+                        title: "Generated Branch Execution Detail",
+                        body: "Third-level generated branch body",
+                        kind: "action",
+                        position: 0,
+                        created_at: 1710000003,
+                        updated_at: 1710000003,
+                      },
+                      children: [],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    sources: [],
+    snapshots: [],
+    patch_history: [],
+  };
+}
+
+function makeGeneratedThirdBranchContext(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "generated-third-node-1",
+        parent_id: "generated-deep-node-1",
+        title: "Generated Branch Execution Detail",
+        body: "Third-level generated branch body",
+        kind: "action",
+        position: 0,
+        created_at: 1710000003,
+        updated_at: 1710000003,
+      },
+      parent: { id: "generated-deep-node-1", title: "Generated Branch Follow-up Revised" },
+      children: [],
+      sources: [],
+      evidence: [],
+    },
+  };
+}
+
+function makeGeneratedSecondBranchDraftReviewPayload(): DraftReviewPayload {
+  return {
+    run: {
+      id: "run-generated-deep-node",
+      capability: "expand",
+      explore_by: null,
+      node_id: "generated-deep-node-1",
+      command: "python3 scripts/provider_runner.py",
+      dry_run: true,
+      status: "completed",
+      started_at: 1710000003,
+      finished_at: 1710000004,
+      request_path: "/tmp/request-generated-deep.json",
+      response_path: "/tmp/response-generated-deep.json",
+      exit_code: 0,
+      provider: "anthropic",
+      model: "claude-sonnet",
+      provider_run_id: null,
+      retry_count: 0,
+      used_plain_json_fallback: false,
+      normalization_notes: [],
+      last_error_category: null,
+      last_error_message: null,
+      last_status_code: null,
+      patch_run_id: null,
+      patch_summary: "Deepen Generated Branch Follow-up Revised",
+    },
+    explanation: {
+      rationale_summary:
+        "Turn the revised second-level generated branch into one concrete execution detail.",
+      direct_evidence: [],
+      inferred_suggestions: [],
+    },
+    response_notes: [],
+    patch: {
+      version: 1,
+      summary: "Deepen Generated Branch Follow-up Revised",
+      ops: [
+        {
+          type: "add_node",
+          parent_id: "generated-deep-node-1",
+          title: "Generated Branch Execution Detail",
+          kind: "action",
+          body: "Third-level generated branch body",
+        },
+      ],
+    },
+    patch_preview: [
+      "Add Generated Branch Execution Detail under Generated Branch Follow-up Revised",
+    ],
+    report: {
+      run_id: null,
+      summary: "Deepen Generated Branch Follow-up Revised",
+      preview: ["Preview third-level generated branch"],
+      created_nodes: [
+        { id: "generated-third-node-1", title: "Generated Branch Execution Detail" },
+      ],
+    },
+  };
+}
+
+function makeGeneratedThirdBranchApplyReviewedPatchOutput(): ApplyReviewedPatchOutput {
+  return {
+    report: {
+      run_id: "patch-run-generated-third-node",
+      summary: "Applied third-level generated branch",
+      preview: [
+        "Added Generated Branch Execution Detail under Generated Branch Follow-up Revised",
+      ],
+      created_nodes: [
+        { id: "generated-third-node-1", title: "Generated Branch Execution Detail" },
+      ],
+    },
+    overview: makeGeneratedThirdBranchOverview(),
+    preferred_focus_node_id: "generated-third-node-1",
+    focus_node_context: makeGeneratedThirdBranchContext(),
+  };
+}
+
 function makeGeneratedChildOverview(): WorkspaceOverview {
   return {
     root_dir: "/workspace",
@@ -4909,7 +5088,9 @@ test("App keeps tri-pane continuity through generated node source detail into Dr
       }
       if (command === "draft_node_expand") {
         return (
-          args.node_id === "generated-node"
+          args.node_id === "generated-deep-node-1"
+            ? makeGeneratedSecondBranchDraftReviewPayload()
+            : args.node_id === "generated-node"
             ? makeGeneratedNodeDraftReviewPayload()
             : makeDraftReviewPayload(String(args.node_id))
         ) as T;
@@ -4919,7 +5100,14 @@ test("App keeps tri-pane continuity through generated node source detail into Dr
       }
       if (command === "apply_reviewed_patch") {
         return (
-          args.focus_node_id === "generated-deep-node-1"
+          args.focus_node_id === "generated-deep-node-1" &&
+          invokeCalls.some(
+            (call) =>
+              call.command === "draft_node_expand" &&
+              call.args.node_id === "generated-deep-node-1",
+          )
+            ? makeGeneratedThirdBranchApplyReviewedPatchOutput()
+            : args.focus_node_id === "generated-deep-node-1"
             ? makeUpdateGeneratedSecondBranchApplyReviewedPatchOutput()
             : args.focus_node_id === "generated-node"
               ? makeGeneratedNodeApplyReviewedPatchOutput()
@@ -5111,6 +5299,66 @@ test("App keeps tri-pane continuity through generated node source detail into Dr
     requireSidePaneProps().nodeContext?.node_detail.node.body,
     "Second-level generated branch body with one local revision",
   );
+
+  const nodeContextFetchCountBeforeSecondLevelDraft = invokeCalls.filter(
+    (call) => call.command === "get_node_workspace_context",
+  ).length;
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
+  assert.equal(requireTreePaneProps().selectedNodeId, "generated-deep-node-1");
+  assert.equal(requireMainPaneProps().selectedNodeId, "generated-deep-node-1");
+  assert.equal(
+    requireSidePaneProps().nodeContext?.node_detail.node.id,
+    "generated-deep-node-1",
+  );
+  assert.equal(
+    invokeCalls.filter((call) => call.command === "get_node_workspace_context").length,
+    nodeContextFetchCountBeforeSecondLevelDraft,
+    "second-level generated node Draft handoff should reuse current node context before the next review/apply step",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onDraftAiExpand();
+    await flush(2);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "draft_node_expand" &&
+        call.args.node_id === "generated-deep-node-1",
+    ),
+    "second-level generated node Draft step should draft from the current second-level generated node",
+  );
+
+  await act(async () => {
+    requireSidePaneProps().onApplyPatch();
+    await flush(4);
+  });
+
+  assertApplyContinuityContract({
+    renderedText: dom.container.textContent ?? "",
+    invokeCalls,
+    treePaneProps: requireTreePaneProps(),
+    mainPaneProps: requireMainPaneProps(),
+    sidePaneProps: requireSidePaneProps(),
+    expectation: {
+      focusedNodeId: "generated-third-node-1",
+      focusedNodeTitle: "Generated Branch Execution Detail",
+      applySummary: "Applied third-level generated branch",
+      reviewFocusNodeId: "generated-deep-node-1",
+    },
+  });
 
   await act(async () => {
     root.unmount();
