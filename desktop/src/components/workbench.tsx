@@ -1750,6 +1750,18 @@ function collectReviewSourceFocusItems(
   };
 
   for (const target of affectedSourceContext) {
+    push("action", target.action, (action) =>
+      formatReviewAffectedSourceAction(
+        action as
+          | "attach_source"
+          | "detach_source"
+          | "attach_source_chunk"
+          | "detach_source_chunk"
+          | "cite"
+          | "uncite",
+        t,
+      ),
+    );
     push("node", target.nodeTitle, (title) =>
       t("workbench.reviewSourceFocusNode", { title }),
     );

@@ -542,6 +542,7 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
   assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewSourceFocusTitle/);
+  assert.equal((html.match(/workbench\.reviewAffectedSourceCite/g) ?? []).length, 2);
   assert.match(
     html,
     /workbench\.reviewSourceFocusNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
@@ -559,7 +560,6 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
   );
   assert.match(html, /workbench\.reviewAffectedSourceTitle/);
-  assert.match(html, /workbench\.reviewAffectedSourceCite/);
   assert.match(
     html,
     /workbench\.reviewAffectedSourceNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
@@ -627,6 +627,9 @@ test("WorkbenchSidePane Review surfaces source-backed focus cues for source remo
     html,
     /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
   );
+  assert.equal((html.match(/workbench\.reviewAffectedSourceUncite/g) ?? []).length, 2);
+  assert.equal((html.match(/workbench\.reviewAffectedSourceDetachChunk/g) ?? []).length, 2);
+  assert.equal((html.match(/workbench\.reviewAffectedSourceDetachSource/g) ?? []).length, 2);
   assert.equal((html.match(/workbench\.reviewHistoryOriginTitle/g) ?? []).length, 2);
   assert.match(html, /workbench\.reviewImpactUnciteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewImpactDetachSourceChunk \{&quot;count&quot;:1\}/);
@@ -656,8 +659,8 @@ test("WorkbenchSidePane Review keeps source and source-chunk ops humanized beyon
   });
 
   assert.match(html, /workbench\.reviewAffectedSourceTitle/);
-  assert.match(html, /workbench\.reviewAffectedSourceAttachSource/);
-  assert.match(html, /workbench\.reviewAffectedSourceAttachChunk/);
+  assert.equal((html.match(/workbench\.reviewAffectedSourceAttachSource/g) ?? []).length, 2);
+  assert.equal((html.match(/workbench\.reviewAffectedSourceAttachChunk/g) ?? []).length, 2);
   assert.match(
     html,
     /workbench\.reviewAffectedSourceNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
@@ -675,6 +678,28 @@ test("WorkbenchSidePane Review keeps source and source-chunk ops humanized beyon
   assert.doesNotMatch(html, /source-1/);
   assert.doesNotMatch(html, /chunk-1/);
   assert.doesNotMatch(html, /node-1/);
+});
+
+test("WorkbenchSidePane Review deduplicates repeated source-action focus cues", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContext(),
+    selectedSourceDetail: makeSourceDetail(),
+    patchDraftState: {
+      state: "ready",
+      summary: "Repeat cite same chunk",
+      opCount: 2,
+      opTypes: [{ type: "cite_source_chunk", count: 2 }],
+      ops: [
+        { type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" },
+        { type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" },
+      ],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.equal((html.match(/workbench\.reviewAffectedSourceCite/g) ?? []).length, 2);
 });
 
 test("WorkbenchSidePane Review keeps patch-history provenance visible for recovery-loaded drafts", () => {
@@ -697,6 +722,10 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
   });
 
   assert.equal((html.match(/workbench\.reviewHistoryOriginTitle/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceAttachSource/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceAttachChunk/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceCite/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceUncite/);
   assert.match(html, /workbench\.reviewHistoryOriginTitle/);
   assert.match(
     html,

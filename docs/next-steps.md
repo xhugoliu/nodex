@@ -94,6 +94,7 @@
   Draft 里当前可见的 draft-op 卡片也应继续复用同一套 node/source/chunk explainability seam，避免 `source detail -> Draft -> Review` 在进入 Review 前重新退回 raw id
   Review 里的 `Affected source context` 也应继续覆盖 attach/detach source 与 attach/detach source chunk，不只在 cite/uncite 上解释 source name / chunk label
   顶部 summary 也应继续把 source-backed patch 的 node / source / chunk / citation 关键信息提到一眼可见处，而不是只留在下方来源卡和逐条 op 文本里
+  source-backed 的 source focus cue 也应继续直接说明是在 cite / uncite / link / unlink 什么，而不是只把动作留在下方 impact/source 卡
   从 patch history / Recovery 重新载回的 source-backed patch，也应在顶部 summary 先露出 provenance cue；下方 provenance 卡片继续保留详细说明
   下一步继续把节点结构变化和 evidence 变化也收成一眼可读的 summary，而不是只留在逐条 op 文本里
 - 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性

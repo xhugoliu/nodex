@@ -5392,6 +5392,8 @@ test("App keeps source-backed Review explainability humanized when loading a his
     /This Review was re-opened from patch run patch-2 \(manual\)\. Inspect it before applying again\./,
   );
   assert.match(renderedText, /Affected source context/);
+  assert.equal((renderedText.match(/Will link source/g) ?? []).length, 2);
+  assert.equal((renderedText.match(/Will link chunk/g) ?? []).length, 2);
   assert.match(renderedText, /Will link source/);
   assert.match(renderedText, /Will link chunk/);
   assert.match(renderedText, /source\.md/);
@@ -5689,6 +5691,9 @@ test("App keeps history-loaded source removal review humanized after source-deta
   assert.match(renderedText, /Source: source\.md/);
   assert.match(renderedText, /Chunk: Provider Authentication Flow/);
   assert.match(renderedText, /Citation: direct/);
+  assert.equal((renderedText.match(/Will remove citation/g) ?? []).length, 2);
+  assert.equal((renderedText.match(/Will unlink chunk/g) ?? []).length, 2);
+  assert.equal((renderedText.match(/Will unlink source/g) ?? []).length, 2);
   assert.match(renderedText, /Will remove citation/);
   assert.match(renderedText, /Will unlink chunk/);
   assert.match(renderedText, /Will unlink source/);
