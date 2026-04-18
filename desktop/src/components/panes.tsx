@@ -190,8 +190,13 @@ export function TreePane(props: {
                           <div className="text-sm leading-6 text-[color:var(--text)]">
                             {entry.summary ?? entry.id}
                           </div>
-                          <div className="text-xs text-[color:var(--muted)]">
-                            {formatTimestamp(entry.applied_at)}
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+                            <span className="rounded-full bg-white/90 px-2.5 py-1">
+                              {props.t("detail.activityOrigin", { value: entry.origin })}
+                            </span>
+                            <span className="rounded-full bg-white/90 px-2.5 py-1">
+                              {formatTimestamp(entry.applied_at)}
+                            </span>
                           </div>
                         </div>
                         <button

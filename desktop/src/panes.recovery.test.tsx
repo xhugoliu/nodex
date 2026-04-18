@@ -122,6 +122,10 @@ test("TreePane renders a lightweight recovery card with recent patch review entr
   assert.match(html, /sidebar\.recoveryRecentPatches/);
   assert.match(html, /sidebar\.recoveryLoadPatchToReview/);
   assert.match(html, /Promote draft to review/);
+  assert.match(
+    html,
+    /detail\.activityOrigin \{&quot;value&quot;:&quot;manual&quot;\}/,
+  );
   assert.match(html, /Attach source evidence/);
   assert.match(html, /Tighten node wording/);
   assert.doesNotMatch(html, /Older patch that should stay hidden/);
