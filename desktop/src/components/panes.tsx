@@ -23,11 +23,13 @@ export function TreePane(props: {
   onImportSource: () => void;
   onSaveSnapshot: () => void;
   onRestoreLatestSnapshot: () => void;
+  onRestoreSnapshot: (snapshotId: string) => void;
   onLoadPatchToReview: (runId: string) => void;
   onQueryChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;
 }) {
   const latestSnapshot = latestWorkspaceSnapshot(props.workspaceOverview);
+  const recentSnapshots = recentWorkspaceSnapshots(props.workspaceOverview, 3);
   const recentPatchRuns = recentWorkspacePatchRuns(props.workspaceOverview, 3);
 
   if (props.isCollapsed) {
@@ -153,16 +155,38 @@ export function TreePane(props: {
               {props.t("sidebar.recoveryRestoreNote")}
             </div>
 
-            {latestSnapshot ? (
-              <div className="space-y-1 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+            {recentSnapshots.length ? (
+              <div className="space-y-3 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
                 <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                  {props.t("sidebar.recoveryLatestSnapshot")}
+                  {props.t("sidebar.snapshots")}
                 </div>
-                <div className="text-sm leading-6 text-[color:var(--text)]">
-                  {latestSnapshot.label ?? latestSnapshot.id}
-                </div>
-                <div className="text-xs text-[color:var(--muted)]">
-                  {formatTimestamp(latestSnapshot.created_at)}
+                <div className="space-y-2">
+                  {recentSnapshots.map((snapshot) => (
+                    <div
+                      key={snapshot.id}
+                      className="rounded-xl border border-[color:var(--line-soft)] bg-[color:var(--bg-warm)]/55 px-3 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm leading-6 text-[color:var(--text)]">
+                            {snapshot.label ?? props.t("history.noLabel")}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+                            <span className="rounded-full bg-white/90 px-2.5 py-1">
+                              {formatTimestamp(snapshot.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          className={ghostButtonClass}
+                          onClick={() => props.onRestoreSnapshot(snapshot.id)}
+                          type="button"
+                        >
+                          {props.t("history.restore")}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : (
@@ -258,6 +282,13 @@ function recentWorkspacePatchRuns(
   limit: number,
 ) {
   return workspaceOverview?.patch_history.slice(0, limit) ?? [];
+}
+
+function recentWorkspaceSnapshots(
+  workspaceOverview: WorkspaceOverview | null,
+  limit: number,
+) {
+  return workspaceOverview?.snapshots.slice(0, limit) ?? [];
 }
 
 function SidebarToggleButton(props: {

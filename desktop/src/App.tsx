@@ -784,10 +784,18 @@ export default function App(props: AppProps = {}) {
       return;
     }
 
+    await restoreSnapshot(latestSnapshot.id);
+  }
+
+  async function restoreSnapshot(snapshotId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
     try {
       const overview = await invokeCommandFn<WorkspaceOverview>("restore_snapshot", {
         start_path: workspacePath,
-        snapshot_id: latestSnapshot.id,
+        snapshot_id: snapshotId,
       });
       await applyOverview(overview, {
         preferredNodeId: selectedNodeId,
@@ -795,7 +803,7 @@ export default function App(props: AppProps = {}) {
       });
       setConsoleMessage(
         t("messages.restoredSnapshot", {
-          snapshotId: latestSnapshot.id,
+          snapshotId,
         }),
         "success",
       );
@@ -1288,6 +1296,9 @@ export default function App(props: AppProps = {}) {
               }}
               onRestoreLatestSnapshot={() => {
                 void restoreLatestSnapshot();
+              }}
+              onRestoreSnapshot={(snapshotId) => {
+                void restoreSnapshot(snapshotId);
               }}
               onLoadPatchToReview={(runId) => {
                 void loadPatchRunToReview(runId);

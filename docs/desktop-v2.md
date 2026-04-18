@@ -17,7 +17,7 @@
 ## 当前桌面 contract
 
 - 左栏：先保持轻导航、`Import Source` 和 source/browser 的最小职责
-  `Recovery` 只承接 `Save Snapshot` / `Restore Latest` 和最近 patch 的 `Load to Review`
+  `Recovery` 只承接 `Save Snapshot`、最近 snapshot restore 和最近 patch 的 `Load to Review`
 - 中栏：固定为纯画布工作区
 - 右栏：节点作用域的 assistant workspace，默认承接 `Context / Draft / Review`
 - 画布高频动作放在节点卡片内

@@ -336,6 +336,18 @@ function makeRecoveryOverview(): WorkspaceOverview {
   const overview = makeOverview();
   overview.snapshots = [
     {
+      id: "snapshot-3",
+      label: "After review",
+      file_name: "snapshot-3.json",
+      created_at: 1710000400,
+    },
+    {
+      id: "snapshot-2",
+      label: null,
+      file_name: "snapshot-2.json",
+      created_at: 1710000200,
+    },
+    {
       id: "snapshot-1",
       label: "Before apply",
       file_name: "snapshot-1.json",
@@ -372,10 +384,10 @@ function makeRecoveryOverviewWithSavedSnapshot(): WorkspaceOverview {
   const overview = makeRecoveryOverview();
   overview.snapshots = [
     {
-      id: "snapshot-2",
+      id: "snapshot-4",
       label: null,
-      file_name: "snapshot-2.json",
-      created_at: 1710000300,
+      file_name: "snapshot-4.json",
+      created_at: 1710000500,
     },
     ...overview.snapshots,
   ];
@@ -5045,10 +5057,10 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
       }
       if (command === "save_snapshot") {
         return {
-          id: "snapshot-2",
+          id: "snapshot-5",
           label: null,
-          file_name: "snapshot-2.json",
-          created_at: 1710000300,
+          file_name: "snapshot-5.json",
+          created_at: 1710000600,
         } as T;
       }
       if (command === "restore_snapshot") {
@@ -5132,7 +5144,7 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   assert.equal(requireSidePaneProps().selectionTab, "review");
   assert.ok(requireSidePaneProps().selectedSourceDetail);
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
-  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 1);
+  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 3);
 
   await act(async () => {
     requireTreePaneProps().onLoadPatchToReview("patch-2");
@@ -5169,8 +5181,25 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
         call.args.label === null,
     ),
   );
-  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 2);
-  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots[0]?.id, "snapshot-2");
+  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 4);
+  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots[0]?.id, "snapshot-5");
+
+  await act(async () => {
+    requireTreePaneProps().onRestoreSnapshot("snapshot-1");
+    await flush(3);
+  });
+
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "restore_snapshot" &&
+        call.args.start_path === "/workspace" &&
+        call.args.snapshot_id === "snapshot-1",
+    ),
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
 
   await act(async () => {
     requireTreePaneProps().onRestoreLatestSnapshot();
@@ -5182,7 +5211,7 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
       (call) =>
         call.command === "restore_snapshot" &&
         call.args.start_path === "/workspace" &&
-        call.args.snapshot_id === "snapshot-2",
+        call.args.snapshot_id === "snapshot-4",
     ),
   );
   assert.equal(requireSidePaneProps().selectionTab, "context");
