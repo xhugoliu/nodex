@@ -1065,6 +1065,11 @@ function ReviewSurface(props: {
   );
   const directEvidenceCount =
     props.reviewDraft?.explanation.direct_evidence.length ?? 0;
+  const affectedNodes = collectReviewAffectedNodes(
+    props.patchDraftState.ops,
+    props.nodeContext,
+    props.t,
+  );
   const affectedSourceChunks = collectReviewAffectedSourceChunks(
     props.patchDraftState.ops,
     props.nodeContext,
@@ -1137,6 +1142,38 @@ function ReviewSurface(props: {
                   })}
                 </span>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {affectedNodes.length ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewAffectedNodesTitle")}
+            </div>
+            <div className="space-y-2">
+              {affectedNodes.map((target) => (
+                <div
+                  key={target.key}
+                  className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
+                      {target.actionLabel}
+                    </span>
+                    <span className="text-sm font-medium text-[color:var(--text)]">
+                      {target.title}
+                    </span>
+                  </div>
+                  {target.metaLines.length ? (
+                    <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
+                      {target.metaLines.map((line) => (
+                        <div key={line}>{line}</div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
@@ -1323,6 +1360,97 @@ function formatReviewImpactSummary(
   }
 }
 
+function collectReviewAffectedNodes(
+  ops: PatchDraftState["ops"],
+  nodeContext: NodeWorkspaceContext | null,
+  t: Translator,
+) {
+  const nodeTitles = buildReviewNodeTitleLookup(nodeContext);
+  const results = new Array<{
+    key: string;
+    actionLabel: string;
+    title: string;
+    metaLines: string[];
+  }>();
+
+  for (const [index, op] of ops.entries()) {
+    if (op.type === "add_node") {
+      const title =
+        trimmedString(op.title) || trimmedString(op.id) || t("composer.untitledNode");
+      const parentTitle = resolveReviewNodeTitle(nodeTitles, op.parent_id);
+      const metaLines = parentTitle
+        ? [t("workbench.reviewAffectedParent", { title: parentTitle })]
+        : [];
+      results.push({
+        key: `add_node:${index}:${title}`,
+        actionLabel: t("workbench.reviewAffectedNodeAdd"),
+        title,
+        metaLines,
+      });
+      continue;
+    }
+
+    if (op.type === "update_node") {
+      const existingTitle = resolveReviewNodeTitle(nodeTitles, op.id);
+      const nextTitle = trimmedString(op.title);
+      const title =
+        existingTitle || nextTitle || trimmedString(op.id) || t("composer.untitledNode");
+      const changedFields = collectReviewChangedFieldLabels(op, t);
+      const metaLines = new Array<string>();
+      if (changedFields.length) {
+        metaLines.push(
+          t("workbench.reviewAffectedFields", {
+            fields: changedFields.join(", "),
+          }),
+        );
+      }
+      if (existingTitle && nextTitle && nextTitle !== existingTitle) {
+        metaLines.push(t("workbench.reviewAffectedNextTitle", { title: nextTitle }));
+      }
+      results.push({
+        key: `update_node:${index}:${title}`,
+        actionLabel: t("workbench.reviewAffectedNodeUpdate"),
+        title,
+        metaLines,
+      });
+      continue;
+    }
+
+    if (op.type === "move_node") {
+      const title =
+        resolveReviewNodeTitle(nodeTitles, op.id) ||
+        trimmedString(op.id) ||
+        t("composer.untitledNode");
+      const parentTitle = resolveReviewNodeTitle(nodeTitles, op.parent_id);
+      const metaLines = parentTitle
+        ? [t("workbench.reviewAffectedParent", { title: parentTitle })]
+        : [];
+      results.push({
+        key: `move_node:${index}:${title}`,
+        actionLabel: t("workbench.reviewAffectedNodeMove"),
+        title,
+        metaLines,
+      });
+      continue;
+    }
+
+    if (op.type === "delete_node") {
+      const title =
+        resolveReviewNodeTitle(nodeTitles, op.id) ||
+        trimmedString(op.id) ||
+        t("composer.untitledNode");
+      results.push({
+        key: `delete_node:${index}:${title}`,
+        actionLabel: t("workbench.reviewAffectedNodeDelete"),
+        title,
+        metaLines: [],
+      });
+    }
+  }
+
+  return results;
+}
+
 function collectReviewAffectedSourceChunks(
   ops: PatchDraftState["ops"],
   nodeContext: NodeWorkspaceContext | null,
@@ -1415,6 +1543,55 @@ function resolveReviewSourceChunk(
   }
 
   return null;
+}
+
+function buildReviewNodeTitleLookup(nodeContext: NodeWorkspaceContext | null) {
+  const titles = new Map<string, string>();
+  const currentNode = nodeContext?.node_detail.node;
+  if (currentNode?.id && currentNode.title.trim()) {
+    titles.set(currentNode.id, currentNode.title.trim());
+  }
+  const parentNode = nodeContext?.node_detail.parent;
+  if (parentNode?.id && parentNode.title.trim()) {
+    titles.set(parentNode.id, parentNode.title.trim());
+  }
+  for (const child of nodeContext?.node_detail.children ?? []) {
+    if (child.id && child.title.trim()) {
+      titles.set(child.id, child.title.trim());
+    }
+  }
+
+  return titles;
+}
+
+function resolveReviewNodeTitle(
+  titles: Map<string, string>,
+  value: unknown,
+): string | null {
+  const nodeId = trimmedString(value);
+  if (!nodeId) {
+    return null;
+  }
+
+  return titles.get(nodeId) || nodeId;
+}
+
+function collectReviewChangedFieldLabels(op: Record<string, unknown>, t: Translator) {
+  const fields = new Array<string>();
+  if (typeof op.title === "string") {
+    fields.push(t("fields.title"));
+  }
+  if (typeof op.kind === "string") {
+    fields.push(t("fields.kind"));
+  }
+  if (typeof op.body === "string") {
+    fields.push(t("fields.body"));
+  }
+  return fields;
+}
+
+function trimmedString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function SourceCard(props: {

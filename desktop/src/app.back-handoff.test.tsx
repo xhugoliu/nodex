@@ -5083,7 +5083,7 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
     WorkbenchMainPane: () => <div />,
     WorkbenchSidePane: (props) => {
       latestSidePaneProps = props;
-      return <div />;
+      return <WorkbenchSidePane {...props} />;
     },
     WorkspaceStartPane: () => <div />,
   };
@@ -5168,6 +5168,9 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   });
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.equal(requireSidePaneProps().patchDraftState.summary, "Loaded patch from history");
+  assert.match(dom.container.textContent ?? "", /Affected nodes/);
+  assert.match(dom.container.textContent ?? "", /Will update node/);
+  assert.match(dom.container.textContent ?? "", /Fields: Body/);
   assert.ok(
     !invokeCalls.some((call) => call.command === "apply_reviewed_patch"),
     "loading history into Review should not apply the patch",
@@ -5962,6 +5965,10 @@ test("App keeps tree, canvas, and right rail aligned on the updated node after m
     ),
     "manual draft update should use the current node and edited title",
   );
+  assert.match(dom.container.textContent ?? "", /Affected nodes/);
+  assert.match(dom.container.textContent ?? "", /Will update node/);
+  assert.match(dom.container.textContent ?? "", /Fields: Title, Body/);
+  assert.match(dom.container.textContent ?? "", /New title: Authentication Updated/);
 
   await act(async () => {
     requireSidePaneProps().onApplyPatch();
@@ -6395,6 +6402,9 @@ test("App refocuses tree, canvas, and right rail onto the created child after ad
     ),
     "add-child draft should use the selected node as parent and the typed title",
   );
+  assert.match(dom.container.textContent ?? "", /Affected nodes/);
+  assert.match(dom.container.textContent ?? "", /Will add node/);
+  assert.match(dom.container.textContent ?? "", /Parent: Authentication/);
 
   await act(async () => {
     requireSidePaneProps().onApplyPatch();

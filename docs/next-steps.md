@@ -87,6 +87,7 @@
   当前右栏 `Review` 也应直接先说明草案摘要、操作数量和 apply 后大概率聚焦到哪，而不是只堆变更列表
   进入 Review 后也应直接看见当前草案来自哪条 AI run 或哪条 patch history，不要把 provenance 只留给瞬时提示
   手工起草的 add child / update / cite / uncite 也应保留来源提示，避免 Review 变成脱离动作上下文的纯 patch JSON
+  add/update 这类结构草案也应直接点名受影响的节点、父节点和字段，而不只显示 node id
   cite / uncite 草案里还应直接说清楚受影响的 source/chunk，避免 Review 退化成只看 chunk id 的低可读状态
   下一步继续把节点结构变化和 evidence 变化也收成一眼可读的 summary，而不是只留在逐条 op 文本里
 - 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性

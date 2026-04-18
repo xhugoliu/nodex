@@ -316,7 +316,14 @@ test("WorkbenchSidePane Review falls back to the current node when the draft doe
       summary: "Update draft summary",
       opCount: 1,
       opTypes: [{ type: "update_node", count: 1 }],
-      ops: [{ type: "update_node", id: "node-1" }],
+      ops: [
+        {
+          type: "update_node",
+          id: "node-1",
+          title: "Authentication Updated",
+          body: "Current auth routing notes with one local revision",
+        },
+      ],
       error: null,
     },
     reviewDraft: {
@@ -324,7 +331,14 @@ test("WorkbenchSidePane Review falls back to the current node when the draft doe
       patch: {
         version: 1,
         summary: "Update draft summary",
-        ops: [{ type: "update_node", id: "node-1" }],
+        ops: [
+          {
+            type: "update_node",
+            id: "node-1",
+            title: "Authentication Updated",
+            body: "Current auth routing notes with one local revision",
+          },
+        ],
       },
     },
   });
@@ -334,6 +348,48 @@ test("WorkbenchSidePane Review falls back to the current node when the draft doe
     /workbench\.reviewFocusCurrentNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
   );
   assert.match(html, /workbench\.reviewImpactUpdateNode \{&quot;count&quot;:1\}/);
+  assert.match(html, /workbench\.reviewAffectedNodesTitle/);
+  assert.match(html, /workbench\.reviewAffectedNodeUpdate/);
+  assert.match(
+    html,
+    /workbench\.reviewAffectedFields \{&quot;fields&quot;:&quot;fields\.title, fields\.body&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewAffectedNextTitle \{&quot;title&quot;:&quot;Authentication Updated&quot;\}/,
+  );
+});
+
+test("WorkbenchSidePane Review explains parent scope for add-node drafts", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftOrigin: {
+      kind: "manual",
+      action: "add_child",
+    },
+    patchDraftState: {
+      state: "ready",
+      summary: "Add child draft summary",
+      opCount: 1,
+      opTypes: [{ type: "add_node", count: 1 }],
+      ops: [
+        {
+          type: "add_node",
+          title: "Authentication Child",
+          parent_id: "node-1",
+        },
+      ],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.match(html, /workbench\.reviewAffectedNodesTitle/);
+  assert.match(html, /workbench\.reviewAffectedNodeAdd/);
+  assert.match(
+    html,
+    /workbench\.reviewAffectedParent \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
 });
 
 test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when the draft changes citations", () => {
@@ -370,6 +426,14 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
       run_id: "patch-2",
       origin: "manual",
     },
+    patchDraftState: {
+      state: "ready",
+      summary: "Loaded patch from history",
+      opCount: 1,
+      opTypes: [{ type: "update_node", count: 1 }],
+      ops: [{ type: "update_node", id: "node-1", body: "Recovered wording" }],
+      error: null,
+    },
     reviewDraft: null,
   });
 
@@ -377,6 +441,12 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
   assert.match(
     html,
     /workbench\.reviewHistoryOriginBody \{&quot;runId&quot;:&quot;patch-2&quot;,&quot;origin&quot;:&quot;manual&quot;\}/,
+  );
+  assert.match(html, /workbench\.reviewAffectedNodesTitle/);
+  assert.match(html, /workbench\.reviewAffectedNodeUpdate/);
+  assert.match(
+    html,
+    /workbench\.reviewAffectedFields \{&quot;fields&quot;:&quot;fields\.body&quot;\}/,
   );
 });
 
