@@ -6756,8 +6756,14 @@ test("App keeps source-backed Review explainability humanized for source link op
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
   assert.match(renderedText, /Affected source context/);
+  assert.match(renderedText, /Source-backed focus/);
+  assert.match(renderedText, /Node: Authentication/);
+  assert.match(renderedText, /Source: source\.md/);
+  assert.match(renderedText, /Chunk: Provider Authentication Flow/);
   assert.match(renderedText, /Will link source/);
   assert.match(renderedText, /Will link chunk/);
+  assert.equal((renderedText.match(/Will link source/g) ?? []).length, 2);
+  assert.equal((renderedText.match(/Will link chunk/g) ?? []).length, 2);
   assert.match(renderedText, /source\.md/);
   assert.match(renderedText, /Provider Authentication Flow/);
   assert.doesNotMatch(renderedText, /source-1/);
