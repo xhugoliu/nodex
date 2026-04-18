@@ -57,11 +57,32 @@ function makeOverview(): WorkspaceOverview {
     ],
     patch_history: [
       {
-        id: "patch-1",
+        id: "patch-3",
+        summary: "Promote draft to review",
+        origin: "manual",
+        file_name: "patch-3.json",
+        applied_at: 1710000500,
+      },
+      {
+        id: "patch-2",
         summary: "Attach source evidence",
+        origin: "manual",
+        file_name: "patch-2.json",
+        applied_at: 1710000400,
+      },
+      {
+        id: "patch-1",
+        summary: "Tighten node wording",
         origin: "manual",
         file_name: "patch-1.json",
         applied_at: 1710000300,
+      },
+      {
+        id: "patch-0",
+        summary: "Older patch that should stay hidden",
+        origin: "manual",
+        file_name: "patch-0.json",
+        applied_at: 1710000200,
       },
     ],
   };
@@ -73,6 +94,7 @@ function renderTreePane(workspaceOverview: WorkspaceOverview | null) {
       filteredTree={workspaceOverview?.tree ?? null}
       isCollapsed={false}
       onImportSource={() => {}}
+      onLoadPatchToReview={() => {}}
       onQueryChange={() => {}}
       onRestoreLatestSnapshot={() => {}}
       onSaveSnapshot={() => {}}
@@ -88,15 +110,21 @@ function renderTreePane(workspaceOverview: WorkspaceOverview | null) {
   );
 }
 
-test("TreePane renders a lightweight recovery card with latest snapshot and patch summary", () => {
+test("TreePane renders a lightweight recovery card with recent patch review entries", () => {
   const html = renderTreePane(makeOverview());
 
   assert.match(html, /sidebar\.recovery/);
   assert.match(html, /sidebar\.recoverySnapshotCount \{&quot;count&quot;:2\}/);
-  assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:1\}/);
+  assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:4\}/);
   assert.match(html, /sidebar\.restoreLatestSnapshot/);
+  assert.match(html, /sidebar\.recoveryRestoreNote/);
   assert.match(html, /Before apply|snapshot-2/);
+  assert.match(html, /sidebar\.recoveryRecentPatches/);
+  assert.match(html, /sidebar\.recoveryLoadPatchToReview/);
+  assert.match(html, /Promote draft to review/);
   assert.match(html, /Attach source evidence/);
+  assert.match(html, /Tighten node wording/);
+  assert.doesNotMatch(html, /Older patch that should stay hidden/);
 });
 
 test("TreePane recovery card falls back to an empty restore state before any snapshots exist", () => {

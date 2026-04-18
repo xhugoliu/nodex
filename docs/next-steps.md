@@ -89,6 +89,8 @@
 - 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性
   source detail 里也应直接露出当前节点对某个已引用 chunk 的 citation kind / rationale，避免 cite/uncite 前还要靠记忆回想
 - 第五优先级：把 snapshot、patch history、AI replay 继续做成次级但好用的恢复入口，不回填成主舞台
+  当前左栏 `Recovery` 已接上 `Save Snapshot` / `Restore Latest` 和最近 3 条 patch 的 `Load to Review`
+  后续继续守住“只载入 Review、不直接 apply”的次级入口语义
 - 横向持续项：继续补 `desktop_flow_smoke.py`、`provider_smoke.py`、`runner_compare.py` 和 `npm run test:logic`，把回归能力当成核心资产而不是收尾工作
 
 ## 当前不优先

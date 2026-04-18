@@ -804,6 +804,33 @@ export default function App(props: AppProps = {}) {
     }
   }
 
+  async function loadPatchRunToReview(runId: string) {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const patch = await invokeCommandFn<PatchDocument>("get_patch_document", {
+        start_path: workspacePath,
+        run_id: runId,
+      });
+      if (selectedSourceId) {
+        returnToNodeContext({
+          clearTransientReviewState: false,
+          preservePanelTab: true,
+        });
+      }
+      openReviewDraftState({
+        patchEditorText: JSON.stringify(patch, null, 2),
+        patchDraftOrigin: null,
+        reviewDraft: null,
+      });
+      setConsoleMessage(t("messages.loadedPatchRunReview", { runId }), "success");
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
   async function fetchNodeContext(
     nodeId: string,
     path = workspacePath,
@@ -1261,6 +1288,9 @@ export default function App(props: AppProps = {}) {
               }}
               onRestoreLatestSnapshot={() => {
                 void restoreLatestSnapshot();
+              }}
+              onLoadPatchToReview={(runId) => {
+                void loadPatchRunToReview(runId);
               }}
               onQueryChange={setTreeQuery}
               onSelectNode={handleWorkbenchNodeSelection}

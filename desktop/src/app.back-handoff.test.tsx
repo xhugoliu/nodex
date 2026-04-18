@@ -344,8 +344,22 @@ function makeRecoveryOverview(): WorkspaceOverview {
   ];
   overview.patch_history = [
     {
-      id: "patch-1",
+      id: "patch-3",
+      summary: "Promote draft to review",
+      origin: "manual",
+      file_name: "patch-3.json",
+      applied_at: 1710000400,
+    },
+    {
+      id: "patch-2",
       summary: "Attach source evidence",
+      origin: "manual",
+      file_name: "patch-2.json",
+      applied_at: 1710000300,
+    },
+    {
+      id: "patch-1",
+      summary: "Tighten node wording",
       origin: "manual",
       file_name: "patch-1.json",
       applied_at: 1710000200,
@@ -5040,6 +5054,13 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
       if (command === "restore_snapshot") {
         return makeRecoveryOverviewWithSavedSnapshot() as T;
       }
+      if (command === "get_patch_document") {
+        return {
+          version: 1,
+          summary: "Loaded patch from history",
+          ops: [{ type: "update_node", id: "node-1", body: "Recovered wording" }],
+        } as T;
+      }
       throw new Error(`unexpected command: ${command}`);
     },
     openPath: async () => null,
@@ -5112,6 +5133,28 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   assert.ok(requireSidePaneProps().selectedSourceDetail);
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 1);
+
+  await act(async () => {
+    requireTreePaneProps().onLoadPatchToReview("patch-2");
+    await flush(2);
+  });
+
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_patch_document" &&
+        call.args.start_path === "/workspace" &&
+        call.args.run_id === "patch-2",
+    ),
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(requireSidePaneProps().patchDraftState.summary, "Loaded patch from history");
+  assert.ok(
+    !invokeCalls.some((call) => call.command === "apply_reviewed_patch"),
+    "loading history into Review should not apply the patch",
+  );
 
   await act(async () => {
     requireTreePaneProps().onSaveSnapshot();

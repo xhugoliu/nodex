@@ -17,6 +17,7 @@
 ## 当前桌面 contract
 
 - 左栏：先保持轻导航、`Import Source` 和 source/browser 的最小职责
+  `Recovery` 只承接 `Save Snapshot` / `Restore Latest` 和最近 patch 的 `Load to Review`
 - 中栏：固定为纯画布工作区
 - 右栏：节点作用域的 assistant workspace，默认承接 `Context / Draft / Review`
 - 画布高频动作放在节点卡片内
@@ -44,6 +45,7 @@
 - `source detail -> Draft` 也应先通过共享 helper 收口到 node-scoped Draft，不把打开的 source detail 直接带成新的 Draft 状态边界
 - 当某个 chunk 已经被当前节点引用时，source detail 里也应直接看见当前 citation kind 和 rationale，再决定是继续保留还是起草 uncite
 - apply 成功后优先聚焦新增节点；若没有新增节点，则回到当前节点
+- `Recovery -> Recent patches` 只允许把最近 patch 重新载入 `Review`，不直接 apply，也不把 history/activity 抬回主舞台
 - 右栏来源信息应解释“为什么值得看”，而不只是列 chunk
 - 右栏默认展示用户下一步该做什么，而不是底层运行细节列表
 - 右栏在 `Context / Draft / Review` 和 source handoff 间都应继续说明“当前围绕哪个节点行动”

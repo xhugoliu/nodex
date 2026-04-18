@@ -170,6 +170,12 @@ const translations: Record<Locale, TranslationTree> = {
       recoveryPatchCount: "{count} applied patches",
       recoveryLatestSnapshot: "Latest snapshot",
       recoveryLatestPatch: "Latest patch",
+      recoveryRecentPatches: "Recent patches",
+      recoveryRecentPatchesBody:
+        "Load one of the latest applied patches back into Review without applying it again.",
+      recoveryLoadPatchToReview: "Load to Review",
+      recoveryRestoreNote:
+        "Restore rewinds content state only. Later patch runs and AI history stay in the workspace.",
       recoveryEmpty: "Save one snapshot to create a safe return point.",
       restoreLatestSnapshot: "Restore Latest",
       collapse: "Hide",
@@ -565,6 +571,7 @@ const translations: Record<Locale, TranslationTree> = {
       draftedUncitation: "Drafted uncitation patch for {nodeId}.",
       loadedAiRunPatch: "Loaded AI run {runId} into the patch editor.",
       loadedPatchRunPatch: "Loaded patch run {runId} into the patch editor.",
+      loadedPatchRunReview: "Loaded patch run {runId} into Review.",
       restoredSnapshotFromActivity:
         "Restored snapshot {snapshotId} from the activity timeline.",
       rootNodeStructureLocked: "The root node cannot be moved or deleted.",
@@ -779,6 +786,12 @@ const translations: Record<Locale, TranslationTree> = {
       recoveryPatchCount: "{count} 条已应用 patch",
       recoveryLatestSnapshot: "最近快照",
       recoveryLatestPatch: "最近一次 patch",
+      recoveryRecentPatches: "最近 patch",
+      recoveryRecentPatchesBody:
+        "把最近已应用的 patch 重新载回 Review，只做复看，不直接再次应用。",
+      recoveryLoadPatchToReview: "载入 Review",
+      recoveryRestoreNote:
+        "恢复只回退内容状态，不会抹掉之后的 patch 历史或 AI 历史。",
       recoveryEmpty: "先保存一份快照，给当前工作流留一个安全回退点。",
       restoreLatestSnapshot: "恢复最近快照",
       collapse: "收起",
@@ -1165,6 +1178,7 @@ const translations: Record<Locale, TranslationTree> = {
       draftedUncitation: "已为 {nodeId} 起草取消引用 patch。",
       loadedAiRunPatch: "已将 AI 运行 {runId} 载入 patch 编辑器。",
       loadedPatchRunPatch: "已将 patch run {runId} 载入 patch 编辑器。",
+      loadedPatchRunReview: "已将 patch run {runId} 载入 Review。",
       restoredSnapshotFromActivity:
         "已从活动时间线恢复快照 {snapshotId}。",
       rootNodeStructureLocked: "根节点不能移动或删除。",

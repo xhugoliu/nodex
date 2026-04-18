@@ -23,11 +23,12 @@ export function TreePane(props: {
   onImportSource: () => void;
   onSaveSnapshot: () => void;
   onRestoreLatestSnapshot: () => void;
+  onLoadPatchToReview: (runId: string) => void;
   onQueryChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;
 }) {
   const latestSnapshot = latestWorkspaceSnapshot(props.workspaceOverview);
-  const latestPatchRun = latestWorkspacePatchRun(props.workspaceOverview);
+  const recentPatchRuns = recentWorkspacePatchRuns(props.workspaceOverview, 3);
 
   if (props.isCollapsed) {
     return (
@@ -148,6 +149,9 @@ export function TreePane(props: {
                 {props.t("sidebar.restoreLatestSnapshot")}
               </button>
             </div>
+            <div className="text-xs leading-6 text-[color:var(--muted)]">
+              {props.t("sidebar.recoveryRestoreNote")}
+            </div>
 
             {latestSnapshot ? (
               <div className="space-y-1 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
@@ -165,16 +169,41 @@ export function TreePane(props: {
               <EmptyBox>{props.t("sidebar.recoveryEmpty")}</EmptyBox>
             )}
 
-            {latestPatchRun ? (
-              <div className="space-y-1 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                  {props.t("sidebar.recoveryLatestPatch")}
+            {recentPatchRuns.length ? (
+              <div className="space-y-3 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+                <div className="space-y-1">
+                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                    {props.t("sidebar.recoveryRecentPatches")}
+                  </div>
+                  <div className="text-sm leading-6 text-[color:var(--muted)]">
+                    {props.t("sidebar.recoveryRecentPatchesBody")}
+                  </div>
                 </div>
-                <div className="text-sm leading-6 text-[color:var(--text)]">
-                  {latestPatchRun.summary ?? latestPatchRun.id}
-                </div>
-                <div className="text-xs text-[color:var(--muted)]">
-                  {formatTimestamp(latestPatchRun.applied_at)}
+                <div className="space-y-2">
+                  {recentPatchRuns.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-xl border border-[color:var(--line-soft)] bg-[color:var(--bg-warm)]/55 px-3 py-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm leading-6 text-[color:var(--text)]">
+                            {entry.summary ?? entry.id}
+                          </div>
+                          <div className="text-xs text-[color:var(--muted)]">
+                            {formatTimestamp(entry.applied_at)}
+                          </div>
+                        </div>
+                        <button
+                          className={ghostButtonClass}
+                          onClick={() => props.onLoadPatchToReview(entry.id)}
+                          type="button"
+                        >
+                          {props.t("sidebar.recoveryLoadPatchToReview")}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : null}
@@ -219,14 +248,11 @@ function latestWorkspaceSnapshot(workspaceOverview: WorkspaceOverview | null) {
   ) ?? null;
 }
 
-function latestWorkspacePatchRun(workspaceOverview: WorkspaceOverview | null) {
-  return workspaceOverview?.patch_history.reduce<
-    WorkspaceOverview["patch_history"][number] | null
-  >(
-    (latest, entry) =>
-      !latest || entry.applied_at > latest.applied_at ? entry : latest,
-    null,
-  ) ?? null;
+function recentWorkspacePatchRuns(
+  workspaceOverview: WorkspaceOverview | null,
+  limit: number,
+) {
+  return workspaceOverview?.patch_history.slice(0, limit) ?? [];
 }
 
 function SidebarToggleButton(props: {
