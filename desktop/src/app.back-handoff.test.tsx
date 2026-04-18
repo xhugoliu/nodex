@@ -5679,6 +5679,11 @@ test("App keeps history-loaded source removal review humanized after source-deta
     "Loaded source removal patch from history",
   );
   assert.match(renderedText, /Affected source context/);
+  assert.match(renderedText, /Source-backed focus/);
+  assert.match(renderedText, /Node: Authentication/);
+  assert.match(renderedText, /Source: source\.md/);
+  assert.match(renderedText, /Chunk: Provider Authentication Flow/);
+  assert.match(renderedText, /Citation: direct/);
   assert.match(renderedText, /Will remove citation/);
   assert.match(renderedText, /Will unlink chunk/);
   assert.match(renderedText, /Will unlink source/);

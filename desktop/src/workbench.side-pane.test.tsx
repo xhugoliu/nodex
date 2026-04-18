@@ -521,6 +521,23 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
 
   assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
+  assert.match(html, /workbench\.reviewSourceFocusTitle/);
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusSource \{&quot;title&quot;:&quot;source\.md&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusChunk \{&quot;title&quot;:&quot;Provider Authentication Flow&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
+  );
   assert.match(html, /workbench\.reviewAffectedSourceTitle/);
   assert.match(html, /workbench\.reviewAffectedSourceCite/);
   assert.match(
@@ -542,6 +559,57 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     html,
     /composer\.opCiteSourceChunkWithRationale \{&quot;chunk&quot;:&quot;Provider Authentication Flow&quot;,&quot;node&quot;:&quot;Authentication&quot;,&quot;citationKind&quot;:&quot;detail\.citationKindDirect&quot;,&quot;rationale&quot;:&quot;This section explains why the current node should reuse the default auth route\.&quot;\}/,
   );
+});
+
+test("WorkbenchSidePane Review surfaces source-backed focus cues for source removal drafts", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContextWithEvidence(),
+    selectedSourceDetail: null,
+    patchDraftOrigin: {
+      kind: "patch_history",
+      run_id: "patch-2",
+      origin: "manual",
+    },
+    patchDraftState: {
+      state: "ready",
+      summary: "Loaded source removal patch from history",
+      opCount: 3,
+      opTypes: [
+        { type: "uncite_source_chunk", count: 1 },
+        { type: "detach_source_chunk", count: 1 },
+        { type: "detach_source", count: 1 },
+      ],
+      ops: [
+        { type: "uncite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" },
+        { type: "detach_source_chunk", chunk_id: "chunk-1", node_id: "node-1" },
+        { type: "detach_source", source_id: "source-1", node_id: "node-1" },
+      ],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.match(html, /workbench\.reviewSourceFocusTitle/);
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusSource \{&quot;title&quot;:&quot;source\.md&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusChunk \{&quot;title&quot;:&quot;Provider Authentication Flow&quot;\}/,
+  );
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
+  );
+  assert.match(html, /workbench\.reviewImpactUnciteSourceChunk \{&quot;count&quot;:1\}/);
+  assert.match(html, /workbench\.reviewImpactDetachSourceChunk \{&quot;count&quot;:1\}/);
+  assert.match(html, /workbench\.reviewImpactDetachSource \{&quot;count&quot;:1\}/);
 });
 
 test("WorkbenchSidePane Review keeps source and source-chunk ops humanized beyond cite and uncite", () => {

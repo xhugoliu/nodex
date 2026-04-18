@@ -1081,6 +1081,10 @@ function ReviewSurface(props: {
     props.selectedSourceDetail,
     props.t,
   );
+  const reviewSourceFocusItems = collectReviewSourceFocusItems(
+    affectedSourceContext,
+    props.t,
+  );
   const reviewOriginMeta = props.patchDraftOrigin
     ? formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)
     : "";
@@ -1147,6 +1151,24 @@ function ReviewSurface(props: {
                   })}
                 </span>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {reviewSourceFocusItems.length ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewSourceFocusTitle")}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+              {reviewSourceFocusItems.map((item) => (
+                <span
+                  key={item.key}
+                  className="rounded-full border border-[color:var(--line-soft)] bg-white/90 px-2.5 py-1"
+                >
+                  {item.label}
+                </span>
+              ))}
             </div>
           </div>
         ) : null}
@@ -1671,6 +1693,50 @@ function collectReviewAffectedSourceContext(
       rationale:
         trimmedString(op.rationale) || trimmedString(citationDetail?.rationale) || null,
     });
+  }
+
+  return results;
+}
+
+function collectReviewSourceFocusItems(
+  affectedSourceContext: ReturnType<typeof collectReviewAffectedSourceContext>,
+  t: Translator,
+) {
+  const results = new Array<{ key: string; label: string }>();
+  const seen = new Set<string>();
+
+  const push = (kind: string, value: string | null, formatter: (text: string) => string) => {
+    const trimmed = value?.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const key = `${kind}:${trimmed}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    results.push({
+      key,
+      label: formatter(trimmed),
+    });
+  };
+
+  for (const target of affectedSourceContext) {
+    push("node", target.nodeTitle, (title) =>
+      t("workbench.reviewSourceFocusNode", { title }),
+    );
+    push("source", target.sourceName, (title) =>
+      t("workbench.reviewSourceFocusSource", { title }),
+    );
+    push("chunk", target.chunk?.label?.trim() || target.chunk?.id || null, (title) =>
+      t("workbench.reviewSourceFocusChunk", { title }),
+    );
+    push("citation", target.citationKind, (kind) =>
+      t("workbench.reviewSourceFocusCitation", {
+        kind: formatCitationKind(kind, t),
+      }),
+    );
   }
 
   return results;

@@ -31,6 +31,7 @@
 - `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
   当前 `Draft` 里可见的 draft-op 卡片也应复用 `Review` 同一套 node/source/chunk 人类化解释，不在进入 Review 前退回 raw id
 - `Review`：仍然回到 patch inspect / apply 的确认层，并直接概括当前草案、操作数量、证据支撑，以及 apply 后可能落到的焦点
+  对 source-backed patch，顶部 summary 也应尽量先把 node / source / chunk / citation 这些关键信息留在一眼可见处，再往下看逐条来源影响卡
   当草案来自 AI run 或 history reload 时，Review 里也应直接露出 provenance，而不是只靠瞬时提示记忆
   手工起草的 add child / update / cite / uncite 也应在 Review 里说明来源，避免只剩一份无上下文 patch
   add/update 这类结构草案也应直接说明影响了哪个节点、父节点和哪些字段，避免 Review 退回只看 op id
