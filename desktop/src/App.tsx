@@ -42,6 +42,7 @@ import type {
   NodeWorkspaceContext,
   PatchDocument,
   PatchDraftOrigin,
+  SnapshotRecord,
   SourceDetail,
   SourceImportOutput,
   SourceImportReport,
@@ -527,9 +528,17 @@ export default function App(props: AppProps = {}) {
       preserveSelection?: boolean;
       skipAutoSelect?: boolean;
       preferredNodeId?: string | null;
+      resetTransientUiState?: boolean;
     } = {},
   ) {
     const workspaceChanged = overview.root_dir !== workspacePath;
+    const currentSelection = options.resetTransientUiState
+      ? { nodeId: null, sourceId: null }
+      : {
+          nodeId: selectedNodeId,
+          sourceId: selectedSourceId,
+        };
+    const currentNodeId = options.resetTransientUiState ? null : selectedNodeId;
 
     startTransition(() => {
       setWorkspaceOverview(overview);
@@ -540,12 +549,23 @@ export default function App(props: AppProps = {}) {
       }
     });
 
+    if (options.resetTransientUiState) {
+      setSelectionPanelTab("context");
+      setSelectedSourceId(null);
+      setSelectedSourceDetail(null);
+      setPatchEditor("");
+      setPatchDraftOrigin(null);
+      setReviewDraft(null);
+      setApplyResult(null);
+      setLastAiDraftError(null);
+    }
+
     if (
       options.preserveSelection &&
-      selectedNodeId &&
-      findNodeById(overview.tree, selectedNodeId)
+      currentNodeId &&
+      findNodeById(overview.tree, currentNodeId)
     ) {
-      const reloaded = await fetchNodeContext(selectedNodeId, overview.root_dir, {
+      const reloaded = await fetchNodeContext(currentNodeId, overview.root_dir, {
         clearTransientReviewState: false,
         preservePanelTab: true,
         silentError: true,
@@ -568,10 +588,7 @@ export default function App(props: AppProps = {}) {
 
     const focusDecision = deriveOverviewFocusDecision(
       overview.tree,
-      {
-        nodeId: selectedNodeId,
-        sourceId: selectedSourceId,
-      },
+      currentSelection,
       options.preferredNodeId,
     );
     const nextNodeId = focusDecision.nextNodeId;
@@ -698,6 +715,87 @@ export default function App(props: AppProps = {}) {
         t("messages.importedSource", {
           name: output.report.original_name,
           title: output.report.root_title,
+        }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
+  function latestSnapshotRecord(
+    snapshots: SnapshotRecord[],
+  ): SnapshotRecord | null {
+    return snapshots.reduce<SnapshotRecord | null>(
+      (latest, snapshot) =>
+        !latest || snapshot.created_at > latest.created_at ? snapshot : latest,
+      null,
+    );
+  }
+
+  function mergeSnapshotRecord(
+    snapshots: SnapshotRecord[],
+    snapshot: SnapshotRecord,
+  ): SnapshotRecord[] {
+    return [snapshot, ...snapshots.filter((entry) => entry.id !== snapshot.id)].sort(
+      (left, right) => right.created_at - left.created_at,
+    );
+  }
+
+  async function saveWorkspaceSnapshot() {
+    if (!ensureWorkspace()) {
+      return;
+    }
+
+    try {
+      const snapshot = await invokeCommandFn<SnapshotRecord>("save_snapshot", {
+        start_path: workspacePath,
+        label: null,
+      });
+      startTransition(() => {
+        setWorkspaceOverview((current) =>
+          current
+            ? {
+                ...current,
+                snapshots: mergeSnapshotRecord(current.snapshots, snapshot),
+              }
+            : current,
+        );
+      });
+      setConsoleMessage(
+        t("messages.savedSnapshot", {
+          snapshotId: snapshot.id,
+        }),
+        "success",
+      );
+    } catch (error) {
+      setConsoleMessage(formatError(error), "error");
+    }
+  }
+
+  async function restoreLatestSnapshot() {
+    if (!ensureWorkspace() || !workspaceOverview) {
+      return;
+    }
+
+    const latestSnapshot = latestSnapshotRecord(workspaceOverview.snapshots);
+    if (!latestSnapshot) {
+      setConsoleMessage(t("messages.noSnapshotsAvailable"), "error");
+      return;
+    }
+
+    try {
+      const overview = await invokeCommandFn<WorkspaceOverview>("restore_snapshot", {
+        start_path: workspacePath,
+        snapshot_id: latestSnapshot.id,
+      });
+      await applyOverview(overview, {
+        preferredNodeId: selectedNodeId,
+        resetTransientUiState: true,
+      });
+      setConsoleMessage(
+        t("messages.restoredSnapshot", {
+          snapshotId: latestSnapshot.id,
         }),
         "success",
       );
@@ -1157,6 +1255,12 @@ export default function App(props: AppProps = {}) {
               }}
               onImportSource={() => {
                 void importSourceFromShortcut();
+              }}
+              onSaveSnapshot={() => {
+                void saveWorkspaceSnapshot();
+              }}
+              onRestoreLatestSnapshot={() => {
+                void restoreLatestSnapshot();
               }}
               onQueryChange={setTreeQuery}
               onSelectNode={handleWorkbenchNodeSelection}

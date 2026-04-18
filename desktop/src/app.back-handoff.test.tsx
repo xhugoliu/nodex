@@ -332,6 +332,42 @@ function makeOverview(): WorkspaceOverview {
   };
 }
 
+function makeRecoveryOverview(): WorkspaceOverview {
+  const overview = makeOverview();
+  overview.snapshots = [
+    {
+      id: "snapshot-1",
+      label: "Before apply",
+      file_name: "snapshot-1.json",
+      created_at: 1710000100,
+    },
+  ];
+  overview.patch_history = [
+    {
+      id: "patch-1",
+      summary: "Attach source evidence",
+      origin: "manual",
+      file_name: "patch-1.json",
+      applied_at: 1710000200,
+    },
+  ];
+  return overview;
+}
+
+function makeRecoveryOverviewWithSavedSnapshot(): WorkspaceOverview {
+  const overview = makeRecoveryOverview();
+  overview.snapshots = [
+    {
+      id: "snapshot-2",
+      label: null,
+      file_name: "snapshot-2.json",
+      created_at: 1710000300,
+    },
+    ...overview.snapshots,
+  ];
+  return overview;
+}
+
 function makeImportedOverview(): WorkspaceOverview {
   return {
     root_dir: "/workspace",
@@ -4956,6 +4992,159 @@ test("App renders Context CTA and local provenance in the mounted right pane aft
     ),
     "preferred node id should still drive the mounted context load",
   );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
+test("App wires the lightweight recovery entry through save-snapshot and restore-latest actions", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      if (command === "save_snapshot") {
+        return {
+          id: "snapshot-2",
+          label: null,
+          file_name: "snapshot-2.json",
+          created_at: 1710000300,
+        } as T;
+      }
+      if (command === "restore_snapshot") {
+        return makeRecoveryOverviewWithSavedSnapshot() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <div />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  const patchEditor = eventHandlers.get("desktop://patch-editor");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+  assert.ok(patchEditor, "patch-editor listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeRecoveryOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(3);
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  await act(async () => {
+    patchEditor?.({
+      payload: {
+        patch_json: JSON.stringify({
+          version: 1,
+          summary: "Draft summary",
+          ops: [{ type: "add_node", title: "Follow-up branch" }],
+        } satisfies PatchDocument),
+        message: "draft ready",
+        tone: "success",
+      },
+    });
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.ok(requireSidePaneProps().selectedSourceDetail);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 1);
+
+  await act(async () => {
+    requireTreePaneProps().onSaveSnapshot();
+    await flush(2);
+  });
+
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "save_snapshot" &&
+        call.args.start_path === "/workspace" &&
+        call.args.label === null,
+    ),
+  );
+  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots.length, 2);
+  assert.equal(requireTreePaneProps().workspaceOverview?.snapshots[0]?.id, "snapshot-2");
+
+  await act(async () => {
+    requireTreePaneProps().onRestoreLatestSnapshot();
+    await flush(3);
+  });
+
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "restore_snapshot" &&
+        call.args.start_path === "/workspace" &&
+        call.args.snapshot_id === "snapshot-2",
+    ),
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "context");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().patchDraftState.state, "empty");
 
   await act(async () => {
     root.unmount();

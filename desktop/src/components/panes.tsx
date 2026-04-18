@@ -1,8 +1,9 @@
-import type { ConsoleTone, Translator } from "../app-helpers";
+import { formatTimestamp, type ConsoleTone, type Translator } from "../app-helpers";
 import type { TreeNode, WorkspaceOverview } from "../types";
 import {
   EmptyBox,
   EmptyState,
+  ghostButtonClass,
   inputClass,
   panelClass,
   primaryButtonClass,
@@ -20,9 +21,14 @@ export function TreePane(props: {
   t: Translator;
   onToggleCollapse: () => void;
   onImportSource: () => void;
+  onSaveSnapshot: () => void;
+  onRestoreLatestSnapshot: () => void;
   onQueryChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;
 }) {
+  const latestSnapshot = latestWorkspaceSnapshot(props.workspaceOverview);
+  const latestPatchRun = latestWorkspacePatchRun(props.workspaceOverview);
+
   if (props.isCollapsed) {
     return (
       <section className={`${panelClass} flex min-h-0 flex-col items-center gap-3 overflow-hidden px-2 py-3`}>
@@ -101,6 +107,78 @@ export function TreePane(props: {
           ) : (
             <EmptyBox>{props.t("navigator.searchEmpty")}</EmptyBox>
           )}
+
+          <div className="mt-3 space-y-3 rounded-2xl border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.86))] px-3 py-3">
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-[color:var(--text)]">
+                {props.t("sidebar.recovery")}
+              </div>
+              <div className="text-sm leading-6 text-[color:var(--muted)]">
+                {props.t("sidebar.recoveryBody")}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {props.t("sidebar.recoverySnapshotCount", {
+                  count: props.workspaceOverview.snapshots.length,
+                })}
+              </span>
+              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                {props.t("sidebar.recoveryPatchCount", {
+                  count: props.workspaceOverview.patch_history.length,
+                })}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={secondaryButtonClass}
+                onClick={props.onSaveSnapshot}
+                type="button"
+              >
+                {props.t("sidebar.saveSnapshotButton")}
+              </button>
+              <button
+                className={ghostButtonClass}
+                disabled={!latestSnapshot}
+                onClick={props.onRestoreLatestSnapshot}
+                type="button"
+              >
+                {props.t("sidebar.restoreLatestSnapshot")}
+              </button>
+            </div>
+
+            {latestSnapshot ? (
+              <div className="space-y-1 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                  {props.t("sidebar.recoveryLatestSnapshot")}
+                </div>
+                <div className="text-sm leading-6 text-[color:var(--text)]">
+                  {latestSnapshot.label ?? latestSnapshot.id}
+                </div>
+                <div className="text-xs text-[color:var(--muted)]">
+                  {formatTimestamp(latestSnapshot.created_at)}
+                </div>
+              </div>
+            ) : (
+              <EmptyBox>{props.t("sidebar.recoveryEmpty")}</EmptyBox>
+            )}
+
+            {latestPatchRun ? (
+              <div className="space-y-1 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                  {props.t("sidebar.recoveryLatestPatch")}
+                </div>
+                <div className="text-sm leading-6 text-[color:var(--text)]">
+                  {latestPatchRun.summary ?? latestPatchRun.id}
+                </div>
+                <div className="text-xs text-[color:var(--muted)]">
+                  {formatTimestamp(latestPatchRun.applied_at)}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : (
         <EmptyState
@@ -129,6 +207,26 @@ function findSelectedNodeTitle(tree: TreeNode | null, nodeId: string): string | 
   }
 
   return null;
+}
+
+function latestWorkspaceSnapshot(workspaceOverview: WorkspaceOverview | null) {
+  return workspaceOverview?.snapshots.reduce<
+    WorkspaceOverview["snapshots"][number] | null
+  >(
+    (latest, snapshot) =>
+      !latest || snapshot.created_at > latest.created_at ? snapshot : latest,
+    null,
+  ) ?? null;
+}
+
+function latestWorkspacePatchRun(workspaceOverview: WorkspaceOverview | null) {
+  return workspaceOverview?.patch_history.reduce<
+    WorkspaceOverview["patch_history"][number] | null
+  >(
+    (latest, entry) =>
+      !latest || entry.applied_at > latest.applied_at ? entry : latest,
+    null,
+  ) ?? null;
 }
 
 function SidebarToggleButton(props: {
