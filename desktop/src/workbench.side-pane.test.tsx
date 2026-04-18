@@ -503,6 +503,10 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     html,
     /detail\.chunkMeta \{&quot;ordinal&quot;:1,&quot;start&quot;:5,&quot;end&quot;:11\}/,
   );
+  assert.match(
+    html,
+    /composer\.opCiteSourceChunkWithRationale \{&quot;chunk&quot;:&quot;Provider Authentication Flow&quot;,&quot;node&quot;:&quot;Authentication&quot;,&quot;citationKind&quot;:&quot;detail\.citationKindDirect&quot;,&quot;rationale&quot;:&quot;This section explains why the current node should reuse the default auth route\.&quot;\}/,
+  );
 });
 
 test("WorkbenchSidePane Review keeps patch-history provenance visible for recovery-loaded drafts", () => {
@@ -534,6 +538,10 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
   assert.match(
     html,
     /workbench\.reviewAffectedFields \{&quot;fields&quot;:&quot;fields\.body&quot;\}/,
+  );
+  assert.match(
+    html,
+    /composer\.opUpdateNodeFields \{&quot;node&quot;:&quot;Authentication&quot;,&quot;fields&quot;:&quot;fields\.body&quot;\}/,
   );
 });
 
@@ -602,6 +610,10 @@ test("WorkbenchSidePane Review keeps affected source context visible for uncite 
   );
   assert.match(html, /source\.md/);
   assert.match(html, /Provider Authentication Flow/);
+  assert.match(
+    html,
+    /composer\.opUnciteSourceChunk \{&quot;chunk&quot;:&quot;Provider Authentication Flow&quot;,&quot;node&quot;:&quot;Authentication&quot;\}/,
+  );
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {

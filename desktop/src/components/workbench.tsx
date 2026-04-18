@@ -1318,7 +1318,12 @@ function ReviewSurface(props: {
               key={`${op.type ?? "op"}-${index}`}
               className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-3 py-3 text-sm leading-6 text-[color:var(--text)]"
             >
-              {describePatchOperation(op, props.t)}
+              {describeReviewPatchOperation(
+                op,
+                props.nodeContext,
+                props.selectedSourceDetail,
+                props.t,
+              )}
             </div>
           ))}
         </div>
@@ -1381,6 +1386,18 @@ function formatReviewImpactSummary(
     default:
       return t("workbench.reviewImpactGeneric", { count, type });
   }
+}
+
+function describeReviewPatchOperation(
+  op: PatchDraftState["ops"][number],
+  nodeContext: NodeWorkspaceContext | null,
+  selectedSourceDetail: SourceDetail | null,
+  t: Translator,
+) {
+  return describePatchOperation(
+    contextualizeReviewPatchOperation(op, nodeContext, selectedSourceDetail),
+    t,
+  );
 }
 
 function collectReviewAffectedNodes(
@@ -1472,6 +1489,55 @@ function collectReviewAffectedNodes(
   }
 
   return results;
+}
+
+function contextualizeReviewPatchOperation(
+  op: PatchDraftState["ops"][number],
+  nodeContext: NodeWorkspaceContext | null,
+  selectedSourceDetail: SourceDetail | null,
+) {
+  const next = { ...op };
+  const nodeTitles = buildReviewNodeTitleLookup(nodeContext);
+  const sourceName = resolveReviewSourceName(op.source_id, nodeContext, selectedSourceDetail);
+  const chunkLabel = resolveReviewChunkLabel(op.chunk_id, nodeContext, selectedSourceDetail);
+
+  if (op.type === "add_node" || op.type === "move_node") {
+    next.parent_id = resolveReviewNodeTitle(nodeTitles, op.parent_id) ?? op.parent_id;
+  }
+
+  if (
+    op.type === "update_node" ||
+    op.type === "move_node" ||
+    op.type === "delete_node"
+  ) {
+    next.id = resolveReviewNodeTitle(nodeTitles, op.id) ?? op.id;
+  }
+
+  if (
+    op.type === "attach_source" ||
+    op.type === "detach_source" ||
+    op.type === "attach_source_chunk" ||
+    op.type === "detach_source_chunk" ||
+    op.type === "cite_source_chunk" ||
+    op.type === "uncite_source_chunk"
+  ) {
+    next.node_id = resolveReviewNodeTitle(nodeTitles, op.node_id) ?? op.node_id;
+  }
+
+  if (op.type === "attach_source" || op.type === "detach_source") {
+    next.source_id = sourceName ?? op.source_id;
+  }
+
+  if (
+    op.type === "attach_source_chunk" ||
+    op.type === "detach_source_chunk" ||
+    op.type === "cite_source_chunk" ||
+    op.type === "uncite_source_chunk"
+  ) {
+    next.chunk_id = chunkLabel ?? op.chunk_id;
+  }
+
+  return next;
 }
 
 function collectReviewAffectedSourceChunks(
@@ -1580,6 +1646,53 @@ function resolveReviewSourceChunk(
   }
 
   return null;
+}
+
+function resolveReviewSourceName(
+  sourceIdValue: unknown,
+  nodeContext: NodeWorkspaceContext | null,
+  selectedSourceDetail: SourceDetail | null,
+) {
+  const sourceId = trimmedString(sourceIdValue);
+  if (!sourceId) {
+    return null;
+  }
+
+  if (selectedSourceDetail?.source.id === sourceId) {
+    return selectedSourceDetail.source.original_name;
+  }
+
+  for (const source of nodeContext?.node_detail.evidence ?? []) {
+    if (source.source.id === sourceId) {
+      return source.source.original_name;
+    }
+  }
+
+  for (const source of nodeContext?.node_detail.sources ?? []) {
+    if (source.source.id === sourceId) {
+      return source.source.original_name;
+    }
+  }
+
+  return null;
+}
+
+function resolveReviewChunkLabel(
+  chunkIdValue: unknown,
+  nodeContext: NodeWorkspaceContext | null,
+  selectedSourceDetail: SourceDetail | null,
+) {
+  const chunkId = trimmedString(chunkIdValue);
+  if (!chunkId) {
+    return null;
+  }
+
+  const resolved = resolveReviewSourceChunk(chunkId, nodeContext, selectedSourceDetail);
+  if (!resolved) {
+    return null;
+  }
+
+  return resolved.chunk.label?.trim() || resolved.chunk.id;
 }
 
 function resolveReviewCitationDetail(

@@ -5200,6 +5200,8 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   assert.match(dom.container.textContent ?? "", /Affected nodes/);
   assert.match(dom.container.textContent ?? "", /Will update node/);
   assert.match(dom.container.textContent ?? "", /Fields: Body/);
+  assert.match(dom.container.textContent ?? "", /Update Authentication/);
+  assert.doesNotMatch(dom.container.textContent ?? "", /Update node-1/);
   assert.ok(
     !invokeCalls.some((call) => call.command === "apply_reviewed_patch"),
     "loading history into Review should not apply the patch",
@@ -6144,6 +6146,10 @@ test("App keeps tree, canvas, and right rail aligned on the current node after c
     "cite draft should use the selected node and source chunk",
   );
   assert.match(dom.container.textContent ?? "", /For node: Authentication/);
+  assert.match(
+    dom.container.textContent ?? "",
+    /Cite chunk Provider Authentication Flow as direct evidence for Authentication/,
+  );
 
   await act(async () => {
     requireSidePaneProps().onApplyPatch();
@@ -6297,6 +6303,10 @@ test("App keeps tree, canvas, and right rail aligned on the current node after u
   assert.match(
     dom.container.textContent ?? "",
     /rationale: This section explains why the current node should reuse the default auth route\./,
+  );
+  assert.match(
+    dom.container.textContent ?? "",
+    /Remove cited chunk Provider Authentication Flow from Authentication/,
   );
 
   await act(async () => {
