@@ -372,6 +372,26 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
   );
 });
 
+test("WorkbenchSidePane Review keeps AI draft provenance visible when the draft came from an AI run", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftOrigin: {
+      kind: "ai_run",
+      run_id: "run-1",
+      capability: "expand",
+      explore_by: null,
+      provider: "anthropic",
+      model: "claude-sonnet",
+      patch_run_id: null,
+    },
+  });
+
+  assert.match(html, /composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/);
+  assert.match(html, /reports\.capability \{&quot;value&quot;:&quot;expand&quot;\}/);
+  assert.match(html, /reports\.provider \{&quot;value&quot;:&quot;anthropic&quot;\}/);
+  assert.match(html, /reports\.model \{&quot;value&quot;:&quot;claude-sonnet&quot;\}/);
+});
+
 test("source-detail handoff clears stale review/apply state before node context renders", () => {
   const nextState = deriveReturnToNodeContextState({
     currentSelection: { nodeId: "node-1", sourceId: "source-1" },

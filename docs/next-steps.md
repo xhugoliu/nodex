@@ -85,6 +85,7 @@
 - 第二优先级：继续稳定桌面默认 AI draft route，把 LangChain + external runner 的失败分类、凭据诊断、重试与 smoke 回归收紧到默认路径服务面
 - 第三优先级：提升 patch review 可读性，让 inspect / apply 更清楚地说明影响范围、evidence 变化和 apply 后 focus 落点
   当前右栏 `Review` 也应直接先说明草案摘要、操作数量和 apply 后大概率聚焦到哪，而不是只堆变更列表
+  进入 Review 后也应直接看见当前草案来自哪条 AI run 或哪条 patch history，不要把 provenance 只留给瞬时提示
   下一步继续把节点结构变化和 evidence 变化也收成一眼可读的 summary，而不是只留在逐条 op 文本里
 - 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性
   source detail 里也应直接露出当前节点对某个已引用 chunk 的 citation kind / rationale，避免 cite/uncite 前还要靠记忆回想

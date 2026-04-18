@@ -30,6 +30,7 @@
   同时保留当前来源的本地 provenance（至少文件路径与导入时间），让这块更像稳定工作台而不是会话摘要
 - `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
 - `Review`：仍然回到 patch inspect / apply 的确认层，并直接概括当前草案、操作数量、证据支撑，以及 apply 后可能落到的焦点
+  当草案来自 AI run 或 history reload 时，Review 里也应直接露出 provenance，而不是只靠瞬时提示记忆
 - 右栏顶部持续显示当前焦点节点；如果来源上下文仍打开，也应同时标出当前来源
 - `Draft` 仍只显示 node-scoped 焦点，不把来源提示重新暗示成新的执行作用域
 - 不是全局聊天窗口
