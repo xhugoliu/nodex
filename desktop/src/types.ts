@@ -173,6 +173,7 @@ export interface PatchHistoryDraftOrigin {
 
 export interface ManualPatchDraftOrigin {
   kind: "manual";
+  action?: "add_child" | "update_node" | "cite_source_chunk" | "uncite_source_chunk";
 }
 
 export type PatchDraftOrigin =

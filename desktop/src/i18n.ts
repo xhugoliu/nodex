@@ -137,6 +137,11 @@ const translations: Record<Locale, TranslationTree> = {
       reviewImpactUnciteSourceChunk: "{count} evidence removals",
       reviewImpactGeneric: "{count} × {type}",
       reviewEvidenceCount: "{count} direct evidence refs",
+      reviewManualOriginTitle: "Drafted here",
+      reviewManualOriginAddChild: "Manually drafted from Add Child.",
+      reviewManualOriginUpdateNode: "Manually drafted from Edit text.",
+      reviewManualOriginCiteChunk: "Manually drafted from source evidence.",
+      reviewManualOriginUnciteChunk: "Manually drafted from evidence removal.",
       reviewHistoryOriginTitle: "Loaded from history",
       reviewHistoryOriginBody:
         "This Review was re-opened from patch run {runId} ({origin}). Inspect it before applying again.",
@@ -759,6 +764,11 @@ const translations: Record<Locale, TranslationTree> = {
       reviewImpactUnciteSourceChunk: "{count} 条证据取消引用",
       reviewImpactGeneric: "{type} × {count}",
       reviewEvidenceCount: "{count} 条直接证据引用",
+      reviewManualOriginTitle: "当前草案来源",
+      reviewManualOriginAddChild: "这份草案来自手工新增子节点。",
+      reviewManualOriginUpdateNode: "这份草案来自手工编辑当前节点。",
+      reviewManualOriginCiteChunk: "这份草案来自手工起草证据引用。",
+      reviewManualOriginUnciteChunk: "这份草案来自手工起草取消引用。",
       reviewHistoryOriginTitle: "来自历史记录",
       reviewHistoryOriginBody:
         "这次 Review 是从 patch run {runId}（{origin}）重新载回来的，应用前请再检查一次。",

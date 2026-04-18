@@ -1063,13 +1063,14 @@ function ReviewSurface(props: {
   );
   const directEvidenceCount =
     props.reviewDraft?.explanation.direct_evidence.length ?? 0;
+  const reviewOriginMeta = props.patchDraftOrigin
+    ? formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)
+    : "";
   const reviewOrigin =
-    props.patchDraftOrigin && props.patchDraftOrigin.kind !== "manual"
+    props.patchDraftOrigin &&
+    (props.patchDraftOrigin.kind !== "manual" || reviewOriginMeta)
       ? props.patchDraftOrigin
       : null;
-  const reviewOriginMeta = reviewOrigin
-    ? formatPatchDraftOriginMeta(reviewOrigin, props.t)
-    : "";
 
   return (
     <div className="space-y-4">

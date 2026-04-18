@@ -1095,7 +1095,7 @@ export default function App(props: AppProps = {}) {
       });
       openReviewDraftState({
         patchEditorText: JSON.stringify(patch, null, 2),
-        patchDraftOrigin: null,
+        patchDraftOrigin: { kind: "manual", action: "add_child" },
         reviewDraft: null,
       });
       setConsoleMessage(
@@ -1195,7 +1195,7 @@ export default function App(props: AppProps = {}) {
       });
       openReviewDraftState({
         patchEditorText: JSON.stringify(patch, null, 2),
-        patchDraftOrigin: null,
+        patchDraftOrigin: { kind: "manual", action: "update_node" },
         reviewDraft: null,
       });
       setConsoleMessage(
@@ -1219,7 +1219,7 @@ export default function App(props: AppProps = {}) {
       });
       openReviewDraftState({
         patchEditorText: JSON.stringify(patch, null, 2),
-        patchDraftOrigin: null,
+        patchDraftOrigin: { kind: "manual", action: "cite_source_chunk" },
         reviewDraft: null,
       });
       setConsoleMessage(
@@ -1243,7 +1243,7 @@ export default function App(props: AppProps = {}) {
       });
       openReviewDraftState({
         patchEditorText: JSON.stringify(patch, null, 2),
-        patchDraftOrigin: null,
+        patchDraftOrigin: { kind: "manual", action: "uncite_source_chunk" },
         reviewDraft: null,
       });
       setConsoleMessage(

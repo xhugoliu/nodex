@@ -5948,6 +5948,10 @@ test("App keeps tree, canvas, and right rail aligned on the updated node after m
   });
 
   assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.deepEqual(requireSidePaneProps().patchDraftOrigin, {
+    kind: "manual",
+    action: "update_node",
+  });
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.ok(
     invokeCalls.some(
@@ -6089,6 +6093,10 @@ test("App keeps tree, canvas, and right rail aligned on the current node after c
   });
 
   assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.deepEqual(requireSidePaneProps().patchDraftOrigin, {
+    kind: "manual",
+    action: "cite_source_chunk",
+  });
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.ok(
     invokeCalls.some(
@@ -6233,6 +6241,10 @@ test("App keeps tree, canvas, and right rail aligned on the current node after u
   });
 
   assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.deepEqual(requireSidePaneProps().patchDraftOrigin, {
+    kind: "manual",
+    action: "uncite_source_chunk",
+  });
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.ok(
     invokeCalls.some(

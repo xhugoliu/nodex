@@ -921,7 +921,7 @@ export function formatPatchDraftOriginTitle(
     case "patch_history":
       return t("workbench.reviewHistoryOriginTitle");
     case "manual":
-      return t("composer.previewTitle");
+      return t("workbench.reviewManualOriginTitle");
   }
 }
 
@@ -946,7 +946,15 @@ export function formatPatchDraftOriginMeta(
             t("reports.sourcePatchRun", { id: origin.run_id }),
             t("detail.activityOrigin", { value: origin.origin }),
           ]
-        : [];
+        : origin.action === "add_child"
+          ? [t("workbench.reviewManualOriginAddChild")]
+          : origin.action === "update_node"
+            ? [t("workbench.reviewManualOriginUpdateNode")]
+            : origin.action === "cite_source_chunk"
+              ? [t("workbench.reviewManualOriginCiteChunk")]
+              : origin.action === "uncite_source_chunk"
+                ? [t("workbench.reviewManualOriginUnciteChunk")]
+                : [];
 
   return parts.filter(Boolean).join(" · ");
 }

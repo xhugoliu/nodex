@@ -392,6 +392,19 @@ test("WorkbenchSidePane Review keeps AI draft provenance visible when the draft 
   assert.match(html, /reports\.model \{&quot;value&quot;:&quot;claude-sonnet&quot;\}/);
 });
 
+test("WorkbenchSidePane Review keeps manual draft provenance visible for node edits", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftOrigin: {
+      kind: "manual",
+      action: "update_node",
+    },
+  });
+
+  assert.match(html, /workbench\.reviewManualOriginTitle/);
+  assert.match(html, /workbench\.reviewManualOriginUpdateNode/);
+});
+
 test("source-detail handoff clears stale review/apply state before node context renders", () => {
   const nextState = deriveReturnToNodeContextState({
     currentSelection: { nodeId: "node-1", sourceId: "source-1" },
