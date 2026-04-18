@@ -194,6 +194,7 @@ export function WorkbenchSidePane(props: {
         <div className="scroll-panel min-h-0 flex-1 overflow-auto">
           {props.selectionTab === "review" ? (
             <ReviewSurface
+              nodeContext={props.nodeContext}
               reviewDraft={props.reviewDraft}
               patchDraftState={props.patchDraftState}
               t={props.t}
@@ -1013,6 +1014,7 @@ export function SourceContextSurface(props: {
 function ReviewSurface(props: {
   reviewDraft: DraftReviewPayload | null;
   patchDraftState: PatchDraftState;
+  nodeContext: NodeWorkspaceContext | null;
   t: Translator;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
@@ -1034,8 +1036,52 @@ function ReviewSurface(props: {
     );
   }
 
+  const draftSummary =
+    props.reviewDraft?.patch.summary ??
+    props.reviewDraft?.report.summary ??
+    props.patchDraftState.summary;
+  const reviewFocusTarget = deriveReviewFocusTarget(
+    props.patchDraftState.ops,
+    props.nodeContext?.node_detail.node.title ?? null,
+  );
+
   return (
     <div className="space-y-4">
+      <section className={`${cardClass} space-y-3`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-[color:var(--text)]">
+              {props.t("detail.currentDraft")}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--muted)]">
+              {draftSummary || props.t("workbench.reviewBody")}
+            </div>
+          </div>
+          <div className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
+            {props.t("workbench.draftReadyOps", {
+              count: props.patchDraftState.opCount,
+            })}
+          </div>
+        </div>
+
+        {reviewFocusTarget ? (
+          <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewFocusTitle")}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+              {reviewFocusTarget.kind === "new"
+                ? props.t("workbench.reviewFocusNewNode", {
+                    title: reviewFocusTarget.title,
+                  })
+                : props.t("workbench.reviewFocusCurrentNode", {
+                    title: reviewFocusTarget.title,
+                  })}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
       <section className={`${cardClass} space-y-3`}>
         <div className="flex gap-2">
           <button className={secondaryButtonClass} onClick={props.onPreviewPatch}>
@@ -1101,6 +1147,31 @@ function ReviewSurface(props: {
       </section>
     </div>
   );
+}
+
+function deriveReviewFocusTarget(
+  ops: PatchDraftState["ops"],
+  currentNodeTitle: string | null,
+): { kind: "new" | "current"; title: string } | null {
+  const firstAddNode = ops.find(
+    (op) => op.type === "add_node" && typeof op.title === "string" && op.title.trim(),
+  );
+
+  if (firstAddNode && typeof firstAddNode.title === "string") {
+    return {
+      kind: "new",
+      title: firstAddNode.title.trim(),
+    };
+  }
+
+  if (currentNodeTitle?.trim()) {
+    return {
+      kind: "current",
+      title: currentNodeTitle.trim(),
+    };
+  }
+
+  return null;
 }
 
 function SourceCard(props: {

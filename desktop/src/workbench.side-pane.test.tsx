@@ -142,6 +142,14 @@ function renderSidePane(options: {
   reviewDraft?: DraftReviewPayload | null;
   aiDraftStatus?: DesktopAiStatus | null;
   aiDraftError?: string | null;
+  patchDraftState?: {
+    state: "ready";
+    summary: string | null;
+    opCount: number;
+    opTypes: Array<{ type: string; count: number }>;
+    ops: Array<{ type: string; title?: string; id?: string }>;
+    error: null;
+  };
 }) {
   return renderToStaticMarkup(
     <WorkbenchSidePane
@@ -165,14 +173,16 @@ function renderSidePane(options: {
       onRefreshAiDraftStatus={() => {}}
       onSelectSelectionTab={() => {}}
       onTitleChange={() => {}}
-      patchDraftState={{
-        state: "ready",
-        summary: "Draft patch summary",
-        opCount: 1,
-        opTypes: [{ type: "add_node", count: 1 }],
-        ops: [{ type: "add_node", title: "Follow-up branch" }],
-        error: null,
-      }}
+      patchDraftState={
+        options.patchDraftState ?? {
+          state: "ready",
+          summary: "Draft patch summary",
+          opCount: 1,
+          opTypes: [{ type: "add_node", count: 1 }],
+          ops: [{ type: "add_node", title: "Follow-up branch" }],
+          error: null,
+        }
+      }
       reviewDraft={options.reviewDraft ?? makeReviewDraft()}
       selectedSourceChunkId={null}
       selectedSourceDetail={
@@ -198,6 +208,12 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
   assert.match(html, /workbench\.focusScopeSourceLabel/);
   assert.match(html, /Authentication/);
   assert.match(html, /source\.md/);
+  assert.match(html, /detail\.currentDraft/);
+  assert.match(html, /workbench\.draftReadyOps \{&quot;count&quot;:1\}/);
+  assert.match(
+    html,
+    /workbench\.reviewFocusNewNode \{&quot;title&quot;:&quot;Follow-up branch&quot;\}/,
+  );
   assert.match(html, /patchEditor\.preview/);
   assert.match(html, /patchEditor\.apply/);
   assert.doesNotMatch(html, /run-1/);
@@ -259,6 +275,33 @@ test("WorkbenchSidePane falls back to node context apply results when no source 
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
   assert.doesNotMatch(html, /patchEditor\.preview/);
   assert.doesNotMatch(html, /workbench\.focusScopeSourceLabel/);
+});
+
+test("WorkbenchSidePane Review falls back to the current node when the draft does not create a new branch", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftState: {
+      state: "ready",
+      summary: "Update draft summary",
+      opCount: 1,
+      opTypes: [{ type: "update_node", count: 1 }],
+      ops: [{ type: "update_node", id: "node-1" }],
+      error: null,
+    },
+    reviewDraft: {
+      ...makeReviewDraft(),
+      patch: {
+        version: 1,
+        summary: "Update draft summary",
+        ops: [{ type: "update_node", id: "node-1" }],
+      },
+    },
+  });
+
+  assert.match(
+    html,
+    /workbench\.reviewFocusCurrentNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {
