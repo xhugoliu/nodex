@@ -42,6 +42,7 @@ import type {
   NodeWorkspaceContext,
   PatchDocument,
   PatchDraftOrigin,
+  PatchRunRecord,
   SnapshotRecord,
   SourceDetail,
   SourceImportOutput,
@@ -818,6 +819,8 @@ export default function App(props: AppProps = {}) {
     }
 
     try {
+      const patchRunRecord =
+        workspaceOverview?.patch_history.find((entry) => entry.id === runId) ?? null;
       const patch = await invokeCommandFn<PatchDocument>("get_patch_document", {
         start_path: workspacePath,
         run_id: runId,
@@ -830,7 +833,9 @@ export default function App(props: AppProps = {}) {
       }
       openReviewDraftState({
         patchEditorText: JSON.stringify(patch, null, 2),
-        patchDraftOrigin: null,
+        patchDraftOrigin: patchRunRecord
+          ? patchRunRecordToDraftOrigin(patchRunRecord)
+          : null,
         reviewDraft: null,
       });
       setConsoleMessage(t("messages.loadedPatchRunReview", { runId }), "success");
@@ -1371,6 +1376,7 @@ export default function App(props: AppProps = {}) {
               selectedSourceDetail={selectedSourceDetail}
               selectedSourceChunkId={null}
               reviewDraft={reviewDraft}
+              patchDraftOrigin={patchDraftOrigin}
               patchDraftState={patchDraftState}
               t={t}
               onSelectSelectionTab={selectSelectionPanelTab}
@@ -1441,5 +1447,13 @@ function aiRunRecordToDraftOrigin(run: DraftReviewPayload["run"]): PatchDraftOri
     provider: run.provider,
     model: run.model,
     patch_run_id: run.patch_run_id,
+  };
+}
+
+function patchRunRecordToDraftOrigin(run: PatchRunRecord): PatchDraftOrigin {
+  return {
+    kind: "patch_history",
+    run_id: run.id,
+    origin: run.origin,
   };
 }

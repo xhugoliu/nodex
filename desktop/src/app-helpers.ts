@@ -915,23 +915,38 @@ export function formatPatchDraftOriginTitle(
   origin: PatchDraftOrigin,
   t: Translator,
 ): string {
-  return t("composer.aiRunOriginTitle", { id: origin.run_id });
+  switch (origin.kind) {
+    case "ai_run":
+      return t("composer.aiRunOriginTitle", { id: origin.run_id });
+    case "patch_history":
+      return t("workbench.reviewHistoryOriginTitle");
+    case "manual":
+      return t("composer.previewTitle");
+  }
 }
 
 export function formatPatchDraftOriginMeta(
   origin: PatchDraftOrigin,
   t: Translator,
 ): string {
-  const parts = [
-    origin.explore_by
-      ? t("reports.exploreBy", { value: origin.explore_by })
-      : t("reports.capability", { value: origin.capability }),
-    origin.provider ? t("reports.provider", { value: origin.provider }) : null,
-    origin.model ? t("reports.model", { value: origin.model }) : null,
-    origin.patch_run_id
-      ? t("composer.aiRunOriginPatchRun", { id: origin.patch_run_id })
-      : null,
-  ];
+  const parts =
+    origin.kind === "ai_run"
+      ? [
+          origin.explore_by
+            ? t("reports.exploreBy", { value: origin.explore_by })
+            : t("reports.capability", { value: origin.capability }),
+          origin.provider ? t("reports.provider", { value: origin.provider }) : null,
+          origin.model ? t("reports.model", { value: origin.model }) : null,
+          origin.patch_run_id
+            ? t("composer.aiRunOriginPatchRun", { id: origin.patch_run_id })
+            : null,
+        ]
+      : origin.kind === "patch_history"
+        ? [
+            t("reports.sourcePatchRun", { id: origin.run_id }),
+            t("detail.activityOrigin", { value: origin.origin }),
+          ]
+        : [];
 
   return parts.filter(Boolean).join(" · ");
 }
@@ -983,6 +998,17 @@ function renderPatchDraftOriginLines(
   origin: PatchDraftOrigin,
   t: Translator,
 ): string[] {
+  if (origin.kind === "patch_history") {
+    return [
+      t("reports.sourcePatchRun", { id: origin.run_id }),
+      t("detail.activityOrigin", { value: origin.origin }),
+    ];
+  }
+
+  if (origin.kind === "manual") {
+    return [];
+  }
+
   return [
     t("reports.sourceAiRun", { id: origin.run_id }),
     origin.explore_by

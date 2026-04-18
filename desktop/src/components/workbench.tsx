@@ -123,6 +123,7 @@ export function WorkbenchSidePane(props: {
   selectedSourceDetail: SourceDetail | null;
   selectedSourceChunkId: string | null;
   reviewDraft: DraftReviewPayload | null;
+  patchDraftOrigin: { kind: string; run_id?: string; origin?: string } | null;
   patchDraftState: PatchDraftState;
   t: Translator;
   onSelectSelectionTab: (tab: SelectionPanelTab) => void;
@@ -196,6 +197,7 @@ export function WorkbenchSidePane(props: {
             <ReviewSurface
               nodeContext={props.nodeContext}
               reviewDraft={props.reviewDraft}
+              patchDraftOrigin={props.patchDraftOrigin}
               patchDraftState={props.patchDraftState}
               t={props.t}
               onPreviewPatch={props.onPreviewPatch}
@@ -1021,6 +1023,7 @@ export function SourceContextSurface(props: {
 
 function ReviewSurface(props: {
   reviewDraft: DraftReviewPayload | null;
+  patchDraftOrigin: { kind: string; run_id?: string; origin?: string } | null;
   patchDraftState: PatchDraftState;
   nodeContext: NodeWorkspaceContext | null;
   t: Translator;
@@ -1057,6 +1060,12 @@ function ReviewSurface(props: {
   );
   const directEvidenceCount =
     props.reviewDraft?.explanation.direct_evidence.length ?? 0;
+  const historyOrigin =
+    props.patchDraftOrigin?.kind === "patch_history" &&
+    typeof props.patchDraftOrigin.run_id === "string" &&
+    typeof props.patchDraftOrigin.origin === "string"
+      ? props.patchDraftOrigin
+      : null;
 
   return (
     <div className="space-y-4">
@@ -1115,6 +1124,20 @@ function ReviewSurface(props: {
                   })}
                 </span>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {historyOrigin ? (
+          <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewHistoryOriginTitle")}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+              {props.t("workbench.reviewHistoryOriginBody", {
+                runId: historyOrigin.run_id,
+                origin: historyOrigin.origin,
+              })}
             </div>
           </div>
         ) : null}

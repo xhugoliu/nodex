@@ -137,6 +137,9 @@ const translations: Record<Locale, TranslationTree> = {
       reviewImpactUnciteSourceChunk: "{count} evidence removals",
       reviewImpactGeneric: "{count} × {type}",
       reviewEvidenceCount: "{count} direct evidence refs",
+      reviewHistoryOriginTitle: "Loaded from history",
+      reviewHistoryOriginBody:
+        "This Review was re-opened from patch run {runId} ({origin}). Inspect it before applying again.",
       reviewBody: "Nothing is written yet. Read the rationale, inspect the change list, then apply when it looks right.",
       backToNode: "Back To Node",
       contextEmptyTitle: "Open A Node Context",
@@ -756,6 +759,9 @@ const translations: Record<Locale, TranslationTree> = {
       reviewImpactUnciteSourceChunk: "{count} 条证据取消引用",
       reviewImpactGeneric: "{type} × {count}",
       reviewEvidenceCount: "{count} 条直接证据引用",
+      reviewHistoryOriginTitle: "来自历史记录",
+      reviewHistoryOriginBody:
+        "这次 Review 是从 patch run {runId}（{origin}）重新载回来的，应用前请再检查一次。",
       reviewBody: "现在还没有真正写入。先看理由和变更列表，确认后再应用。",
       backToNode: "返回节点",
       contextEmptyTitle: "先打开节点上下文",

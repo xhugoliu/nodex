@@ -10,6 +10,7 @@ import type {
   DesktopAiStatus,
   DraftReviewPayload,
   NodeWorkspaceContext,
+  PatchDraftOrigin,
   SourceDetail,
 } from "./types";
 
@@ -168,6 +169,7 @@ function renderSidePane(options: {
   reviewDraft?: DraftReviewPayload | null;
   aiDraftStatus?: DesktopAiStatus | null;
   aiDraftError?: string | null;
+  patchDraftOrigin?: PatchDraftOrigin | null;
   patchDraftState?: {
     state: "ready";
     summary: string | null;
@@ -199,6 +201,7 @@ function renderSidePane(options: {
       onRefreshAiDraftStatus={() => {}}
       onSelectSelectionTab={() => {}}
       onTitleChange={() => {}}
+      patchDraftOrigin={options.patchDraftOrigin ?? null}
       patchDraftState={
         options.patchDraftState ?? {
           state: "ready",
@@ -349,6 +352,24 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
 
   assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
+});
+
+test("WorkbenchSidePane Review keeps patch-history provenance visible for recovery-loaded drafts", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftOrigin: {
+      kind: "patch_history",
+      run_id: "patch-2",
+      origin: "manual",
+    },
+    reviewDraft: null,
+  });
+
+  assert.match(html, /workbench\.reviewHistoryOriginTitle/);
+  assert.match(
+    html,
+    /workbench\.reviewHistoryOriginBody \{&quot;runId&quot;:&quot;patch-2&quot;,&quot;origin&quot;:&quot;manual&quot;\}/,
+  );
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {

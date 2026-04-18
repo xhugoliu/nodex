@@ -155,7 +155,7 @@ export interface AiRunCompareOutput {
   comparison: AiRunCompareSummary;
 }
 
-export interface PatchDraftOrigin {
+export interface AiRunPatchDraftOrigin {
   kind: "ai_run";
   run_id: string;
   capability: string;
@@ -164,6 +164,21 @@ export interface PatchDraftOrigin {
   model: string | null;
   patch_run_id: string | null;
 }
+
+export interface PatchHistoryDraftOrigin {
+  kind: "patch_history";
+  run_id: string;
+  origin: string;
+}
+
+export interface ManualPatchDraftOrigin {
+  kind: "manual";
+}
+
+export type PatchDraftOrigin =
+  | AiRunPatchDraftOrigin
+  | PatchHistoryDraftOrigin
+  | ManualPatchDraftOrigin;
 
 export interface PatchExecutionSummary {
   kind: "preview" | "apply";

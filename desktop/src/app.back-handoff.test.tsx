@@ -5161,6 +5161,11 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   );
   assert.equal(requireSidePaneProps().selectionTab, "review");
   assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.deepEqual(requireSidePaneProps().patchDraftOrigin, {
+    kind: "patch_history",
+    run_id: "patch-2",
+    origin: "manual",
+  });
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.equal(requireSidePaneProps().patchDraftState.summary, "Loaded patch from history");
   assert.ok(
