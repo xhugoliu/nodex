@@ -1075,7 +1075,7 @@ function ReviewSurface(props: {
     props.nodeContext,
     props.t,
   );
-  const affectedSourceChunks = collectReviewAffectedSourceChunks(
+  const affectedSourceContext = collectReviewAffectedSourceContext(
     props.patchDraftState.ops,
     props.nodeContext,
     props.selectedSourceDetail,
@@ -1183,37 +1183,39 @@ function ReviewSurface(props: {
           </div>
         ) : null}
 
-        {affectedSourceChunks.length ? (
+        {affectedSourceContext.length ? (
           <div className="space-y-2">
             <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
               {props.t("workbench.reviewAffectedSourceTitle")}
             </div>
             <div className="space-y-2">
-              {affectedSourceChunks.map((target) => (
+              {affectedSourceContext.map((target) => (
                 <div
-                  key={`${target.action}-${target.chunk.id}`}
+                  key={target.key}
                   className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
-                      {target.action === "cite"
-                        ? props.t("workbench.reviewAffectedSourceCite")
-                        : props.t("workbench.reviewAffectedSourceUncite")}
+                      {formatReviewAffectedSourceAction(target.action, props.t)}
                     </span>
                     <span className="text-sm font-medium text-[color:var(--text)]">
                       {target.sourceName}
                     </span>
                   </div>
-                  <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
-                    {target.chunk.label || props.t("detail.noLabel")}
-                  </div>
-                  <div className="mt-1 text-xs text-[color:var(--muted)]">
-                    {props.t("detail.chunkMeta", {
-                      ordinal: target.chunk.ordinal + 1,
-                      start: target.chunk.start_line,
-                      end: target.chunk.end_line,
-                    })}
-                  </div>
+                  {target.chunk ? (
+                    <>
+                      <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                        {target.chunk.label || props.t("detail.noLabel")}
+                      </div>
+                      <div className="mt-1 text-xs text-[color:var(--muted)]">
+                        {props.t("detail.chunkMeta", {
+                          ordinal: target.chunk.ordinal + 1,
+                          start: target.chunk.start_line,
+                          end: target.chunk.end_line,
+                        })}
+                      </div>
+                    </>
+                  ) : null}
                   {target.nodeTitle || target.citationKind ? (
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
                       {target.nodeTitle ? (
@@ -1545,16 +1547,49 @@ function contextualizeReviewPatchOperation(
   return next;
 }
 
-function collectReviewAffectedSourceChunks(
+function formatReviewAffectedSourceAction(
+  action:
+    | "attach_source"
+    | "detach_source"
+    | "attach_source_chunk"
+    | "detach_source_chunk"
+    | "cite"
+    | "uncite",
+  t: Translator,
+) {
+  switch (action) {
+    case "attach_source":
+      return t("workbench.reviewAffectedSourceAttachSource");
+    case "detach_source":
+      return t("workbench.reviewAffectedSourceDetachSource");
+    case "attach_source_chunk":
+      return t("workbench.reviewAffectedSourceAttachChunk");
+    case "detach_source_chunk":
+      return t("workbench.reviewAffectedSourceDetachChunk");
+    case "cite":
+      return t("workbench.reviewAffectedSourceCite");
+    case "uncite":
+      return t("workbench.reviewAffectedSourceUncite");
+  }
+}
+
+function collectReviewAffectedSourceContext(
   ops: PatchDraftState["ops"],
   nodeContext: NodeWorkspaceContext | null,
   selectedSourceDetail: SourceDetail | null,
   t: Translator,
 ) {
   const results = new Array<{
-    action: "cite" | "uncite";
+    key: string;
+    action:
+      | "attach_source"
+      | "detach_source"
+      | "attach_source_chunk"
+      | "detach_source_chunk"
+      | "cite"
+      | "uncite";
     sourceName: string;
-    chunk: SourceChunkRecord;
+    chunk: SourceChunkRecord | null;
     nodeTitle: string | null;
     citationKind: string | null;
     rationale: string | null;
@@ -1563,22 +1598,49 @@ function collectReviewAffectedSourceChunks(
   const nodeTitles = buildReviewNodeTitleLookup(nodeContext);
 
   for (const op of ops) {
-    const chunkId =
-      typeof op.chunk_id === "string"
-        ? op.chunk_id
-        : typeof op.id === "string"
-          ? op.id
-          : null;
+    if (op.type === "attach_source" || op.type === "detach_source") {
+      const sourceId = trimmedString(op.source_id);
+      if (!sourceId) {
+        continue;
+      }
+
+      const action =
+        op.type === "attach_source" ? "attach_source" : "detach_source";
+      const key = `${action}:${sourceId}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+
+      results.push({
+        key,
+        action,
+        sourceName:
+          resolveReviewSourceName(sourceId, nodeContext, selectedSourceDetail) ??
+          sourceId,
+        chunk: null,
+        nodeTitle: resolveReviewNodeTitle(nodeTitles, op.node_id),
+        citationKind: null,
+        rationale: null,
+      });
+      continue;
+    }
+
+    const chunkId = trimmedString(op.chunk_id);
     if (!chunkId) {
       continue;
     }
 
     const action =
-      op.type === "cite_source_chunk"
-        ? "cite"
-        : op.type === "uncite_source_chunk"
-          ? "uncite"
-          : null;
+      op.type === "attach_source_chunk"
+        ? "attach_source_chunk"
+        : op.type === "detach_source_chunk"
+          ? "detach_source_chunk"
+          : op.type === "cite_source_chunk"
+            ? "cite"
+            : op.type === "uncite_source_chunk"
+              ? "uncite"
+              : null;
     if (!action) {
       continue;
     }
@@ -1599,6 +1661,7 @@ function collectReviewAffectedSourceChunks(
       nodeContext,
     );
     results.push({
+      key,
       action,
       sourceName: resolved.sourceName || t("detail.none"),
       chunk: resolved.chunk,

@@ -544,6 +544,50 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
   );
 });
 
+test("WorkbenchSidePane Review keeps source and source-chunk ops humanized beyond cite and uncite", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContextWithEvidence(),
+    selectedSourceDetail: null,
+    patchDraftState: {
+      state: "ready",
+      summary: "Refresh source links",
+      opCount: 2,
+      opTypes: [
+        { type: "attach_source", count: 1 },
+        { type: "attach_source_chunk", count: 1 },
+      ],
+      ops: [
+        { type: "attach_source", source_id: "source-1", node_id: "node-1" },
+        { type: "attach_source_chunk", chunk_id: "chunk-1", node_id: "node-1" },
+      ],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.match(html, /workbench\.reviewAffectedSourceAttachSource/);
+  assert.match(html, /workbench\.reviewAffectedSourceAttachChunk/);
+  assert.match(
+    html,
+    /workbench\.reviewAffectedSourceNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(html, /source\.md/);
+  assert.match(html, /Provider Authentication Flow/);
+  assert.match(
+    html,
+    /composer\.opAttachSource \{&quot;source&quot;:&quot;source\.md&quot;,&quot;node&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(
+    html,
+    /composer\.opAttachSourceChunk \{&quot;chunk&quot;:&quot;Provider Authentication Flow&quot;,&quot;node&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.doesNotMatch(html, /source-1/);
+  assert.doesNotMatch(html, /chunk-1/);
+  assert.doesNotMatch(html, /node-1/);
+});
+
 test("WorkbenchSidePane Review keeps patch-history provenance visible for recovery-loaded drafts", () => {
   const html = renderSidePane({
     selectionTab: "review",

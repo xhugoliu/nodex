@@ -92,6 +92,7 @@
   手工 cite 草案里的默认 `direct` 语义也应显式可见，避免右栏和底层 patch 默认值出现理解落差
   Review 底部逐条 patch preview 也应尽量把 raw node/chunk/source id 解释回标题和标签，避免顶层摘要可读、底层列表仍然偏调试
   Draft 里当前可见的 draft-op 卡片也应继续复用同一套 node/source/chunk explainability seam，避免 `source detail -> Draft -> Review` 在进入 Review 前重新退回 raw id
+  Review 里的 `Affected source context` 也应继续覆盖 attach/detach source 与 attach/detach source chunk，不只在 cite/uncite 上解释 source name / chunk label
   下一步继续把节点结构变化和 evidence 变化也收成一眼可读的 summary，而不是只留在逐条 op 文本里
 - 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性
   source detail 里也应直接露出当前节点对某个已引用 chunk 的 citation kind / rationale，避免 cite/uncite 前还要靠记忆回想
