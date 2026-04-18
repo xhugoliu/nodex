@@ -5741,6 +5741,121 @@ test("App keeps node and source focus cues visible when source context transitio
   dom.cleanup();
 });
 
+test("App keeps source-backed Review explainability humanized for source link ops", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string) => {
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithEvidence() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetailWithChunk() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush();
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  const patchEditor = eventHandlers.get("desktop://patch-editor");
+  assert.ok(patchEditor, "patch-editor listener should be registered");
+
+  await act(async () => {
+    patchEditor?.({
+      payload: {
+        patch_json: JSON.stringify({
+          version: 1,
+          summary: "Refresh source links",
+          ops: [
+            { type: "attach_source", source_id: "source-1", node_id: "node-1" },
+            {
+              type: "attach_source_chunk",
+              chunk_id: "chunk-1",
+              node_id: "node-1",
+            },
+          ],
+        } satisfies PatchDocument),
+        message: "draft ready",
+        tone: "success",
+      },
+    });
+    await flush();
+  });
+
+  const renderedText = dom.container.textContent ?? "";
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+  assert.match(renderedText, /Affected source context/);
+  assert.match(renderedText, /Will link source/);
+  assert.match(renderedText, /Will link chunk/);
+  assert.match(renderedText, /source\.md/);
+  assert.match(renderedText, /Provider Authentication Flow/);
+  assert.doesNotMatch(renderedText, /source-1/);
+  assert.doesNotMatch(renderedText, /chunk-1/);
+  assert.doesNotMatch(renderedText, /node-1/);
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App refocuses tree, canvas, and right rail onto the applied node after review apply", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
