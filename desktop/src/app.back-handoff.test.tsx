@@ -5386,6 +5386,11 @@ test("App keeps source-backed Review explainability humanized when loading a his
     requireSidePaneProps().patchDraftState.summary,
     "Loaded source patch from history",
   );
+  assert.equal((renderedText.match(/Loaded from history/g) ?? []).length, 2);
+  assert.match(
+    renderedText,
+    /This Review was re-opened from patch run patch-2 \(manual\)\. Inspect it before applying again\./,
+  );
   assert.match(renderedText, /Affected source context/);
   assert.match(renderedText, /Will link source/);
   assert.match(renderedText, /Will link chunk/);

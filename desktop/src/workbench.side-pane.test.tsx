@@ -607,6 +607,7 @@ test("WorkbenchSidePane Review surfaces source-backed focus cues for source remo
     html,
     /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
   );
+  assert.equal((html.match(/workbench\.reviewHistoryOriginTitle/g) ?? []).length, 2);
   assert.match(html, /workbench\.reviewImpactUnciteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewImpactDetachSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewImpactDetachSource \{&quot;count&quot;:1\}/);
@@ -675,6 +676,7 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
     reviewDraft: null,
   });
 
+  assert.equal((html.match(/workbench\.reviewHistoryOriginTitle/g) ?? []).length, 1);
   assert.match(html, /workbench\.reviewHistoryOriginTitle/);
   assert.match(
     html,
@@ -706,13 +708,82 @@ test("WorkbenchSidePane Review keeps AI draft provenance visible when the draft 
     },
   });
 
+  assert.equal(
+    (html.match(/composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/g) ?? [])
+      .length,
+    1,
+  );
   assert.match(html, /composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/);
   assert.match(html, /reports\.capability \{&quot;value&quot;:&quot;expand&quot;\}/);
   assert.match(html, /reports\.provider \{&quot;value&quot;:&quot;anthropic&quot;\}/);
   assert.match(html, /reports\.model \{&quot;value&quot;:&quot;claude-sonnet&quot;\}/);
 });
 
+test("WorkbenchSidePane Review does not promote AI provenance into the top summary for source-backed drafts", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContextWithEvidence(),
+    patchDraftOrigin: {
+      kind: "ai_run",
+      run_id: "run-1",
+      capability: "expand",
+      explore_by: null,
+      provider: "anthropic",
+      model: "claude-sonnet",
+      patch_run_id: null,
+    },
+    patchDraftState: {
+      state: "ready",
+      summary: "AI source-backed draft",
+      opCount: 1,
+      opTypes: [{ type: "cite_source_chunk", count: 1 }],
+      ops: [{ type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.equal(
+    (html.match(/composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/g) ?? [])
+      .length,
+    1,
+  );
+  assert.match(html, /workbench\.reviewSourceFocusTitle/);
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusChunk \{&quot;title&quot;:&quot;Provider Authentication Flow&quot;\}/,
+  );
+});
+
+test("WorkbenchSidePane Review does not promote manual provenance into the top summary for source-backed drafts", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContextWithEvidence(),
+    patchDraftOrigin: {
+      kind: "manual",
+      action: "uncite_source_chunk",
+    },
+    patchDraftState: {
+      state: "ready",
+      summary: "Manual source-backed draft",
+      opCount: 1,
+      opTypes: [{ type: "uncite_source_chunk", count: 1 }],
+      ops: [{ type: "uncite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.equal((html.match(/workbench\.reviewManualOriginTitle/g) ?? []).length, 1);
+  assert.match(html, /workbench\.reviewSourceFocusTitle/);
+  assert.match(
+    html,
+    /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
+  );
+});
+
 test("WorkbenchSidePane Review keeps manual draft provenance visible for node edits", () => {
+
   const html = renderSidePane({
     selectionTab: "review",
     patchDraftOrigin: {
@@ -721,6 +792,7 @@ test("WorkbenchSidePane Review keeps manual draft provenance visible for node ed
     },
   });
 
+  assert.equal((html.match(/workbench\.reviewManualOriginTitle/g) ?? []).length, 1);
   assert.match(html, /workbench\.reviewManualOriginTitle/);
   assert.match(html, /workbench\.reviewManualOriginUpdateNode/);
 });

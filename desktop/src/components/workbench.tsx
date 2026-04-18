@@ -14,6 +14,7 @@ import type {
   ApplyPatchReport,
   DesktopAiStatus,
   DraftReviewPayload,
+  EvidenceCitationDetail,
   NodeEvidenceDetail,
   NodeSourceDetail,
   NodeWorkspaceContext,
@@ -1093,6 +1094,10 @@ function ReviewSurface(props: {
     (props.patchDraftOrigin.kind !== "manual" || reviewOriginMeta)
       ? props.patchDraftOrigin
       : null;
+  const reviewTopSummaryOriginCue = deriveReviewTopSummaryOriginCue(
+    reviewOrigin,
+    affectedSourceContext,
+  );
 
   return (
     <div className="space-y-4">
@@ -1106,10 +1111,17 @@ function ReviewSurface(props: {
               {draftSummary || props.t("workbench.reviewBody")}
             </div>
           </div>
-          <div className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
-            {props.t("workbench.draftReadyOps", {
-              count: props.patchDraftState.opCount,
-            })}
+          <div className="flex flex-wrap justify-end gap-2 text-xs text-[color:var(--muted)]">
+            {reviewTopSummaryOriginCue ? (
+              <div className="rounded-full border border-[color:var(--line-soft)] bg-white/90 px-2.5 py-1">
+                {formatPatchDraftOriginTitle(reviewTopSummaryOriginCue, props.t)}
+              </div>
+            ) : null}
+            <div className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+              {props.t("workbench.draftReadyOps", {
+                count: props.patchDraftState.opCount,
+              })}
+            </div>
           </div>
         </div>
 
@@ -1740,6 +1752,17 @@ function collectReviewSourceFocusItems(
   }
 
   return results;
+}
+
+function deriveReviewTopSummaryOriginCue(
+  origin: PatchDraftOrigin | null,
+  affectedSourceContext: ReturnType<typeof collectReviewAffectedSourceContext>,
+) {
+  if (origin?.kind !== "patch_history" || !affectedSourceContext.length) {
+    return null;
+  }
+
+  return origin;
 }
 
 function resolveReviewSourceChunk(
