@@ -509,6 +509,18 @@ export default function App(props: AppProps = {}) {
     return false;
   }
 
+  function preserveSameNodeWorkbenchSelection(nodeId: string) {
+    return selectedSourceId === null && selectedNodeId === nodeId;
+  }
+
+  function handleWorkbenchNodeSelection(nodeId: string) {
+    if (preserveSameNodeWorkbenchSelection(nodeId)) {
+      return;
+    }
+
+    void fetchNodeContext(nodeId);
+  }
+
   async function applyOverview(
     overview: WorkspaceOverview,
     options: {
@@ -1147,9 +1159,7 @@ export default function App(props: AppProps = {}) {
                 void importSourceFromShortcut();
               }}
               onQueryChange={setTreeQuery}
-              onSelectNode={(nodeId) => {
-                void fetchNodeContext(nodeId);
-              }}
+              onSelectNode={handleWorkbenchNodeSelection}
             />
 
             <WorkbenchMainPaneComponent
@@ -1192,9 +1202,7 @@ export default function App(props: AppProps = {}) {
                   };
                 });
               }}
-              onSelectNode={(nodeId) => {
-                void fetchNodeContext(nodeId);
-              }}
+              onSelectNode={handleWorkbenchNodeSelection}
               onDraftAiExpand={() => {
                 void draftAiExpandPatch();
               }}
