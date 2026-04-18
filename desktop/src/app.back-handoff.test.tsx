@@ -5538,6 +5538,12 @@ test("App keeps history-loaded citation review humanized after source-detail han
     "Loaded citation patch from history",
   );
   assert.match(renderedText, /Affected source context/);
+  assert.equal((renderedText.match(/Will cite/g) ?? []).length, 2);
+  assert.match(renderedText, /Source-backed focus/);
+  assert.match(renderedText, /Node: Authentication/);
+  assert.match(renderedText, /Source: source\.md/);
+  assert.match(renderedText, /Chunk: Provider Authentication Flow/);
+  assert.match(renderedText, /Citation: direct/);
   assert.match(renderedText, /Will cite/);
   assert.match(renderedText, /Authentication/);
   assert.match(renderedText, /source\.md/);
@@ -5843,8 +5849,14 @@ test("App keeps source-backed history patches humanized when Recovery loads them
     "Loaded source patch from history",
   );
   assert.match(renderedText, /Affected source context/);
+  assert.match(renderedText, /Source-backed focus/);
+  assert.match(renderedText, /Node: Authentication/);
+  assert.match(renderedText, /Source: source\.md/);
+  assert.match(renderedText, /Chunk: Provider Authentication Flow/);
   assert.match(renderedText, /Will link source/);
   assert.match(renderedText, /Will link chunk/);
+  assert.equal((renderedText.match(/Will link source/g) ?? []).length, 2);
+  assert.equal((renderedText.match(/Will link chunk/g) ?? []).length, 2);
   assert.match(renderedText, /source\.md/);
   assert.match(renderedText, /Provider Authentication Flow/);
   assert.doesNotMatch(renderedText, /source-1/);
