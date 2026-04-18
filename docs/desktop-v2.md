@@ -29,6 +29,7 @@
 - `Context`：看懂当前节点、来源、证据和“为什么值得看”，并明确提示下一步如何进入 `Draft`
   同时保留当前来源的本地 provenance（至少文件路径与导入时间），让这块更像稳定工作台而不是会话摘要
 - `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
+  当前 `Draft` 里可见的 draft-op 卡片也应复用 `Review` 同一套 node/source/chunk 人类化解释，不在进入 Review 前退回 raw id
 - `Review`：仍然回到 patch inspect / apply 的确认层，并直接概括当前草案、操作数量、证据支撑，以及 apply 后可能落到的焦点
   当草案来自 AI run 或 history reload 时，Review 里也应直接露出 provenance，而不是只靠瞬时提示记忆
   手工起草的 add child / update / cite / uncite 也应在 Review 里说明来源，避免只剩一份无上下文 patch

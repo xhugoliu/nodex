@@ -244,7 +244,7 @@ function renderSidePane(options: {
     summary: string | null;
     opCount: number;
     opTypes: Array<{ type: string; count: number }>;
-    ops: Array<{ type: string; title?: string; id?: string }>;
+    ops: Array<Record<string, unknown> & { type: string; title?: string; id?: string }>;
     error: null;
   };
 }) {
@@ -342,6 +342,41 @@ test("WorkbenchSidePane renders Draft as a node-scoped assistant workspace witho
   assert.doesNotMatch(html, /workbench\.applyResultTitle/);
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
   assert.doesNotMatch(html, /workbench\.focusScopeSourceLabel/);
+});
+
+test("WorkbenchSidePane Draft reuses contextualized source-backed op descriptions instead of raw ids", () => {
+  const html = renderSidePane({
+    selectionTab: "draft",
+    nodeContext: makeNodeContextWithEvidence(),
+    selectedSourceDetail: null,
+    patchDraftState: {
+      state: "ready",
+      summary: "Source-backed draft summary",
+      opCount: 2,
+      opTypes: [
+        { type: "attach_source", count: 1 },
+        { type: "cite_source_chunk", count: 1 },
+      ],
+      ops: [
+        { type: "attach_source", source_id: "source-1", node_id: "node-1" },
+        {
+          type: "cite_source_chunk",
+          chunk_id: "chunk-1",
+          node_id: "node-1",
+          citation_kind: "direct",
+        },
+      ],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.match(html, /source\.md/);
+  assert.match(html, /Provider Authentication Flow/);
+  assert.match(html, /Authentication/);
+  assert.doesNotMatch(html, /source-1/);
+  assert.doesNotMatch(html, /chunk-1/);
+  assert.doesNotMatch(html, /node-1/);
 });
 
 test("WorkbenchSidePane returns to source context when the context tab is selected with a source open", () => {

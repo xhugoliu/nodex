@@ -397,7 +397,12 @@ function DraftSurface(props: {
                 key={`${op.type ?? "op"}-${index}`}
                 className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-3 py-3 text-sm leading-6 text-[color:var(--text)]"
               >
-                {describePatchOperation(op, props.t)}
+                {describeContextualizedPatchOperation(
+                  op,
+                  props.nodeContext,
+                  null,
+                  props.t,
+                )}
               </div>
             ))}
             {hiddenDraftOpCount ? (
@@ -1318,7 +1323,7 @@ function ReviewSurface(props: {
               key={`${op.type ?? "op"}-${index}`}
               className="rounded-xl border border-[color:var(--line-soft)] bg-white/85 px-3 py-3 text-sm leading-6 text-[color:var(--text)]"
             >
-              {describeReviewPatchOperation(
+              {describeContextualizedPatchOperation(
                 op,
                 props.nodeContext,
                 props.selectedSourceDetail,
@@ -1388,7 +1393,7 @@ function formatReviewImpactSummary(
   }
 }
 
-function describeReviewPatchOperation(
+function describeContextualizedPatchOperation(
   op: PatchDraftState["ops"][number],
   nodeContext: NodeWorkspaceContext | null,
   selectedSourceDetail: SourceDetail | null,
