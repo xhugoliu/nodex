@@ -38,6 +38,65 @@ function makeNodeContext(): NodeWorkspaceContext {
   };
 }
 
+function makeNodeContextWithEvidence(): NodeWorkspaceContext {
+  return {
+    node_detail: {
+      node: {
+        id: "node-1",
+        parent_id: "root",
+        title: "Authentication",
+        body: "Current auth routing notes",
+        kind: "topic",
+        position: 0,
+        created_at: 1710000000,
+        updated_at: 1710000001,
+      },
+      parent: { id: "root", title: "Root" },
+      children: [{ id: "node-child-1", title: "Existing child" }],
+      sources: [],
+      evidence: [
+        {
+          source: {
+            id: "source-1",
+            original_path: "/fixtures/source.md",
+            original_name: "source.md",
+            stored_name: "source.md",
+            format: "md",
+            imported_at: 1710000000,
+          },
+          chunks: [
+            {
+              id: "chunk-1",
+              source_id: "source-1",
+              ordinal: 0,
+              label: "Provider Authentication Flow",
+              text: "OpenAI-compatible auth setup and model routing details.",
+              start_line: 5,
+              end_line: 11,
+            },
+          ],
+          citations: [
+            {
+              chunk: {
+                id: "chunk-1",
+                source_id: "source-1",
+                ordinal: 0,
+                label: "Provider Authentication Flow",
+                text: "OpenAI-compatible auth setup and model routing details.",
+                start_line: 5,
+                end_line: 11,
+              },
+              citation_kind: "direct",
+              rationale:
+                "This section explains why the current node should reuse the default auth route.",
+            },
+          ],
+        },
+      ],
+    },
+  };
+}
+
 function makeSourceDetail(): SourceDetail {
   return {
     source: {
@@ -157,13 +216,23 @@ function makeDirectEvidenceReviewDraft(): DraftReviewPayload {
     patch: {
       version: 1,
       summary: "Draft citation summary",
-      ops: [{ type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      ops: [
+        {
+          type: "cite_source_chunk",
+          chunk_id: "chunk-1",
+          node_id: "node-1",
+          citation_kind: "direct",
+          rationale:
+            "This section explains why the current node should reuse the default auth route.",
+        },
+      ],
     },
   };
 }
 
 function renderSidePane(options: {
   selectionTab: "context" | "draft" | "review";
+  nodeContext?: NodeWorkspaceContext | null;
   selectedSourceDetail?: SourceDetail | null;
   applyResult?: ApplyPatchReport | null;
   reviewDraft?: DraftReviewPayload | null;
@@ -185,7 +254,7 @@ function renderSidePane(options: {
       aiDraftStatus={options.aiDraftStatus ?? makeDesktopAiStatus()}
       aiDraftStatusLoading={false}
       applyResult={options.applyResult ?? null}
-      nodeContext={makeNodeContext()}
+      nodeContext={options.nodeContext === undefined ? makeNodeContext() : options.nodeContext}
       onApplyPatch={() => {}}
       onBackToNodeContext={() => {}}
       onBodyChange={() => {}}
@@ -400,7 +469,16 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
       summary: "Draft citation summary",
       opCount: 1,
       opTypes: [{ type: "cite_source_chunk", count: 1 }],
-      ops: [{ type: "cite_source_chunk", id: "chunk-1" }],
+      ops: [
+        {
+          type: "cite_source_chunk",
+          chunk_id: "chunk-1",
+          node_id: "node-1",
+          citation_kind: "direct",
+          rationale:
+            "This section explains why the current node should reuse the default auth route.",
+        },
+      ],
       error: null,
     },
     reviewDraft: makeDirectEvidenceReviewDraft(),
@@ -410,6 +488,15 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewAffectedSourceTitle/);
   assert.match(html, /workbench\.reviewAffectedSourceCite/);
+  assert.match(
+    html,
+    /workbench\.reviewAffectedSourceNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(html, /detail\.citationKindDirect/);
+  assert.match(
+    html,
+    /reports\.rationale \{&quot;value&quot;:&quot;This section explains why the current node should reuse the default auth route\.&quot;\}/,
+  );
   assert.match(html, /source\.md/);
   assert.match(html, /Provider Authentication Flow/);
   assert.match(
@@ -486,6 +573,7 @@ test("WorkbenchSidePane Review keeps manual draft provenance visible for node ed
 test("WorkbenchSidePane Review keeps affected source context visible for uncite drafts", () => {
   const html = renderSidePane({
     selectionTab: "review",
+    nodeContext: makeNodeContextWithEvidence(),
     patchDraftOrigin: {
       kind: "manual",
       action: "uncite_source_chunk",
@@ -503,6 +591,15 @@ test("WorkbenchSidePane Review keeps affected source context visible for uncite 
 
   assert.match(html, /workbench\.reviewAffectedSourceTitle/);
   assert.match(html, /workbench\.reviewAffectedSourceUncite/);
+  assert.match(
+    html,
+    /workbench\.reviewAffectedSourceNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(html, /detail\.citationKindDirect/);
+  assert.match(
+    html,
+    /reports\.rationale \{&quot;value&quot;:&quot;This section explains why the current node should reuse the default auth route\.&quot;\}/,
+  );
   assert.match(html, /source\.md/);
   assert.match(html, /Provider Authentication Flow/);
 });

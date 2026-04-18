@@ -2739,6 +2739,35 @@ function makeSourceDetail(): SourceDetail {
   };
 }
 
+function makeSourceDetailWithChunk(): SourceDetail {
+  return {
+    source: {
+      id: "source-1",
+      original_path: "/fixtures/source.md",
+      original_name: "source.md",
+      stored_name: "source.md",
+      format: "md",
+      imported_at: 1710000000,
+    },
+    chunks: [
+      {
+        chunk: {
+          id: "chunk-1",
+          source_id: "source-1",
+          ordinal: 0,
+          label: "Provider Authentication Flow",
+          text: "OpenAI-compatible auth setup and model routing details.",
+          start_line: 5,
+          end_line: 11,
+        },
+        linked_nodes: [{ id: "node-1", title: "Authentication" }],
+        evidence_nodes: [],
+        evidence_links: [],
+      },
+    ],
+  };
+}
+
 function makeDesktopAiStatus(
   overrides: Partial<DesktopAiStatus> = {},
 ): DesktopAiStatus {
@@ -6028,7 +6057,7 @@ test("App keeps tree, canvas, and right rail aligned on the current node after c
         return makeNodeContextWithSource() as T;
       }
       if (command === "get_source_detail") {
-        return makeSourceDetail() as T;
+        return makeSourceDetailWithChunk() as T;
       }
       if (command === "draft_cite_source_chunk_patch") {
         return makeCiteChunkPatchDocument() as T;
@@ -6114,6 +6143,7 @@ test("App keeps tree, canvas, and right rail aligned on the current node after c
     ),
     "cite draft should use the selected node and source chunk",
   );
+  assert.match(dom.container.textContent ?? "", /For node: Authentication/);
 
   await act(async () => {
     requireSidePaneProps().onApplyPatch();
@@ -6261,6 +6291,12 @@ test("App keeps tree, canvas, and right rail aligned on the current node after u
         call.args.chunk_id === "chunk-1",
     ),
     "uncite draft should use the selected node and source chunk",
+  );
+  assert.match(dom.container.textContent ?? "", /For node: Authentication/);
+  assert.match(dom.container.textContent ?? "", /direct/);
+  assert.match(
+    dom.container.textContent ?? "",
+    /rationale: This section explains why the current node should reuse the default auth route\./,
   );
 
   await act(async () => {

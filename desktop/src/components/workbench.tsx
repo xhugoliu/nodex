@@ -1209,6 +1209,29 @@ function ReviewSurface(props: {
                       end: target.chunk.end_line,
                     })}
                   </div>
+                  {target.nodeTitle || target.citationKind ? (
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+                      {target.nodeTitle ? (
+                        <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                          {props.t("workbench.reviewAffectedSourceNode", {
+                            title: target.nodeTitle,
+                          })}
+                        </span>
+                      ) : null}
+                      {target.citationKind ? (
+                        <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-white/85 px-2.5 py-1 uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                          {formatCitationKind(target.citationKind, props.t)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {target.rationale ? (
+                    <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                      {props.t("reports.rationale", {
+                        value: clipText(normalizeInlineText(target.rationale), 160),
+                      })}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1461,8 +1484,12 @@ function collectReviewAffectedSourceChunks(
     action: "cite" | "uncite";
     sourceName: string;
     chunk: SourceChunkRecord;
+    nodeTitle: string | null;
+    citationKind: string | null;
+    rationale: string | null;
   }>();
   const seen = new Set<string>();
+  const nodeTitles = buildReviewNodeTitleLookup(nodeContext);
 
   for (const op of ops) {
     const chunkId =
@@ -1495,10 +1522,20 @@ function collectReviewAffectedSourceChunks(
       continue;
     }
     seen.add(key);
+    const citationDetail = resolveReviewCitationDetail(
+      chunkId,
+      op.node_id,
+      nodeContext,
+    );
     results.push({
       action,
       sourceName: resolved.sourceName || t("detail.none"),
       chunk: resolved.chunk,
+      nodeTitle: resolveReviewNodeTitle(nodeTitles, op.node_id),
+      citationKind:
+        trimmedString(op.citation_kind) || citationDetail?.citation_kind || null,
+      rationale:
+        trimmedString(op.rationale) || trimmedString(citationDetail?.rationale) || null,
     });
   }
 
@@ -1539,6 +1576,27 @@ function resolveReviewSourceChunk(
         sourceName: source.source.original_name,
         chunk,
       };
+    }
+  }
+
+  return null;
+}
+
+function resolveReviewCitationDetail(
+  chunkId: string,
+  nodeIdValue: unknown,
+  nodeContext: NodeWorkspaceContext | null,
+) {
+  const currentNodeId = nodeContext?.node_detail.node.id ?? null;
+  const targetNodeId = trimmedString(nodeIdValue);
+  if (!currentNodeId || !targetNodeId || currentNodeId !== targetNodeId) {
+    return null;
+  }
+
+  for (const source of nodeContext?.node_detail.evidence ?? []) {
+    const citation = source.citations.find((item) => item.chunk.id === chunkId);
+    if (citation) {
+      return citation;
     }
   }
 

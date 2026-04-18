@@ -33,7 +33,7 @@
   当草案来自 AI run 或 history reload 时，Review 里也应直接露出 provenance，而不是只靠瞬时提示记忆
   手工起草的 add child / update / cite / uncite 也应在 Review 里说明来源，避免只剩一份无上下文 patch
   add/update 这类结构草案也应直接说明影响了哪个节点、父节点和哪些字段，避免 Review 退回只看 op id
-  cite / uncite 这类草案也应直接说明影响的是哪份 source、哪个 chunk，而不是只留下 chunk id
+  cite / uncite 这类草案也应继续说明作用节点、citation kind / rationale 和受影响的 source chunk，而不是只留下 chunk id
 - 右栏顶部持续显示当前焦点节点；如果来源上下文仍打开，也应同时标出当前来源
 - `Draft` 仍只显示 node-scoped 焦点，不把来源提示重新暗示成新的执行作用域
 - 不是全局聊天窗口
