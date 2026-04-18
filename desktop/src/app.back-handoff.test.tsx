@@ -3081,6 +3081,122 @@ test("App routes source detail into node-scoped Draft through the shared handoff
   dom.cleanup();
 });
 
+test("App keeps source-detail handoff on the node-scoped Draft route surface without refetching status", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContext() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetail() as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: () => <div />,
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(3);
+  });
+
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  let renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /Source in view/);
+  assert.match(renderedText, /source\.md/);
+
+  const nodeContextFetchCountBeforeDraft = invokeCalls.filter(
+    (call) => call.command === "get_node_workspace_context",
+  ).length;
+  const aiStatusFetchCountBeforeDraft = invokeCalls.filter(
+    (call) => call.command === "get_desktop_ai_status",
+  ).length;
+
+  await act(async () => {
+    requireSidePaneProps().onSelectSelectionTab("draft");
+    await flush(3);
+  });
+
+  assert.equal(requireSidePaneProps().selectionTab, "draft");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
+
+  renderedText = dom.container.textContent ?? "";
+  assert.match(renderedText, /AI Draft Route/);
+  assert.match(renderedText, /Current focus/);
+  assert.match(renderedText, /Node: Authentication/);
+  assert.doesNotMatch(renderedText, /Source in view/);
+  assert.doesNotMatch(renderedText, /source\.md/);
+  assert.equal(
+    invokeCalls.filter((call) => call.command === "get_node_workspace_context").length,
+    nodeContextFetchCountBeforeDraft,
+    "source detail -> Draft should reuse current node context instead of refetching it",
+  );
+  assert.equal(
+    invokeCalls.filter((call) => call.command === "get_desktop_ai_status").length,
+    aiStatusFetchCountBeforeDraft,
+    "source detail -> Draft should reuse the current AI route status instead of probing again",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App preserves Draft when the tree reselects the current node without an open source detail", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
