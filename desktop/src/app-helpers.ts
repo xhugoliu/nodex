@@ -638,10 +638,7 @@ export function describePatchOperation(op: PatchOperation, t: Translator): strin
         node: stringValue(op.node_id, "node"),
       });
     case "cite_source_chunk":
-      return t("composer.opCiteSourceChunk", {
-        chunk: stringValue(op.chunk_id, "chunk"),
-        node: stringValue(op.node_id, "node"),
-      });
+      return describeCiteSourceChunkOperation(op, t);
     case "detach_source":
       return t("composer.opDetachSource", {
         source: stringValue(op.source_id, "source"),
@@ -977,6 +974,30 @@ function changedFieldLabels(op: PatchOperation, t: Translator): string[] {
   return fields;
 }
 
+function describeCiteSourceChunkOperation(op: PatchOperation, t: Translator): string {
+  const chunk = stringValue(op.chunk_id, "chunk");
+  const node = stringValue(op.node_id, "node");
+  const citationKind = formatCitationKindLabel(
+    typeof op.citation_kind === "string" ? op.citation_kind : "direct",
+    t,
+  );
+  const rationale =
+    typeof op.rationale === "string" ? optionalText(op.rationale) : null;
+
+  return rationale
+    ? t("composer.opCiteSourceChunkWithRationale", {
+        chunk,
+        node,
+        citationKind,
+        rationale,
+      })
+    : t("composer.opCiteSourceChunkAs", {
+        chunk,
+        node,
+        citationKind,
+      });
+}
+
 function stringValue(value: unknown, fallback: string): string {
   if (typeof value === "string" && value.trim()) {
     return value;
@@ -987,6 +1008,16 @@ function stringValue(value: unknown, fallback: string): string {
 
 function integerValue(value: unknown): number | null {
   return Number.isInteger(value) ? Number(value) : null;
+}
+
+function formatCitationKindLabel(kind: string, t: Translator): string {
+  if (kind === "direct") {
+    return t("detail.citationKindDirect");
+  }
+  if (kind === "inferred") {
+    return t("detail.citationKindInferred");
+  }
+  return kind;
 }
 
 function deriveAiRunMetadataPath(responsePath: string): string | null {

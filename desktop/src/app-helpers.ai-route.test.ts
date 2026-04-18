@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   deriveApplyFocusDecision,
+  describePatchOperation,
   deriveClearedDraftReviewState,
   deriveClearedTransientReviewState,
   deriveContextSelectionDecision,
@@ -152,6 +153,40 @@ test("buildAiDraftNextSteps surfaces auth-check guidance for explicit auth failu
   );
 
   assert.ok(steps.includes("messages.aiDraftNextCheckAuth"));
+});
+
+test("describePatchOperation treats cite_source_chunk as direct evidence by default", () => {
+  const description = describePatchOperation(
+    {
+      type: "cite_source_chunk",
+      chunk_id: "chunk-1",
+      node_id: "node-1",
+    },
+    t,
+  );
+
+  assert.equal(
+    description,
+    'composer.opCiteSourceChunkAs {"chunk":"chunk-1","node":"node-1","citationKind":"detail.citationKindDirect"}',
+  );
+});
+
+test("describePatchOperation keeps cite rationale visible when present", () => {
+  const description = describePatchOperation(
+    {
+      type: "cite_source_chunk",
+      chunk_id: "chunk-1",
+      node_id: "node-1",
+      citation_kind: "inferred",
+      rationale: "This section still matters.",
+    },
+    t,
+  );
+
+  assert.equal(
+    description,
+    'composer.opCiteSourceChunkWithRationale {"chunk":"chunk-1","node":"node-1","citationKind":"detail.citationKindInferred","rationale":"This section still matters."}',
+  );
 });
 
 test("source import with preferred node hit resolves focus and clears transient review state", () => {

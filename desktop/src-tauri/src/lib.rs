@@ -485,7 +485,7 @@ fn cite_source_chunk_patch(node_id: String, chunk_id: String) -> PatchDocument {
         ops: vec![PatchOp::CiteSourceChunk {
             node_id,
             chunk_id,
-            citation_kind: None,
+            citation_kind: Some("direct".to_string()),
             rationale: None,
         }],
     }
@@ -1511,11 +1511,13 @@ mod tests {
     };
 
     use super::{
-        desktop_ai_status, desktop_default_ai_runner_command, detected_provider_from_command,
-        effective_model_for_command, effective_reasoning_for_command,
-        parse_provider_doctor_summary, preferred_focus_node_id_after_apply,
+        cite_source_chunk_patch, desktop_ai_status, desktop_default_ai_runner_command,
+        detected_provider_from_command, effective_model_for_command,
+        effective_reasoning_for_command, parse_provider_doctor_summary,
+        preferred_focus_node_id_after_apply,
     };
     use nodex::model::{ApplyPatchReport, NodeSummary};
+    use nodex::patch::PatchOp;
 
     #[cfg(windows)]
     use super::display_path_text;
@@ -1604,6 +1606,31 @@ mod tests {
             .as_deref(),
             Some("medium")
         );
+    }
+
+    #[test]
+    fn cite_source_chunk_patch_makes_default_direct_evidence_explicit() {
+        let patch = cite_source_chunk_patch("node-1".to_string(), "chunk-1".to_string());
+
+        assert_eq!(
+            patch.summary.as_deref(),
+            Some("Cite chunk chunk-1 for node node-1")
+        );
+        assert_eq!(patch.ops.len(), 1);
+        match &patch.ops[0] {
+            PatchOp::CiteSourceChunk {
+                node_id,
+                chunk_id,
+                citation_kind,
+                rationale,
+            } => {
+                assert_eq!(node_id, "node-1");
+                assert_eq!(chunk_id, "chunk-1");
+                assert_eq!(citation_kind.as_deref(), Some("direct"));
+                assert_eq!(rationale, &None);
+            }
+            other => panic!("expected cite_source_chunk op, got {other:?}"),
+        }
     }
 
     #[test]

@@ -89,6 +89,7 @@
   手工起草的 add child / update / cite / uncite 也应保留来源提示，避免 Review 变成脱离动作上下文的纯 patch JSON
   add/update 这类结构草案也应直接点名受影响的节点、父节点和字段，而不只显示 node id
   cite / uncite 草案里还应直接说清楚作用节点、citation kind / rationale 和受影响的 source/chunk，避免 Review 退化成只看 chunk id 的低可读状态
+  手工 cite 草案里的默认 `direct` 语义也应显式可见，避免右栏和底层 patch 默认值出现理解落差
   下一步继续把节点结构变化和 evidence 变化也收成一眼可读的 summary，而不是只留在逐条 op 文本里
 - 第四优先级：加强 `source detail -> node context -> cite/uncite -> Draft -> Review` 这条高频工作流的连续性
   source detail 里也应直接露出当前节点对某个已引用 chunk 的 citation kind / rationale，避免 cite/uncite 前还要靠记忆回想

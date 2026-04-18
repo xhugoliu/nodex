@@ -538,6 +538,10 @@ const translations: Record<Locale, TranslationTree> = {
       opAttachSource: "Attach source {source} to {node}",
       opAttachSourceChunk: "Attach chunk {chunk} to {node}",
       opCiteSourceChunk: "Cite chunk {chunk} for {node}",
+      opCiteSourceChunkAs:
+        "Cite chunk {chunk} as {citationKind} evidence for {node}",
+      opCiteSourceChunkWithRationale:
+        "Cite chunk {chunk} as {citationKind} evidence for {node} · {rationale}",
       opDetachSource: "Detach source {source} from {node}",
       opDetachSourceChunk: "Detach chunk {chunk} from {node}",
       opUnciteSourceChunk: "Remove cited chunk {chunk} from {node}",
@@ -1165,6 +1169,10 @@ const translations: Record<Locale, TranslationTree> = {
       opAttachSource: "将来源 {source} 关联到 {node}",
       opAttachSourceChunk: "将切片 {chunk} 关联到 {node}",
       opCiteSourceChunk: "将切片 {chunk} 作为 {node} 的证据引用",
+      opCiteSourceChunkAs:
+        "将切片 {chunk} 作为 {node} 的{citationKind}证据引用",
+      opCiteSourceChunkWithRationale:
+        "将切片 {chunk} 作为 {node} 的{citationKind}证据引用 · {rationale}",
       opDetachSource: "从 {node} 解除来源 {source}",
       opDetachSourceChunk: "从 {node} 解除切片 {chunk}",
       opUnciteSourceChunk: "从 {node} 移除证据切片 {chunk}",
