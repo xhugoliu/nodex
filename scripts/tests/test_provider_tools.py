@@ -23,6 +23,7 @@ from desktop_flow_smoke import (
     apply_default_ai_status_contract,
     build_ai_status,
     resolve_runner_command,
+    run_desktop_flow_smoke,
 )
 import langchain_anthropic_runner as langchain_anthropic_runner_module
 import langchain_openai_runner as langchain_openai_runner_module
@@ -3127,6 +3128,128 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIsNone(ai_status["has_shell_env_conflict"])
         self.assertFalse(ai_status["uses_provider_defaults"])
         self.assertIn("does not map to a known provider runner", ai_status["status_error"])
+
+    def test_run_desktop_flow_smoke_apply_hard_gates_default_ai_status(self) -> None:
+        smoke_result = {
+            "status": "applied",
+            "steps": {"init": {"command": ["cargo", "run", "--", "init"]}},
+            "scenario_context": {
+                "imported_root_node": {
+                    "id": "imported-root",
+                    "title": "Imported Root",
+                },
+                "target_node": {
+                    "id": "target-node",
+                    "title": "Provider Authentication Flow",
+                },
+                "evidence": {
+                    "chunk_id": "chunk-1",
+                    "chunk_label": "Provider Authentication Flow",
+                },
+            },
+            "run_external_json": {
+                "metadata": {
+                    "model": "gpt-5.4-mini",
+                },
+                "patch": {
+                    "ops": [
+                        {
+                            "type": "add_node",
+                            "parent_id": "target-node",
+                            "title": "Applied Branch",
+                            "kind": "topic",
+                        }
+                    ]
+                },
+                "report": {
+                    "preview": ["add node Applied Branch"],
+                    "created_nodes": [
+                        {
+                            "id": "generated-node",
+                            "title": "Applied Branch",
+                        }
+                    ],
+                },
+            },
+            "quality": {
+                "status_ok": True,
+                "rationale_present": True,
+            },
+            "verification": {
+                "ai_run": {"ok": True},
+                "scenario": {
+                    "target_node_under_imported_root": True,
+                    "target_evidence_retained": True,
+                    "source_evidence_link_retained": True,
+                    "created_nodes_present": True,
+                    "created_nodes_match_patch": True,
+                },
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            workspace_dir = Path(tmp_dir)
+            with patch("desktop_flow_smoke.run_smoke", return_value=smoke_result):
+                aligned = run_desktop_flow_smoke(
+                    manifest_path=REPO_ROOT / "Cargo.toml",
+                    workspace_dir=workspace_dir,
+                    runner_command_text=(
+                        "python3 '/tmp/provider_runner.py' "
+                        "--provider openai --use-default-args"
+                    ),
+                    apply=True,
+                    fixture_path=None,
+                    target_label="Provider Authentication Flow",
+                    citation_rationale="default route rationale",
+                    preflight_summary={
+                        "has_auth": True,
+                        "has_process_env_conflict": False,
+                        "has_shell_env_conflict": False,
+                    },
+                    provider="openai",
+                    command_source="default",
+                )
+
+                drifted = run_desktop_flow_smoke(
+                    manifest_path=REPO_ROOT / "Cargo.toml",
+                    workspace_dir=workspace_dir,
+                    runner_command_text="python3 '/tmp/langchain_openai_runner.py'",
+                    apply=True,
+                    fixture_path=None,
+                    target_label="Provider Authentication Flow",
+                    citation_rationale="default route rationale",
+                    preflight_summary={
+                        "has_auth": True,
+                        "has_process_env_conflict": False,
+                        "has_shell_env_conflict": False,
+                    },
+                    provider="openai",
+                    command_source="default",
+                )
+
+        self.assertTrue(aligned["ok"])
+        self.assertTrue(
+            aligned["desktop_flow"]["checks"]["default_ai_status_provider"]
+        )
+        self.assertTrue(aligned["desktop_flow"]["checks"]["default_ai_status_runner"])
+        self.assertTrue(
+            aligned["desktop_flow"]["checks"][
+                "default_ai_status_uses_provider_defaults"
+            ]
+        )
+        self.assertTrue(
+            aligned["desktop_flow"]["checks"][
+                "default_ai_status_has_no_status_error"
+            ]
+        )
+
+        self.assertFalse(drifted["ok"])
+        self.assertFalse(drifted["desktop_flow"]["checks"]["default_ai_status_runner"])
+        self.assertFalse(
+            drifted["desktop_flow"]["checks"][
+                "default_ai_status_uses_provider_defaults"
+            ]
+        )
 
     def test_desktop_flow_ai_status_uses_provider_preflight_for_default_route(self) -> None:
         ai_status = build_ai_status(
