@@ -230,6 +230,26 @@ function makeDirectEvidenceReviewDraft(): DraftReviewPayload {
   };
 }
 
+function makeDirectEvidenceReviewDraftWithoutCitationRationale(): DraftReviewPayload {
+  const draft = makeDirectEvidenceReviewDraft();
+  return {
+    ...draft,
+    patch: {
+      ...draft.patch,
+      ops: draft.patch.ops.map((op) =>
+        op.type === "cite_source_chunk"
+          ? {
+              type: "cite_source_chunk",
+              chunk_id: op.chunk_id,
+              node_id: op.node_id,
+              citation_kind: op.citation_kind,
+            }
+          : op,
+      ),
+    },
+  };
+}
+
 function renderSidePane(options: {
   selectionTab: "context" | "draft" | "review";
   nodeContext?: NodeWorkspaceContext | null;
@@ -832,6 +852,84 @@ test("WorkbenchSidePane Review keeps affected source context visible for uncite 
   assert.match(
     html,
     /composer\.opUnciteSourceChunk \{&quot;chunk&quot;:&quot;Provider Authentication Flow&quot;,&quot;node&quot;:&quot;Authentication&quot;\}/,
+  );
+});
+
+test("WorkbenchSidePane Review falls back to direct evidence why-it-matters for source-backed drafts without rationale", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContext(),
+    selectedSourceDetail: makeSourceDetail(),
+    patchDraftState: {
+      state: "ready",
+      summary: "Cite source-backed chunk",
+      opCount: 1,
+      opTypes: [{ type: "cite_source_chunk", count: 1 }],
+      ops: [{ type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      error: null,
+    },
+    reviewDraft: makeDirectEvidenceReviewDraftWithoutCitationRationale(),
+  });
+
+  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.match(html, /workbench\.reviewAffectedSourceCite/);
+  assert.match(
+    html,
+    /reports\.rationale \{&quot;value&quot;:&quot;This chunk directly supports the citation patch\.&quot;\}/,
+  );
+  assert.match(html, /source\.md/);
+  assert.match(html, /Provider Authentication Flow/);
+  assert.doesNotMatch(html, /source-1/);
+  assert.doesNotMatch(html, /chunk-1/);
+  assert.doesNotMatch(html, /node-1/);
+});
+
+test("WorkbenchSidePane Review keeps stored citation rationale ahead of direct-evidence fallback", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContextWithEvidence(),
+    patchDraftState: {
+      state: "ready",
+      summary: "Remove cited chunk",
+      opCount: 1,
+      opTypes: [{ type: "uncite_source_chunk", count: 1 }],
+      ops: [{ type: "uncite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      error: null,
+    },
+    reviewDraft: makeDirectEvidenceReviewDraftWithoutCitationRationale(),
+  });
+
+  assert.match(
+    html,
+    /reports\.rationale \{&quot;value&quot;:&quot;This section explains why the current node should reuse the default auth route\.&quot;\}/,
+  );
+});
+
+test("WorkbenchSidePane Review ignores unmatched direct-evidence fallback entries", () => {
+  const reviewDraft = makeDirectEvidenceReviewDraftWithoutCitationRationale();
+  reviewDraft.explanation.direct_evidence = reviewDraft.explanation.direct_evidence.map((item) => ({
+    ...item,
+    chunk_id: "chunk-unmatched",
+  }));
+
+  const html = renderSidePane({
+    selectionTab: "review",
+    nodeContext: makeNodeContext(),
+    selectedSourceDetail: makeSourceDetail(),
+    patchDraftState: {
+      state: "ready",
+      summary: "Cite source-backed chunk",
+      opCount: 1,
+      opTypes: [{ type: "cite_source_chunk", count: 1 }],
+      ops: [{ type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      error: null,
+    },
+    reviewDraft,
+  });
+
+  assert.doesNotMatch(
+    html,
+    /reports\.rationale \{&quot;value&quot;:&quot;This chunk directly supports the citation patch\.&quot;\}/,
   );
 });
 

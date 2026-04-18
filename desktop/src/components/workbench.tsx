@@ -1080,6 +1080,7 @@ function ReviewSurface(props: {
     props.patchDraftState.ops,
     props.nodeContext,
     props.selectedSourceDetail,
+    props.reviewDraft?.explanation.direct_evidence ?? [],
     props.t,
   );
   const reviewSourceFocusItems = collectReviewSourceFocusItems(
@@ -1611,6 +1612,7 @@ function collectReviewAffectedSourceContext(
   ops: PatchDraftState["ops"],
   nodeContext: NodeWorkspaceContext | null,
   selectedSourceDetail: SourceDetail | null,
+  directEvidence: DraftReviewPayload["explanation"]["direct_evidence"],
   t: Translator,
 ) {
   const results = new Array<{
@@ -1630,6 +1632,16 @@ function collectReviewAffectedSourceContext(
   }>();
   const seen = new Set<string>();
   const nodeTitles = buildReviewNodeTitleLookup(nodeContext);
+  const directEvidenceWhyLookup = new Map<string, string>();
+
+  for (const item of directEvidence) {
+    const chunkId = trimmedString(item.chunk_id);
+    const whyItMatters = trimmedString(item.why_it_matters);
+    if (!chunkId || !whyItMatters || directEvidenceWhyLookup.has(chunkId)) {
+      continue;
+    }
+    directEvidenceWhyLookup.set(chunkId, whyItMatters);
+  }
 
   for (const op of ops) {
     if (op.type === "attach_source" || op.type === "detach_source") {
@@ -1703,7 +1715,10 @@ function collectReviewAffectedSourceContext(
       citationKind:
         trimmedString(op.citation_kind) || citationDetail?.citation_kind || null,
       rationale:
-        trimmedString(op.rationale) || trimmedString(citationDetail?.rationale) || null,
+        trimmedString(op.rationale) ||
+        trimmedString(citationDetail?.rationale) ||
+        directEvidenceWhyLookup.get(resolved.chunk.id) ||
+        null,
     });
   }
 
