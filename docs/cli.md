@@ -156,6 +156,11 @@ cd desktop && npm run test:logic
 - `desktop_flow.checks`
 - `ai_status`
 
+默认不传 `--runner-command` 时，这条 smoke 会复用桌面真实默认 draft route：
+`python3 scripts/provider_runner.py --provider openai --use-default-args`。
+因此 `ai_status` 里的 `provider` / `runner` / `uses_provider_defaults` / `status_error`
+也属于这条回归入口要守住的 contract，而不只是附带调试信息。
+
 ## 工作区发现
 
 Nodex 会从当前目录向上查找 `.nodex/project.db`。

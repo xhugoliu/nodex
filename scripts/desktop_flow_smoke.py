@@ -173,6 +173,17 @@ def resolve_runner_command(
             f"Run `python3 scripts/provider_doctor.py --provider {provider}` first."
         )
 
+    if provider == DEFAULT_DESKTOP_FLOW_PROVIDER:
+        runner_command_parts = [
+            sys.executable,
+            str((scripts_dir / "provider_runner.py").resolve()),
+            "--provider",
+            provider,
+            "--use-default-args",
+            *passthrough,
+        ]
+        return shlex.join(runner_command_parts), summary, "default"
+
     entry = get_provider_entry(provider)
     if entry.runner_script is None:
         raise SystemExit(f"[config] provider `{provider}` is not runnable")
@@ -220,6 +231,12 @@ def run_desktop_flow_smoke(
         preflight_summary=preflight_summary,
         provider=provider,
     )
+    desktop_flow = apply_default_ai_status_contract(
+        desktop_flow=desktop_flow,
+        ai_status=ai_status,
+        provider=provider,
+        command_source=command_source,
+    )
     result = {
         "ok": desktop_flow["ok"],
         "mode": "apply" if apply else "dry_run",
@@ -234,6 +251,30 @@ def run_desktop_flow_smoke(
     if preflight_summary is not None:
         result["preflight_summary"] = preflight_summary
     return result
+
+
+def apply_default_ai_status_contract(
+    *,
+    desktop_flow: dict,
+    ai_status: dict,
+    provider: Optional[str],
+    command_source: str,
+) -> dict:
+    if provider != DEFAULT_DESKTOP_FLOW_PROVIDER or command_source != "default":
+        return desktop_flow
+
+    checks = dict(desktop_flow.get("checks") or {})
+    checks["default_ai_status_provider"] = ai_status.get("provider") == provider
+    checks["default_ai_status_runner"] = ai_status.get("runner") == "provider_runner.py"
+    checks["default_ai_status_uses_provider_defaults"] = (
+        ai_status.get("uses_provider_defaults") is True
+    )
+    checks["default_ai_status_has_no_status_error"] = (
+        ai_status.get("status_error") is None
+    )
+    desktop_flow["checks"] = checks
+    desktop_flow["ok"] = all(value is True for value in checks.values())
+    return desktop_flow
 
 
 def build_desktop_flow_summary(smoke_result: dict, *, apply: bool) -> dict:

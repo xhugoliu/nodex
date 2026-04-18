@@ -18,7 +18,12 @@ FIXTURE_PATH = REPO_ROOT / "scripts" / "fixtures" / "source-context-smoke.md"
 from ai_contract import RunnerFailure, validate_contract_response
 from anthropic_context import AnthropicContext
 import compare_offline_runner
-from desktop_flow_smoke import DEFAULT_DESKTOP_FLOW_PROVIDER, build_ai_status
+from desktop_flow_smoke import (
+    DEFAULT_DESKTOP_FLOW_PROVIDER,
+    apply_default_ai_status_contract,
+    build_ai_status,
+    resolve_runner_command,
+)
 import langchain_anthropic_runner as langchain_anthropic_runner_module
 import langchain_openai_runner as langchain_openai_runner_module
 from langchain_runner_common import (
@@ -148,6 +153,73 @@ def build_anthropic_context() -> AnthropicContext:
 class ProviderToolScriptsTests(unittest.TestCase):
     def test_desktop_flow_smoke_defaults_to_openai_provider_route(self) -> None:
         self.assertEqual(DEFAULT_DESKTOP_FLOW_PROVIDER, "openai")
+
+    def test_desktop_flow_smoke_default_route_matches_desktop_default_command(self) -> None:
+        with patch(
+            "desktop_flow_smoke.load_provider_payload",
+            return_value={"summary": {"has_auth": True}},
+        ):
+            command, summary, command_source = resolve_runner_command(
+                provider="openai",
+                runner_command=None,
+                passthrough=[],
+                scripts_dir=REPO_ROOT / "scripts",
+            )
+
+        self.assertEqual(command_source, "default")
+        self.assertEqual(summary, {"has_auth": True})
+        self.assertIn("provider_runner.py", command)
+        self.assertIn("--provider openai", command)
+        self.assertIn("--use-default-args", command)
+
+    def test_desktop_flow_smoke_default_route_ai_status_contract_becomes_a_hard_gate(self) -> None:
+        desktop_flow = {
+            "ok": True,
+            "checks": {
+                "workspace_initialized": True,
+            },
+        }
+
+        aligned = apply_default_ai_status_contract(
+            desktop_flow=desktop_flow,
+            ai_status={
+                "provider": "openai",
+                "runner": "provider_runner.py",
+                "uses_provider_defaults": True,
+                "status_error": None,
+            },
+            provider="openai",
+            command_source="default",
+        )
+
+        self.assertTrue(aligned["ok"])
+        self.assertTrue(aligned["checks"]["default_ai_status_provider"])
+        self.assertTrue(aligned["checks"]["default_ai_status_runner"])
+        self.assertTrue(aligned["checks"]["default_ai_status_uses_provider_defaults"])
+        self.assertTrue(aligned["checks"]["default_ai_status_has_no_status_error"])
+
+        drifted = apply_default_ai_status_contract(
+            desktop_flow={
+                "ok": True,
+                "checks": {
+                    "workspace_initialized": True,
+                },
+            },
+            ai_status={
+                "provider": "openai",
+                "runner": "langchain_openai_runner.py",
+                "uses_provider_defaults": False,
+                "status_error": None,
+            },
+            provider="openai",
+            command_source="default",
+        )
+
+        self.assertFalse(drifted["ok"])
+        self.assertFalse(drifted["checks"]["default_ai_status_runner"])
+        self.assertFalse(
+            drifted["checks"]["default_ai_status_uses_provider_defaults"]
+        )
 
     def test_compare_offline_runner_source_context_builds_semantic_env_var_blueprint(self) -> None:
         request_payload = build_request_payload(node_id="node-1")
