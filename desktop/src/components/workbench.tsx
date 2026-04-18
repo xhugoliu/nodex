@@ -199,6 +199,7 @@ export function WorkbenchSidePane(props: {
           {props.selectionTab === "review" ? (
             <ReviewSurface
               nodeContext={props.nodeContext}
+              selectedSourceDetail={props.selectedSourceDetail}
               reviewDraft={props.reviewDraft}
               patchDraftOrigin={props.patchDraftOrigin}
               patchDraftState={props.patchDraftState}
@@ -1029,6 +1030,7 @@ function ReviewSurface(props: {
   patchDraftOrigin: PatchDraftOrigin | null;
   patchDraftState: PatchDraftState;
   nodeContext: NodeWorkspaceContext | null;
+  selectedSourceDetail: SourceDetail | null;
   t: Translator;
   onPreviewPatch: () => void;
   onApplyPatch: () => void;
@@ -1063,6 +1065,12 @@ function ReviewSurface(props: {
   );
   const directEvidenceCount =
     props.reviewDraft?.explanation.direct_evidence.length ?? 0;
+  const affectedSourceChunks = collectReviewAffectedSourceChunks(
+    props.patchDraftState.ops,
+    props.nodeContext,
+    props.selectedSourceDetail,
+    props.t,
+  );
   const reviewOriginMeta = props.patchDraftOrigin
     ? formatPatchDraftOriginMeta(props.patchDraftOrigin, props.t)
     : "";
@@ -1129,6 +1137,43 @@ function ReviewSurface(props: {
                   })}
                 </span>
               ) : null}
+            </div>
+          </div>
+        ) : null}
+
+        {affectedSourceChunks.length ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewAffectedSourceTitle")}
+            </div>
+            <div className="space-y-2">
+              {affectedSourceChunks.map((target) => (
+                <div
+                  key={`${target.action}-${target.chunk.id}`}
+                  className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
+                      {target.action === "cite"
+                        ? props.t("workbench.reviewAffectedSourceCite")
+                        : props.t("workbench.reviewAffectedSourceUncite")}
+                    </span>
+                    <span className="text-sm font-medium text-[color:var(--text)]">
+                      {target.sourceName}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                    {target.chunk.label || props.t("detail.noLabel")}
+                  </div>
+                  <div className="mt-1 text-xs text-[color:var(--muted)]">
+                    {props.t("detail.chunkMeta", {
+                      ordinal: target.chunk.ordinal + 1,
+                      start: target.chunk.start_line,
+                      end: target.chunk.end_line,
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
@@ -1276,6 +1321,100 @@ function formatReviewImpactSummary(
     default:
       return t("workbench.reviewImpactGeneric", { count, type });
   }
+}
+
+function collectReviewAffectedSourceChunks(
+  ops: PatchDraftState["ops"],
+  nodeContext: NodeWorkspaceContext | null,
+  selectedSourceDetail: SourceDetail | null,
+  t: Translator,
+) {
+  const results = new Array<{
+    action: "cite" | "uncite";
+    sourceName: string;
+    chunk: SourceChunkRecord;
+  }>();
+  const seen = new Set<string>();
+
+  for (const op of ops) {
+    const chunkId =
+      typeof op.chunk_id === "string"
+        ? op.chunk_id
+        : typeof op.id === "string"
+          ? op.id
+          : null;
+    if (!chunkId) {
+      continue;
+    }
+
+    const action =
+      op.type === "cite_source_chunk"
+        ? "cite"
+        : op.type === "uncite_source_chunk"
+          ? "uncite"
+          : null;
+    if (!action) {
+      continue;
+    }
+
+    const resolved = resolveReviewSourceChunk(chunkId, nodeContext, selectedSourceDetail);
+    if (!resolved) {
+      continue;
+    }
+
+    const key = `${action}:${resolved.chunk.id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    results.push({
+      action,
+      sourceName: resolved.sourceName || t("detail.none"),
+      chunk: resolved.chunk,
+    });
+  }
+
+  return results;
+}
+
+function resolveReviewSourceChunk(
+  chunkId: string,
+  nodeContext: NodeWorkspaceContext | null,
+  selectedSourceDetail: SourceDetail | null,
+) {
+  const selectedChunk = selectedSourceDetail?.chunks.find(
+    (detail) => detail.chunk.id === chunkId,
+  );
+  if (selectedChunk && selectedSourceDetail) {
+    return {
+      sourceName: selectedSourceDetail.source.original_name,
+      chunk: selectedChunk.chunk,
+    };
+  }
+
+  for (const source of nodeContext?.node_detail.evidence ?? []) {
+    const chunk =
+      source.citations.find((citation) => citation.chunk.id === chunkId)?.chunk ??
+      source.chunks.find((item) => item.id === chunkId);
+    if (chunk) {
+      return {
+        sourceName: source.source.original_name,
+        chunk,
+      };
+    }
+  }
+
+  for (const source of nodeContext?.node_detail.sources ?? []) {
+    const chunk = source.chunks.find((item) => item.id === chunkId);
+    if (chunk) {
+      return {
+        sourceName: source.source.original_name,
+        chunk,
+      };
+    }
+  }
+
+  return null;
 }
 
 function SourceCard(props: {

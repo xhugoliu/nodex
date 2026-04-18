@@ -352,6 +352,14 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
 
   assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
+  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.match(html, /workbench\.reviewAffectedSourceCite/);
+  assert.match(html, /source\.md/);
+  assert.match(html, /Provider Authentication Flow/);
+  assert.match(
+    html,
+    /detail\.chunkMeta \{&quot;ordinal&quot;:1,&quot;start&quot;:5,&quot;end&quot;:11\}/,
+  );
 });
 
 test("WorkbenchSidePane Review keeps patch-history provenance visible for recovery-loaded drafts", () => {
@@ -403,6 +411,30 @@ test("WorkbenchSidePane Review keeps manual draft provenance visible for node ed
 
   assert.match(html, /workbench\.reviewManualOriginTitle/);
   assert.match(html, /workbench\.reviewManualOriginUpdateNode/);
+});
+
+test("WorkbenchSidePane Review keeps affected source context visible for uncite drafts", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftOrigin: {
+      kind: "manual",
+      action: "uncite_source_chunk",
+    },
+    patchDraftState: {
+      state: "ready",
+      summary: "Remove cited chunk",
+      opCount: 1,
+      opTypes: [{ type: "uncite_source_chunk", count: 1 }],
+      ops: [{ type: "uncite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+      error: null,
+    },
+    reviewDraft: null,
+  });
+
+  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.match(html, /workbench\.reviewAffectedSourceUncite/);
+  assert.match(html, /source\.md/);
+  assert.match(html, /Provider Authentication Flow/);
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {
