@@ -848,6 +848,11 @@ export function SourceContextSurface(props: {
       detail.citations.map((citation) => citation.chunk.id),
     ) ?? [],
   );
+  const currentNodeCitationsByChunk = new Map(
+    props.nodeContext?.node_detail.evidence.flatMap((detail) =>
+      detail.citations.map((citation) => [citation.chunk.id, citation] as const),
+    ) ?? [],
+  );
   const citedChunkCount = props.detail.chunks.filter((chunk) =>
     citedChunkIds.has(chunk.chunk.id),
   ).length;
@@ -997,6 +1002,9 @@ export function SourceContextSurface(props: {
               selected={props.selectedSourceChunkId === chunk.chunk.id}
               citationNodeTitle={citationNodeTitle}
               isCitedForCurrentNode={citedChunkIds.has(chunk.chunk.id)}
+              currentNodeCitation={
+                currentNodeCitationsByChunk.get(chunk.chunk.id) ?? null
+              }
               t={props.t}
               onOpenLinkedNode={props.onOpenLinkedNode}
               onDraftCiteChunk={props.onDraftCiteChunk}
@@ -1274,6 +1282,7 @@ function SourceChunkCard(props: {
   selected: boolean;
   citationNodeTitle: string | null;
   isCitedForCurrentNode: boolean;
+  currentNodeCitation: EvidenceCitationDetail | null;
   t: Translator;
   onOpenLinkedNode: (nodeId: string) => void;
   onDraftCiteChunk: (chunkId: string) => void;
@@ -1339,6 +1348,34 @@ function SourceChunkCard(props: {
                 {props.t("detail.draftUncite")}
               </button>
             </div>
+            {props.currentNodeCitation ? (
+              <div className="rounded-xl border border-[rgba(15,118,110,0.14)] bg-[rgba(15,118,110,0.05)] px-3 py-3">
+                <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                  {props.t("detail.currentNodeCitationTitle")}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm leading-6 text-[color:var(--text)]">
+                  <span>
+                    {props.t("detail.currentNodeCitationMeta", {
+                      title: props.citationNodeTitle,
+                    })}
+                  </span>
+                  <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-white/85 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                    {formatCitationKind(
+                      props.currentNodeCitation.citation_kind,
+                      props.t,
+                    )}
+                  </span>
+                </div>
+                {props.currentNodeCitation.rationale ? (
+                  <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                    {clipText(
+                      normalizeInlineText(props.currentNodeCitation.rationale),
+                      160,
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {linkedNodes.length ? (

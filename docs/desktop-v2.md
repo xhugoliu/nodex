@@ -42,6 +42,7 @@
 - 只有同一节点、同一 source detail 的刷新，才允许保留当前 Review 可见态
 - `source detail -> node context` 的 handoff 语义已经收口到共享 helper，不应再散回 App 分支
 - `source detail -> Draft` 也应先通过共享 helper 收口到 node-scoped Draft，不把打开的 source detail 直接带成新的 Draft 状态边界
+- 当某个 chunk 已经被当前节点引用时，source detail 里也应直接看见当前 citation kind 和 rationale，再决定是继续保留还是起草 uncite
 - apply 成功后优先聚焦新增节点；若没有新增节点，则回到当前节点
 - 右栏来源信息应解释“为什么值得看”，而不只是列 chunk
 - 右栏默认展示用户下一步该做什么，而不是底层运行细节列表

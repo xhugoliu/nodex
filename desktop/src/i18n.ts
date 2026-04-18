@@ -314,6 +314,9 @@ const translations: Record<Locale, TranslationTree> = {
         "Open this source from a node first, then draft cite or uncite patches here.",
       draftCite: "Draft Cite",
       draftUncite: "Draft Uncite",
+      currentNodeCitationTitle: "Current node citation",
+      currentNodeCitationMeta:
+        "This chunk is currently cited for “{title}”.",
       citationActions: "Citation actions",
       chunkCitationAvailable:
         "This chunk can be cited for the current node from here.",
@@ -907,6 +910,8 @@ const translations: Record<Locale, TranslationTree> = {
       citationContextMissing: "请先从某个节点打开这个来源，再在这里起草 cite 或 uncite patch。",
       draftCite: "起草引用",
       draftUncite: "起草取消引用",
+      currentNodeCitationTitle: "当前节点的引用状态",
+      currentNodeCitationMeta: "这个切片当前已经被“{title}”引用。",
       citationActions: "引用操作",
       chunkCitationAvailable: "这个切片可以直接为当前节点起草证据引用。",
       chunkCitationActive: "这个切片已经被当前节点引用，你可以在这里取消或继续回看它。",

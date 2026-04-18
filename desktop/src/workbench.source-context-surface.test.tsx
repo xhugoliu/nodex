@@ -147,6 +147,12 @@ test("SourceContextSurface renders rationale summary, continue entries, and cite
   assert.match(html, /detail\.citationContextReadyForNode/);
   assert.match(html, /detail\.draftCite/);
   assert.match(html, /detail\.draftUncite/);
+  assert.match(html, /detail\.currentNodeCitationTitle/);
+  assert.match(
+    html,
+    /detail\.currentNodeCitationMeta \{&quot;title&quot;:&quot;Authentication&quot;\}/,
+  );
+  assert.match(html, /This section explains why the current node should reuse the default auth route\./);
 });
 
 test("SourceContextSurface hides citation actions and shows empty continue state without node context", () => {
@@ -178,6 +184,7 @@ test("SourceContextSurface hides citation actions and shows empty continue state
   assert.match(html, /workbench\.localProvenanceTitle/);
   assert.doesNotMatch(html, /detail\.draftCite/);
   assert.doesNotMatch(html, /detail\.draftUncite/);
+  assert.doesNotMatch(html, /detail\.currentNodeCitationTitle/);
 });
 
 test("SourceContextSurface keeps continue entries focused by hiding duplicate evidence nodes already listed as related nodes", () => {
