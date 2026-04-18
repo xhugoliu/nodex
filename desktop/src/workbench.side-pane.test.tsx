@@ -135,6 +135,32 @@ function makeReviewDraft(): DraftReviewPayload {
   };
 }
 
+function makeDirectEvidenceReviewDraft(): DraftReviewPayload {
+  return {
+    ...makeReviewDraft(),
+    explanation: {
+      rationale_summary: "Use this source-backed citation patch to preserve the current auth evidence.",
+      direct_evidence: [
+        {
+          source_id: "source-1",
+          source_name: "source.md",
+          chunk_id: "chunk-1",
+          label: "Provider Authentication Flow",
+          start_line: 5,
+          end_line: 11,
+          why_it_matters: "This chunk directly supports the citation patch.",
+        },
+      ],
+      inferred_suggestions: [],
+    },
+    patch: {
+      version: 1,
+      summary: "Draft citation summary",
+      ops: [{ type: "cite_source_chunk", chunk_id: "chunk-1", node_id: "node-1" }],
+    },
+  };
+}
+
 function renderSidePane(options: {
   selectionTab: "context" | "draft" | "review";
   selectedSourceDetail?: SourceDetail | null;
@@ -214,6 +240,8 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
     html,
     /workbench\.reviewFocusNewNode \{&quot;title&quot;:&quot;Follow-up branch&quot;\}/,
   );
+  assert.match(html, /workbench\.reviewImpactTitle/);
+  assert.match(html, /workbench\.reviewImpactAddNode \{&quot;count&quot;:1\}/);
   assert.match(html, /patchEditor\.preview/);
   assert.match(html, /patchEditor\.apply/);
   assert.doesNotMatch(html, /run-1/);
@@ -302,6 +330,25 @@ test("WorkbenchSidePane Review falls back to the current node when the draft doe
     html,
     /workbench\.reviewFocusCurrentNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
   );
+  assert.match(html, /workbench\.reviewImpactUpdateNode \{&quot;count&quot;:1\}/);
+});
+
+test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when the draft changes citations", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftState: {
+      state: "ready",
+      summary: "Draft citation summary",
+      opCount: 1,
+      opTypes: [{ type: "cite_source_chunk", count: 1 }],
+      ops: [{ type: "cite_source_chunk", id: "chunk-1" }],
+      error: null,
+    },
+    reviewDraft: makeDirectEvidenceReviewDraft(),
+  });
+
+  assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
+  assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {

@@ -1044,6 +1044,11 @@ function ReviewSurface(props: {
     props.patchDraftState.ops,
     props.nodeContext?.node_detail.node.title ?? null,
   );
+  const reviewImpactSummaries = props.patchDraftState.opTypes.map((summary) =>
+    formatReviewImpactSummary(summary.type, summary.count, props.t),
+  );
+  const directEvidenceCount =
+    props.reviewDraft?.explanation.direct_evidence.length ?? 0;
 
   return (
     <div className="space-y-4">
@@ -1077,6 +1082,31 @@ function ReviewSurface(props: {
                 : props.t("workbench.reviewFocusCurrentNode", {
                     title: reviewFocusTarget.title,
                   })}
+            </div>
+          </div>
+        ) : null}
+
+        {reviewImpactSummaries.length || directEvidenceCount ? (
+          <div className="space-y-2">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewImpactTitle")}
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+              {reviewImpactSummaries.map((summary) => (
+                <span
+                  key={summary}
+                  className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1"
+                >
+                  {summary}
+                </span>
+              ))}
+              {directEvidenceCount ? (
+                <span className="rounded-full bg-[rgba(15,118,110,0.08)] px-2.5 py-1 text-[color:var(--text)]">
+                  {props.t("workbench.reviewEvidenceCount", {
+                    count: directEvidenceCount,
+                  })}
+                </span>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -1172,6 +1202,37 @@ function deriveReviewFocusTarget(
   }
 
   return null;
+}
+
+function formatReviewImpactSummary(
+  type: string,
+  count: number,
+  t: Translator,
+): string {
+  switch (type) {
+    case "add_node":
+      return t("workbench.reviewImpactAddNode", { count });
+    case "update_node":
+      return t("workbench.reviewImpactUpdateNode", { count });
+    case "move_node":
+      return t("workbench.reviewImpactMoveNode", { count });
+    case "delete_node":
+      return t("workbench.reviewImpactDeleteNode", { count });
+    case "attach_source":
+      return t("workbench.reviewImpactAttachSource", { count });
+    case "attach_source_chunk":
+      return t("workbench.reviewImpactAttachSourceChunk", { count });
+    case "cite_source_chunk":
+      return t("workbench.reviewImpactCiteSourceChunk", { count });
+    case "detach_source":
+      return t("workbench.reviewImpactDetachSource", { count });
+    case "detach_source_chunk":
+      return t("workbench.reviewImpactDetachSourceChunk", { count });
+    case "uncite_source_chunk":
+      return t("workbench.reviewImpactUnciteSourceChunk", { count });
+    default:
+      return t("workbench.reviewImpactGeneric", { count, type });
+  }
 }
 
 function SourceCard(props: {
