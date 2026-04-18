@@ -5264,6 +5264,148 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   dom.cleanup();
 });
 
+test("App keeps source-backed Review explainability humanized when loading a history patch", async () => {
+  const dom = installFakeDom();
+  const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
+  const invokeCalls: Array<{ command: string; args: Record<string, unknown> }> = [];
+  let latestTreePaneProps: TreePaneProps | null = null;
+  let latestSidePaneProps: SidePaneProps | null = null;
+
+  const bindings: Partial<AppBindings> = {
+    hasTauriRuntime: () => true,
+    listen: async (eventName, handler) => {
+      eventHandlers.set(eventName, handler as (event: { payload: unknown }) => void);
+      return () => {
+        eventHandlers.delete(eventName);
+      };
+    },
+    invokeCommand: async <T,>(command: string, args: Record<string, unknown>) => {
+      invokeCalls.push({ command, args });
+      if (command === "set_menu_locale") {
+        return undefined as T;
+      }
+      if (command === "get_desktop_ai_status") {
+        return makeDesktopAiStatus() as T;
+      }
+      if (command === "get_node_workspace_context") {
+        return makeNodeContextWithEvidence() as T;
+      }
+      if (command === "get_source_detail") {
+        return makeSourceDetailWithChunk() as T;
+      }
+      if (command === "get_patch_document") {
+        return {
+          version: 1,
+          summary: "Loaded source patch from history",
+          ops: [
+            { type: "attach_source", source_id: "source-1", node_id: "node-1" },
+            {
+              type: "attach_source_chunk",
+              chunk_id: "chunk-1",
+              node_id: "node-1",
+            },
+          ],
+        } as T;
+      }
+      throw new Error(`unexpected command: ${command}`);
+    },
+    openPath: async () => null,
+    TreePane: (props) => {
+      latestTreePaneProps = props;
+      return <div />;
+    },
+    WorkbenchMainPane: () => <div />,
+    WorkbenchSidePane: (props) => {
+      latestSidePaneProps = props;
+      return <WorkbenchSidePane {...props} />;
+    },
+    WorkspaceStartPane: () => <div />,
+  };
+
+  const root = ReactDOM.createRoot(dom.container as unknown as Element);
+
+  await act(async () => {
+    root.render(<App bindings={bindings} />);
+    await flush();
+  });
+
+  const workspaceLoaded = eventHandlers.get("desktop://workspace-loaded");
+  assert.ok(workspaceLoaded, "workspace-loaded listener should be registered");
+
+  await act(async () => {
+    workspaceLoaded?.({
+      payload: {
+        overview: makeRecoveryOverview(),
+        message: "workspace loaded",
+        tone: "success",
+        focus_node_id: "node-1",
+      },
+    });
+    await flush(3);
+  });
+
+  const requireTreePaneProps = () => {
+    assert.ok(latestTreePaneProps, "tree pane props should be available");
+    return latestTreePaneProps;
+  };
+  const requireSidePaneProps = () => {
+    assert.ok(latestSidePaneProps, "side pane props should be available");
+    return latestSidePaneProps;
+  };
+
+  await act(async () => {
+    requireSidePaneProps().onOpenSource("source-1");
+    await flush();
+  });
+
+  assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
+
+  await act(async () => {
+    requireTreePaneProps().onLoadPatchToReview("patch-2");
+    await flush(2);
+  });
+
+  const renderedText = dom.container.textContent ?? "";
+  assert.ok(
+    invokeCalls.some(
+      (call) =>
+        call.command === "get_patch_document" &&
+        call.args.start_path === "/workspace" &&
+        call.args.run_id === "patch-2",
+    ),
+  );
+  assert.equal(requireSidePaneProps().selectionTab, "review");
+  assert.equal(requireSidePaneProps().selectedSourceDetail, null);
+  assert.deepEqual(requireSidePaneProps().patchDraftOrigin, {
+    kind: "patch_history",
+    run_id: "patch-2",
+    origin: "manual",
+  });
+  assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
+  assert.equal(
+    requireSidePaneProps().patchDraftState.summary,
+    "Loaded source patch from history",
+  );
+  assert.match(renderedText, /Affected source context/);
+  assert.match(renderedText, /Will link source/);
+  assert.match(renderedText, /Will link chunk/);
+  assert.match(renderedText, /source\.md/);
+  assert.match(renderedText, /Provider Authentication Flow/);
+  assert.doesNotMatch(renderedText, /source-1/);
+  assert.doesNotMatch(renderedText, /chunk-1/);
+  assert.doesNotMatch(renderedText, /node-1/);
+  assert.ok(
+    !invokeCalls.some((call) => call.command === "apply_reviewed_patch"),
+    "loading history into Review should not apply the patch",
+  );
+
+  await act(async () => {
+    root.unmount();
+    await flush(2);
+  });
+  dom.cleanup();
+});
+
 test("App surfaces desktop AI status refresh failures inside the node-scoped Draft route", async () => {
   const dom = installFakeDom();
   const eventHandlers = new Map<string, (event: { payload: unknown }) => void>();
