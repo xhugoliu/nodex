@@ -661,6 +661,8 @@ export function NodeContextSurface(props: {
   );
   const visibleCreatedNodes =
     props.applyResult?.created_nodes.filter((node) => node.id !== detail.node.id) ?? [];
+  const hasSupportingMaterial =
+    detail.sources.length > 0 || detail.evidence.length > 0;
   const nextActionKey = props.applyResult?.created_nodes.length
     ? "workbench.applyResultNextCreated"
     : detail.sources.length || detail.evidence.length
@@ -826,49 +828,64 @@ export function NodeContextSurface(props: {
         </section>
       ) : null}
 
-      {detail.sources.length ? (
-        <section className={`${cardClass} space-y-3`}>
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("detail.sourcesSection")}
+      {hasSupportingMaterial ? (
+        <section className={`${cardClass} space-y-4`}>
+          <div className="space-y-1">
+            <div className="text-sm font-medium text-[color:var(--text)]">
+              {props.t("workbench.sourcesTitle")}
+            </div>
+            <div className="text-sm leading-6 text-[color:var(--muted)]">
+              {props.t("workbench.sourcesBody")}
+            </div>
           </div>
-          <div className="space-y-2">
-            {detail.sources.map((source) => (
-              <SourceCard
-                key={source.source.id}
-                title={source.source.original_name}
-                summary={summarizeSourceReason(source, props.t)}
-                meta={summarizeChunkMeta(source.chunks, props.t)}
-                provenanceLines={summarizeSourceProvenance(source.source, props.t)}
-                onClick={() => props.onOpenSource(source.source.id)}
-              />
-            ))}
-          </div>
+
+          {detail.sources.length ? (
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-[color:var(--text)]">
+                {props.t("detail.sourcesSection")}
+              </div>
+              <div className="space-y-2">
+                {detail.sources.map((source) => (
+                  <SourceCard
+                    key={source.source.id}
+                    title={source.source.original_name}
+                    summary={summarizeSourceReason(source, props.t)}
+                    meta={summarizeChunkMeta(source.chunks, props.t)}
+                    provenanceLines={summarizeSourceProvenance(source.source, props.t)}
+                    onClick={() => props.onOpenSource(source.source.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {detail.evidence.length ? (
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-[color:var(--text)]">
+                {props.t("detail.evidenceSection")}
+              </div>
+              <div className="space-y-2">
+                {detail.evidence.map((source) => (
+                  <SourceCard
+                    key={source.source.id}
+                    title={source.source.original_name}
+                    summary={summarizeEvidenceReason(source, props.t)}
+                    meta={summarizeChunkMeta(source.chunks, props.t)}
+                    provenanceLines={summarizeSourceProvenance(source.source, props.t)}
+                    tone="evidence"
+                    onClick={() => props.onOpenSource(source.source.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
-      {detail.evidence.length ? (
-        <section className={`${cardClass} space-y-3`}>
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("detail.evidenceSection")}
-          </div>
-          <div className="space-y-2">
-            {detail.evidence.map((source) => (
-              <SourceCard
-                key={source.source.id}
-                title={source.source.original_name}
-                summary={summarizeEvidenceReason(source, props.t)}
-                meta={summarizeChunkMeta(source.chunks, props.t)}
-                provenanceLines={summarizeSourceProvenance(source.source, props.t)}
-                tone="evidence"
-                onClick={() => props.onOpenSource(source.source.id)}
-              />
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      {!detail.sources.length && !detail.evidence.length ? (
-        <EmptyBox>{props.t("detail.noSourceLinks")}</EmptyBox>
+      {!hasSupportingMaterial ? (
+        <>
+          <EmptyBox>{props.t("detail.noSourceLinks")}</EmptyBox>
+        </>
       ) : null}
     </div>
   );

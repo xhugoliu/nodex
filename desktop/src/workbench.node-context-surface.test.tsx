@@ -138,6 +138,9 @@ test("NodeContextSurface shows the next step into Draft", () => {
 test("NodeContextSurface keeps local provenance visible on source cards", () => {
   const html = renderSurface({});
 
+  assert.match(html, /workbench\.sourcesTitle/);
+  assert.match(html, /workbench\.sourcesBody/);
+  assert.match(html, /detail\.sourcesSection/);
   assert.match(html, /sourceImport\.pathLabel/);
   assert.match(html, /\/fixtures\/source\.md/);
   assert.match(html, /detail\.importedAt/);
