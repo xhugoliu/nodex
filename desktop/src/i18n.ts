@@ -111,12 +111,7 @@ const translations: Record<Locale, TranslationTree> = {
       draftEmptyTitle: "Open A Node Before Drafting",
       draftEmptyBody:
         "Select one node first so the assistant stays scoped to the current branch.",
-      draftScopeTitle: "Assistant scope",
-      draftScopeNodeBody:
-        "Draft the next patch for “{title}” without leaving this node's thread.",
       draftActionsTitle: "Draft next move",
-      draftActionsBody:
-        "Use one focused assistant action at a time, then inspect the patch before applying.",
       draftReadyOps: "{count} draft ops ready",
       draftMoreOps: "{count} more draft ops",
       reviewWhyTitle: "Why this draft",
@@ -771,10 +766,7 @@ const translations: Record<Locale, TranslationTree> = {
       openDraft: "进入草案",
       draftEmptyTitle: "先打开一个节点再起草",
       draftEmptyBody: "先选中一个节点，assistant workspace 才会保持在当前分支作用域内。",
-      draftScopeTitle: "Assistant 作用域",
-      draftScopeNodeBody: "围绕“{title}”起草下一次 patch，不脱离当前节点线程。",
       draftActionsTitle: "起草下一步",
-      draftActionsBody: "每次只发起一个聚焦的 assistant 动作，然后先看 patch 再应用。",
       draftReadyOps: "已有 {count} 条草案操作",
       draftMoreOps: "还有 {count} 条草案操作",
       reviewWhyTitle: "这次草案为什么要改",
