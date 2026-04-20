@@ -489,6 +489,37 @@ export function AiDraftRouteSurface(props: {
   const showNextSteps =
     Boolean(props.draftError) ||
     (!routeIsNeutral && routeNeedsAttention && nextSteps.length > 0);
+  const showCompactHealthyDefaultRoute =
+    Boolean(status) && !routeIsNeutral && !routeNeedsAttention && !usesOverrideCommand;
+
+  if (showCompactHealthyDefaultRoute) {
+    return (
+      <section className={`${cardClass} mb-4 space-y-2 ${toneClass}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+            {props.t("workbench.defaultRoute")}
+          </div>
+          <button className={ghostButtonClass} onClick={props.onRefresh} type="button">
+            {props.t("nodeEditing.aiDraftRefresh")}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {statusLabel}
+          </span>
+          {status?.provider ? (
+            <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+              {status.provider}
+            </span>
+          ) : null}
+          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+            {status?.runner || props.t("nodeEditing.aiDraftUnknown")}
+          </span>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className={`${cardClass} mb-4 space-y-3 ${toneClass}`}>

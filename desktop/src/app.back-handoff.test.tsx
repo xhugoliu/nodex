@@ -3265,7 +3265,9 @@ test("App keeps source-detail handoff on the node-scoped Draft route surface wit
   assert.equal(requireSidePaneProps().nodeContext?.node_detail.node.id, "node-1");
 
   renderedText = dom.container.textContent ?? "";
-  assert.match(renderedText, /AI Draft Route/);
+  assert.match(renderedText, /Default draft route/);
+  assert.match(renderedText, /Route ready/);
+  assert.match(renderedText, /provider_runner\.py/);
   assert.match(renderedText, /Current focus/);
   assert.match(renderedText, /Node: Authentication/);
   assert.doesNotMatch(renderedText, /Source in view/);
@@ -6352,7 +6354,7 @@ test("App recovers the node-scoped Draft route after a manual desktop AI status 
   assert.equal(requireSidePaneProps().aiDraftError, null);
   assert.equal(requireSidePaneProps().aiDraftStatus?.provider, "openai");
   renderedText = dom.container.textContent ?? "";
-  assert.match(renderedText, /Provider: openai/);
+  assert.match(renderedText, /Default draft route/);
   assert.doesNotMatch(renderedText, /desktop AI status probe timed out/);
 
   await act(async () => {
