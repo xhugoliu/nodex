@@ -950,6 +950,14 @@ export function SourceContextSurface(props: {
                 })
               : props.t("detail.citationContextMissing")}
           </div>
+          <div className="mt-3 flex flex-col gap-3 border-t border-[color:var(--line-soft)] pt-3">
+            <div className="text-sm leading-6 text-[color:var(--text)]">
+              {props.t("workbench.contextNextSourceDraft")}
+            </div>
+            <button className={primaryButtonClass} onClick={props.onOpenDraft} type="button">
+              {props.t("workbench.openDraft")}
+            </button>
+          </div>
         </div>
         <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/75 px-3 py-3">
           <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
@@ -962,17 +970,6 @@ export function SourceContextSurface(props: {
               </div>
             ))}
           </div>
-        </div>
-        <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/75 px-3 py-3">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            {props.t("workbench.contextNextTitle")}
-          </div>
-          <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
-            {props.t("workbench.contextNextSourceDraft")}
-          </div>
-          <button className={`${primaryButtonClass} mt-3`} onClick={props.onOpenDraft} type="button">
-            {props.t("workbench.openDraft")}
-          </button>
         </div>
       </section>
 

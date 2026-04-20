@@ -138,9 +138,9 @@ test("SourceContextSurface renders rationale summary, continue entries, and cite
   assert.match(html, /sourceImport\.pathLabel/);
   assert.match(html, /\/fixtures\/source\.md/);
   assert.match(html, /detail\.importedAt/);
-  assert.match(html, /workbench\.contextNextTitle/);
   assert.match(html, /workbench\.contextNextSourceDraft/);
   assert.match(html, /workbench\.openDraft/);
+  assert.doesNotMatch(html, /workbench\.contextNextTitle/);
   assert.match(html, /detail\.sourceContinueTitle/);
   assert.match(html, /Provider Setup/);
   assert.match(html, /Auth Evidence/);
