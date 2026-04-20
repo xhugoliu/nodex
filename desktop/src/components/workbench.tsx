@@ -793,20 +793,18 @@ export function NodeContextSurface(props: {
             ? clipText(detail.node.body, 220)
             : props.t("detail.noBody")}
         </p>
-      </section>
-
-      <section className={`${cardClass} space-y-3`}>
-        <div className="space-y-1">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            {props.t("workbench.contextNextTitle")}
-          </div>
+        <div className="flex flex-col gap-3 border-t border-[color:var(--line-soft)] pt-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm leading-6 text-[color:var(--text)]">
             {props.t("workbench.contextNextNodeDraft")}
           </div>
+          <button
+            className={primaryButtonClass}
+            onClick={props.onOpenDraft}
+            type="button"
+          >
+            {props.t("workbench.openDraft")}
+          </button>
         </div>
-        <button className={primaryButtonClass} onClick={props.onOpenDraft} type="button">
-          {props.t("workbench.openDraft")}
-        </button>
       </section>
 
       {isEditOpen ? (

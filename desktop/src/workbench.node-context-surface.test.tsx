@@ -127,12 +127,12 @@ test("NodeContextSurface falls back to current-node focus and source-guided next
   assert.doesNotMatch(html, /workbench\.applyResultCreatedNodesLabel/);
 });
 
-test("NodeContextSurface shows the next step into Draft", () => {
+test("NodeContextSurface keeps the Draft next step in the node summary footer without a standalone next card", () => {
   const html = renderSurface({});
 
-  assert.match(html, /workbench\.contextNextTitle/);
   assert.match(html, /workbench\.contextNextNodeDraft/);
   assert.match(html, /workbench\.openDraft/);
+  assert.doesNotMatch(html, /workbench\.contextNextTitle/);
 });
 
 test("NodeContextSurface keeps local provenance visible on source cards", () => {
