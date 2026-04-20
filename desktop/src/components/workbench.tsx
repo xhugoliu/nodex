@@ -307,9 +307,6 @@ function DraftSurface(props: {
           <div className="text-sm font-medium text-[color:var(--text)]">
             {props.t("workbench.draftActionsTitle")}
           </div>
-          <div className="text-sm leading-6 text-[color:var(--muted)]">
-            {props.t("workbench.draftActionsBody")}
-          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button className={primaryButtonClass} onClick={props.onDraftAiExpand}>
