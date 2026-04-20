@@ -1362,7 +1362,7 @@ function ReviewSurface(props: {
       {props.reviewDraft?.explanation.direct_evidence.length ? (
         <section className={`${cardClass} space-y-3`}>
           <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("detail.runInspectorDirectEvidence")}
+            {props.t("workbench.reviewEvidenceTitle")}
           </div>
           <div className="space-y-2">
             {props.reviewDraft.explanation.direct_evidence.map((item) => (
@@ -1387,7 +1387,7 @@ function ReviewSurface(props: {
 
       <section className={`${cardClass} space-y-3`}>
         <div className="text-sm font-medium text-[color:var(--text)]">
-          {props.t("detail.runInspectorPatchPreview")}
+          {props.t("workbench.reviewOpsTitle")}
         </div>
         <div className="space-y-2">
           {props.patchDraftState.ops.map((op, index) => (

@@ -548,6 +548,10 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     html,
     /Use this source-backed citation patch to preserve the current auth evidence\./,
   );
+  assert.match(html, /workbench\.reviewEvidenceTitle/);
+  assert.match(html, /workbench\.reviewOpsTitle/);
+  assert.doesNotMatch(html, /detail\.runInspectorDirectEvidence/);
+  assert.doesNotMatch(html, /detail\.runInspectorPatchPreview/);
   assert.doesNotMatch(html, /detail\.runInspectorRationale/);
   assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
