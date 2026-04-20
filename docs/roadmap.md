@@ -15,6 +15,10 @@
 
 > patch-first 的本地工作区模型是否足够支撑 GUI、AI 和来源链路
 
+当前桌面端更具体的问题已经变成：
+
+> 如何通过减法，把过渡性 workbench 收口成最终产品形态，而不是继续把实现期技术细节留在主舞台
+
 ## 阶段
 
 ### 1. CLI 内核
@@ -48,15 +52,18 @@
 ### 5. 桌面端
 
 - Tauri 命令桥
-- 过渡性 workbench
+- 过渡性 workbench 验证共享内核可复用
+- 收口为极简的节点工作流产品壳
 - 纯画布 + 节点作用域的 assistant workspace
 
 ## 当前优先级
 
 长期路线里，当前最重要的是先把桌面端的信息架构和主路径收口，再让 LangChain 主路为这条桌面默认 draft route 服务：
 
-- 把桌面三栏主路径做顺、做稳、做得更可回归
+- 默认做减法：删除、合并、降级与主路径无关的桌面 surface
+- 把桌面主路径做顺、做稳、做得更可回归
 - 把右栏做成 node-scoped assistant workspace，而不是底层调试台或聊天主界面
+- 把 Recovery、history、diagnostics 继续压回次级入口，而不是常驻主舞台
 - 把 LangChain 主路继续作为桌面默认 AI draft route 的支撑能力推进，而不是继续优先扩独立的调试表面
 
 具体切口看 [短期执行清单](./next-steps.md)。
@@ -65,12 +72,13 @@
 
 在当前阶段判断下，后续更值得继续投入的方向主要有 6 类：
 
-### 1. 桌面三栏主路径收口
+### 1. 桌面默认界面减法重构
 
-- 核心目标不是再扩工作台，而是把三栏职责压实
+- 核心目标不是再扩工作台，而是通过删除、合并、降级把默认界面收口成最终产品
 - 中栏继续固定为画布主舞台
 - 右栏继续收紧为 node-scoped assistant workspace
 - 左栏保持轻导航和 source/browser 的最小职责
+- Recovery / history / diagnostics 继续做次级入口，不回填主舞台
 
 ### 2. 默认 AI draft route 稳定化
 
@@ -104,7 +112,7 @@
 
 这些方向之间的推荐顺序是：
 
-1. 先收口桌面三栏主路径
+1. 先做桌面默认界面的减法重构
 2. 再稳定默认 AI draft route
 3. 然后提升 patch review 可读性
 4. 再补强 source / evidence 连续工作流

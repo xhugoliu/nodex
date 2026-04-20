@@ -105,25 +105,17 @@ cargo run -- ai replay <run-id> --dry-run
 cargo run -- ai compare <left-run-id> <right-run-id>
 ```
 
-当前 `ai history` / `ai show` / `ai compare` 相关路径也会保留并读取：
+这些入口当前会保留并读取：
 
 - runner retry / error 分类
 - `used_plain_json_fallback`
 - `normalization_notes`
 
-当前 `ai compare` / `scripts/runner_compare.py` 也会直接汇总：
+`ai compare` / `scripts/runner_compare.py` 的定位是：
 
-- fallback flag 是否一致
-- normalization notes 是否一致
-- failed runner 的 blocker kind / summary / hint
-- `difference_kinds` 这种 machine-readable 差异类别
-- `difference_details`，用于把成功 pair 的差异继续细化到具体字段和值
-- `structure_details`，用于把 patch ops、explanation shape、response / normalization note categories 继续收口到结构级归因
-  当前会继续细化到 patch op 的按 position title / kind / body 差异，以及 direct-evidence ref / inferred-suggestion 的 left/shared/right 结构差异
-  也会直接汇总成 overlap ratio、shape alignment 和 field mismatch counts，方便在真实 runner 波动时先看结构稳定性
-- `comparison_readiness`，用于标记 compare 是 fully ready / partial / blocked
-- `comparison_metrics`，用于汇总 compared pair 数量、differing pair 数量和 difference kind 计数
-- `blocked_comparisons`，用于列出哪些 runner pair 因依赖或鉴权 blocker 无法进入真实 `ai compare`
+- 汇总 runner pair 是否可比较、哪里被 blocker 卡住
+- 给出 patch / explanation / normalization 的结构级差异摘要
+- 输出 machine-readable 的 readiness / metrics / difference kinds，方便回归和对照
 
 如果想在本地缺少 OpenAI 依赖或凭据时继续做 preset compare，也可以显式用：
 
@@ -136,7 +128,6 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 
 - `openai` 只替换 `langchain-pilot` 里的两条 OpenAI lane
 - `all` 替换整个 preset，主要给测试或无依赖回归使用
-- compare-only offline lane 现在会把 `source-root` / `source-context` 收口到共享的 4-branch 结构基线，并用 request-driven 的场景语义模板收紧 title/body/inferred-suggestion 漂移，同时避免额外制造 inferred-op normalization 噪声
 - 不改变默认 provider 路由，也不影响 `provider_smoke.py` 或桌面默认 draft route
 
 ## 当前桌面回归入口
@@ -158,8 +149,7 @@ cd desktop && npm run test:logic
 
 默认不传 `--runner-command` 时，这条 smoke 会复用桌面真实默认 draft route：
 `python3 scripts/provider_runner.py --provider openai --use-default-args`。
-因此 `ai_status` 里的 `provider` / `runner` / `uses_provider_defaults` / `status_error`
-也属于这条回归入口要守住的 contract，而不只是附带调试信息。
+因此 `ai_status` 里的 provider / runner / route health 也属于这条回归入口要守住的 contract。
 
 ## 工作区发现
 

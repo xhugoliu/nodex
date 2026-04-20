@@ -14,15 +14,32 @@
 
 > 打开工作区 -> 选中节点 -> 看懂节点上下文与来源 -> 起草 AI draft -> review -> apply -> 继续进入新增节点
 
+## 从过渡性 workbench 到最终产品
+
+- 当前实现已经证明共享内核、patch 链路和 AI 审计链路可以被桌面端复用
+- 当前更需要解决的问题不是“能力不够多”，而是“实现期 surface 太容易留在默认界面”
+- 接下来的桌面重构允许大刀阔斧调整信息架构，但不应绕开现有 `patch / store / ai` 内核
+- 默认方向是做减法：删除、合并、降级与主路径无关的 surface，而不是继续补更多入口
+
+## 收口原则
+
+- 主界面长期只保留导航、画布、当前节点工作区和提交确认层
+- 任何新 surface 在进入默认界面前，都应先证明自己不能被合并、下沉或删除
+- 主要服务调试、审计、对照、开发验证的信息，默认留在 CLI、脚本层或次级入口
+- 如果一个元素不能直接帮助用户推进 `选中节点 -> 起草 -> review -> apply`，优先不要常驻在主舞台
+- 界面应持续回答 3 个问题：当前围绕哪个节点行动、当前来源为什么值得看、apply 后会发生什么
+
 ## 当前桌面 contract
 
 - 左栏：先保持轻导航、`Import Source` 和 source/browser 的最小职责
-  `Recovery` 只承接 `Save Snapshot`、最近 snapshot restore 和最近 patch 的 `Load to Review`
+  `Recovery` 只承接 `Save Snapshot`、最近 snapshot restore 和最近 patch 的 `Load to Review`；
+  后续也应尽量收口为次级入口，而不是长期占据主舞台
 - 中栏：固定为纯画布工作区
 - 右栏：节点作用域的 assistant workspace，默认承接 `Context / Draft / Review`
 - 画布高频动作放在节点卡片内
 - 当前默认 AI draft route 以 OpenAI-compatible LangChain 为主路
 - patch 仍然是确认层，不绕过 validate / apply
+- AI draft route 状态与 provider 诊断继续服务可用性，但默认应以轻量提示或次级入口呈现，不抢 `Draft` 主内容
 
 ### 右栏 assistant workspace 的边界
 
@@ -31,16 +48,12 @@
 - `Draft`：允许使用更有对话感的 composer 和响应卡片，但执行语义仍绑定当前 node，不额外引入 source-scoped draft state
   当前 `Draft` 里可见的 draft-op 卡片也应复用 `Review` 同一套 node/source/chunk 人类化解释，不在进入 Review 前退回 raw id
 - `Review`：仍然回到 patch inspect / apply 的确认层，并直接概括当前草案、操作数量、证据支撑，以及 apply 后可能落到的焦点
-  对 source-backed patch，顶部 summary 也应尽量先把 node / source / chunk / citation 这些关键信息留在一眼可见处，再往下看逐条来源影响卡
-  对 source-backed patch，靠近顶部的 source focus cue 也应直接说明这次是在 cite / uncite / link / unlink 什么，而不是只把动作留在下方 impact/source 卡
-  对从历史记录重新载回的 source-backed patch，顶部 summary 也应同步露出 history provenance cue；下方 provenance 卡片继续保留详细说明，不把细节挤回瞬时提示
-  当草案来自 AI run 或 history reload 时，Review 里也应直接露出 provenance，而不是只靠瞬时提示记忆
-  手工起草的 add child / update / cite / uncite 也应在 Review 里说明来源，避免只剩一份无上下文 patch
-  add/update 这类结构草案也应直接说明影响了哪个节点、父节点和哪些字段，避免 Review 退回只看 op id
-  cite / uncite 这类草案也应继续说明作用节点、citation kind / rationale 和受影响的 source chunk，而不是只留下 chunk id
-  attach/detach source、attach/detach source chunk 这类来源关联草案也应继续用 source name / chunk label 解释，不只在 cite/uncite 上可读
-  手工 cite 草案即使不额外填写 citation kind，也应显式按默认 `direct` 语义展示，不把默认值藏回底层
-  Review 底部逐条 patch preview 也应尽量复用当前 node/source/chunk 上下文，不再退回 raw id
+  长期形态上，`Review` 更接近一次提交确认时刻，而不是常驻第三个工具面板
+  Review 的可读性长期只守 4 件事：
+  - 一眼看懂这次改什么
+  - 一眼看懂为什么改
+  - 一眼看懂证据来自哪里
+  - 一眼看懂 apply 后焦点落点
 - 右栏顶部持续显示当前焦点节点；如果来源上下文仍打开，也应同时标出当前来源
 - `Draft` 仍只显示 node-scoped 焦点，不把来源提示重新暗示成新的执行作用域
 - 不是全局聊天窗口
@@ -68,63 +81,29 @@
 - `python3 scripts/provider_smoke.py --provider openai --scenario source-root --json`
   守 imported root 上的真实材料 draft/apply 路径
 - `cd desktop && npm run test:logic`
-  守 helper seam、右栏 surface 和 mounted App 级主路径交接
-  当前也已覆盖 `back` handoff、导入落点后的跨 pane 交接、`source import -> AI expand -> review -> apply`、
-  workspace load 后的 `Context` CTA / provenance / current focus、source open 后的 node/source focus cue，
-  source context -> review 后的 node/source focus continuity、
-  source context -> review -> apply 后的 focus 落点、imported-root apply 后真实 right rail 的 generated-node 落点，
-  手工 `update node` patch 路径上的 tree / canvas / right rail 同节点收口，
-  `add child` patch 路径上的 tree / canvas / right rail 新节点收口，
-  `cite source chunk` 路径上的 tree / canvas / right rail 同节点 + evidence 收口，
-  `uncite source chunk` 路径上的 tree / canvas / right rail 同节点 + evidence 清理收口，
-  以及同一 mounted session 内 `imported-root apply -> generated node -> 手工 update -> apply` 的连续收口；
-  现在也已覆盖同一 mounted session 内 `imported-root apply -> generated node -> add child -> apply` 的连续收口；
-  现在也已覆盖同一 mounted session 内 `imported-root apply -> generated node -> source open/cite -> apply` 的连续收口；
-  现在也已覆盖同一 mounted session 内 `imported-root apply -> generated node(with evidence) -> source open/uncite -> apply` 的连续收口；
-  现在也已覆盖同一 mounted session 内生成节点上的 `source detail -> Review` focus continuity，
-  以及 `source detail -> Draft` 共享 handoff seam；
-  现在也已覆盖同一 mounted session 内生成节点上的 `source detail -> Draft -> review/apply` 闭环；
-  现在也已覆盖同一 mounted session 内
-  `imported-root apply -> generated node -> source detail -> Draft -> review/apply -> second-level generated node -> 手工 update -> apply`
-  的连续收口；
-  现在也已覆盖同一 mounted session 内
-  `... -> second-level generated node -> Draft -> review/apply -> third-level generated node`
-  的连续收口；
-  现在也已覆盖同一 mounted session 内
-  `... -> second-level generated node -> source open/cite -> apply`
-  的连续收口；
-  现在也已覆盖同一 mounted session 内
-  `... -> second-level generated node(with evidence) -> source open/uncite -> apply`
-  的连续收口；
-  现在也已覆盖 second-level generated node 上的 `source detail -> Review` focus continuity、
-  `source detail -> Draft` shared handoff seam，
-  以及 `source detail -> Draft -> review/apply` 闭环；
-  现在也已覆盖同一 mounted session 内
-  `... -> third-level generated node -> 手工 update -> apply`
-  的连续收口；
-  现在也已覆盖同一 mounted session 内
-  `... -> third-level generated node -> source open/cite -> apply`
-  和 `... -> third-level generated node(with evidence) -> source open/uncite -> apply`
-  的连续收口；
-  现在也已覆盖 third-level generated node 上的 `source detail -> Review` focus continuity、
-  `source detail -> Draft` shared handoff seam，
-  以及 `source detail -> Draft -> review/apply` 闭环；
-  这些 apply 末态现在也共用一套 mounted continuity contract：
-  tree / canvas / right rail 对齐同一 focus node，右栏回到 `Context`，瞬时 Review/source detail 清空，`Current focus` cue 继续成立
+  守 helper seam、右栏 surface 和 mounted App 级主路径交接。
+  当前重点覆盖：
+  - workspace load、source open、review/apply 的主路径 continuity
+  - `source detail -> Draft -> Review -> apply` 的共享 handoff seam
+  - `update / add child / cite / uncite` 这几类高频 patch 的三栏收口
+  - imported-root apply 后继续进入二级、三级节点时的连续收口
+  - apply 末态统一 contract：tree / canvas / right rail 对齐同一 focus node，右栏回到 `Context`
 
 ## 如果继续推进
 
 优先顺序：
 
-1. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
-2. continuity 主线的 mounted 证据已基本封口，接下来优先转到 runner/runtime 稳定性与桌面默认 draft route 的真实验证
-3. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
-4. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
+1. 先做减法重构，明确哪些 surface 留在主舞台、哪些降为次级入口、哪些直接删除
+2. 收口右栏 assistant workspace 的 IA，把 `Context / Draft / Review` 的职责和切换语义写实、测实
+3. continuity 主线的 mounted 证据已基本封口，接下来优先转到 runner/runtime 稳定性与桌面默认 draft route 的真实验证
+4. 把桌面默认 draft route 继续推到真实 provider 凭据下的手动 / 对照验证
+5. 如果 App 侧再长出新副作用，再补更重的 mounted 交互回归
 
 ## 当前不做
 
 - 恢复 AI runs / Activity / Run Inspector 到主舞台
 - 把 `AI draft route` 变回厚重调试面板
+- 为了保留实现期可观察性而长期把技术状态留在默认页面
 - 在画布层引入新的状态边界
 - 把右栏做成全局长聊天记录 UI
 - 把 compare / artifact / raw payload 暴露成默认页面内容

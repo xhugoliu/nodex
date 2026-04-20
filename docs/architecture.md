@@ -7,6 +7,7 @@ Nodex 当前坚持：
 - 先做稳定内核，再做交互壳
 - 高层入口可以多样，低层执行统一收敛到 canonical patch
 - 本地状态和历史保留在 SQLite + 本地文件
+- 默认桌面界面只服务节点工作流；调试 / 审计 / 对照信息留在 CLI、脚本层或次级入口
 
 ## 当前分层
 
@@ -44,7 +45,8 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 - `desktop/src-tauri`
   Tauri 命令桥与原生菜单
 - `desktop/src`
-  React workbench：左栏轻导航、中栏固定画布、右栏节点作用域的 assistant workspace（`Context / Draft / Review`）
+  当前实现仍是 React workbench；下一阶段应通过减法把它收口为产品壳：
+  左栏轻导航、中栏固定画布、右栏节点作用域的 assistant workspace（`Context / Draft / Review`）
 
 ## 当前边界
 
@@ -56,7 +58,7 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 ## 当前推荐路径
 
 - CLI：工作区验证、核心能力回归、provider 调试
-- 桌面端：以画布为主舞台的最小节点工作流验证；右栏承接 assistant 交互，但不抬出底层调试细节
+- 桌面端：以画布为主舞台的最小节点工作流；右栏承接 assistant 交互，调试 / 审计 / runner 对照留在 CLI 或次级入口
 - AI：OpenAI-compatible LangChain 默认主路 + external runner + 本地 request / response / metadata 审计
 
 ## 当前不做
@@ -64,5 +66,6 @@ LangChain 已被确认为默认 AI 主路和正式核心能力方向，但当前
 - 把 provider SDK 直接塞进 Rust core
 - 让桌面端绕过 patch 直接写状态
 - 继续把重型调试面板放在主舞台
+- 把实现期技术状态直接长期暴露给最终用户
 - 把右栏做成全局长聊天记录或底层运行细节面板
 - 现在就展开一轮通用 Intent Layer 重构
