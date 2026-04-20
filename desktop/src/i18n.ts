@@ -198,6 +198,8 @@ const translations: Record<Locale, TranslationTree> = {
       recovery: "Recovery",
       recoveryBody:
         "Keep one safe snapshot and the latest applied patch within reach without pulling history onto the main stage.",
+      recoveryExpand: "Open Recovery",
+      recoveryCollapse: "Hide Recovery Details",
       recoverySnapshotCount: "{count} snapshots",
       recoveryPatchCount: "{count} applied patches",
       recoveryLatestSnapshot: "Latest snapshot",
@@ -852,6 +854,8 @@ const translations: Record<Locale, TranslationTree> = {
       recovery: "恢复入口",
       recoveryBody:
         "把一份安全快照和最近一次已应用 patch 收在次级入口里，不把历史重新抬回主舞台。",
+      recoveryExpand: "展开恢复入口",
+      recoveryCollapse: "收起恢复细节",
       recoverySnapshotCount: "{count} 个快照",
       recoveryPatchCount: "{count} 条已应用 patch",
       recoveryLatestSnapshot: "最近快照",

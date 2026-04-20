@@ -103,6 +103,31 @@ function makeOverview(): WorkspaceOverview {
 function renderTreePane(workspaceOverview: WorkspaceOverview | null) {
   return renderToStaticMarkup(
     <TreePane
+      defaultRecoveryExpanded={false}
+      filteredTree={workspaceOverview?.tree ?? null}
+      isCollapsed={false}
+      onImportSource={() => {}}
+      onLoadPatchToReview={() => {}}
+      onQueryChange={() => {}}
+      onRestoreSnapshot={() => {}}
+      onRestoreLatestSnapshot={() => {}}
+      onSaveSnapshot={() => {}}
+      onSelectNode={() => {}}
+      onToggleCollapse={() => {}}
+      query=""
+      selectedNodeId="node-1"
+      t={t}
+      treeQuery=""
+      treeSummary="navigator.totalNodes"
+      workspaceOverview={workspaceOverview}
+    />,
+  );
+}
+
+function renderExpandedTreePane(workspaceOverview: WorkspaceOverview | null) {
+  return renderToStaticMarkup(
+    <TreePane
+      defaultRecoveryExpanded={true}
       filteredTree={workspaceOverview?.tree ?? null}
       isCollapsed={false}
       onImportSource={() => {}}
@@ -127,14 +152,29 @@ test("TreePane keeps Recovery as a lightweight latest-only entry", () => {
   const html = renderTreePane(makeOverview());
 
   assert.match(html, /sidebar\.recovery/);
+  assert.match(html, /sidebar\.recoveryExpand/);
   assert.match(html, /sidebar\.recoverySnapshotCount \{&quot;count&quot;:4\}/);
   assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:4\}/);
+  assert.doesNotMatch(html, /sidebar\.restoreLatestSnapshot/);
+  assert.doesNotMatch(html, /sidebar\.recoveryRestoreNote/);
+  assert.doesNotMatch(html, /sidebar\.recoveryLatestSnapshot/);
+  assert.doesNotMatch(html, /After review/);
+  assert.doesNotMatch(html, /Before apply/);
+  assert.doesNotMatch(html, /history\.restore/);
+  assert.doesNotMatch(html, /sidebar\.recoveryLatestPatch/);
+  assert.doesNotMatch(html, /sidebar\.recoveryLoadPatchToReview/);
+  assert.doesNotMatch(html, /Promote draft to review/);
+});
+
+test("TreePane shows latest-only recovery details when the secondary entry is expanded", () => {
+  const html = renderExpandedTreePane(makeOverview());
+
+  assert.match(html, /sidebar\.recoveryCollapse/);
   assert.match(html, /sidebar\.restoreLatestSnapshot/);
   assert.match(html, /sidebar\.recoveryRestoreNote/);
   assert.match(html, /sidebar\.recoveryLatestSnapshot/);
   assert.match(html, /After review/);
   assert.doesNotMatch(html, /Before apply/);
-  assert.doesNotMatch(html, /history\.restore/);
   assert.match(html, /sidebar\.recoveryLatestPatch/);
   assert.match(html, /sidebar\.recoveryLoadPatchToReview/);
   assert.match(html, /Promote draft to review/);
@@ -153,7 +193,7 @@ test("TreePane recovery card falls back to an empty restore state before any sna
   overview.snapshots = [];
   overview.patch_history = [];
 
-  const html = renderTreePane(overview);
+  const html = renderExpandedTreePane(overview);
 
   assert.match(html, /sidebar\.recovery/);
   assert.match(html, /sidebar\.recoveryEmpty/);

@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { formatTimestamp, type ConsoleTone, type Translator } from "../app-helpers";
 import type { TreeNode, WorkspaceOverview } from "../types";
 import {
@@ -12,6 +14,7 @@ import {
 
 export function TreePane(props: {
   isCollapsed: boolean;
+  defaultRecoveryExpanded?: boolean;
   workspaceOverview: WorkspaceOverview | null;
   treeSummary: string;
   treeQuery: string;
@@ -30,6 +33,9 @@ export function TreePane(props: {
 }) {
   const latestSnapshot = latestWorkspaceSnapshot(props.workspaceOverview);
   const latestPatchRun = latestWorkspacePatchRun(props.workspaceOverview);
+  const [isRecoveryExpanded, setIsRecoveryExpanded] = useState(
+    props.defaultRecoveryExpanded ?? false,
+  );
 
   if (props.isCollapsed) {
     return (
@@ -133,84 +139,98 @@ export function TreePane(props: {
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                className={secondaryButtonClass}
-                onClick={props.onSaveSnapshot}
-                type="button"
-              >
-                {props.t("sidebar.saveSnapshotButton")}
-              </button>
-              <button
-                className={ghostButtonClass}
-                disabled={!latestSnapshot}
-                onClick={props.onRestoreLatestSnapshot}
-                type="button"
-              >
-                {props.t("sidebar.restoreLatestSnapshot")}
-              </button>
-            </div>
-            <div className="text-xs leading-6 text-[color:var(--muted)]">
-              {props.t("sidebar.recoveryRestoreNote")}
-            </div>
+            <button
+              className={ghostButtonClass}
+              onClick={() => setIsRecoveryExpanded((current) => !current)}
+              type="button"
+            >
+              {isRecoveryExpanded
+                ? props.t("sidebar.recoveryCollapse")
+                : props.t("sidebar.recoveryExpand")}
+            </button>
 
-            {latestSnapshot ? (
-              <div className="space-y-3 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
-                <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                  {props.t("sidebar.recoveryLatestSnapshot")}
+            {isRecoveryExpanded ? (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className={secondaryButtonClass}
+                    onClick={props.onSaveSnapshot}
+                    type="button"
+                  >
+                    {props.t("sidebar.saveSnapshotButton")}
+                  </button>
+                  <button
+                    className={ghostButtonClass}
+                    disabled={!latestSnapshot}
+                    onClick={props.onRestoreLatestSnapshot}
+                    type="button"
+                  >
+                    {props.t("sidebar.restoreLatestSnapshot")}
+                  </button>
                 </div>
-                <div className="rounded-xl border border-[color:var(--line-soft)] bg-[color:var(--bg-warm)]/55 px-3 py-3">
-                  <div className="text-sm leading-6 text-[color:var(--text)]">
-                    {latestSnapshot.label ?? props.t("history.noLabel")}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
-                    <span className="rounded-full bg-white/90 px-2.5 py-1">
-                      {formatTimestamp(latestSnapshot.created_at)}
-                    </span>
-                  </div>
+                <div className="text-xs leading-6 text-[color:var(--muted)]">
+                  {props.t("sidebar.recoveryRestoreNote")}
                 </div>
-              </div>
-            ) : (
-              <EmptyBox>{props.t("sidebar.recoveryEmpty")}</EmptyBox>
-            )}
 
-            {latestPatchRun ? (
-              <div className="space-y-3 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
-                <div className="space-y-1">
-                  <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                    {props.t("sidebar.recoveryLatestPatch")}
-                  </div>
-                  <div className="text-sm leading-6 text-[color:var(--muted)]">
-                    {props.t("sidebar.recoveryLatestPatchBody")}
-                  </div>
-                </div>
-                <div className="rounded-xl border border-[color:var(--line-soft)] bg-[color:var(--bg-warm)]/55 px-3 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
+                {latestSnapshot ? (
+                  <div className="space-y-3 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+                    <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                      {props.t("sidebar.recoveryLatestSnapshot")}
+                    </div>
+                    <div className="rounded-xl border border-[color:var(--line-soft)] bg-[color:var(--bg-warm)]/55 px-3 py-3">
                       <div className="text-sm leading-6 text-[color:var(--text)]">
-                        {latestPatchRun.summary ?? latestPatchRun.id}
+                        {latestSnapshot.label ?? props.t("history.noLabel")}
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
                         <span className="rounded-full bg-white/90 px-2.5 py-1">
-                          {props.t("detail.activityOrigin", {
-                            value: latestPatchRun.origin,
-                          })}
-                        </span>
-                        <span className="rounded-full bg-white/90 px-2.5 py-1">
-                          {formatTimestamp(latestPatchRun.applied_at)}
+                          {formatTimestamp(latestSnapshot.created_at)}
                         </span>
                       </div>
                     </div>
-                    <button
-                      className={ghostButtonClass}
-                      onClick={() => props.onLoadPatchToReview(latestPatchRun.id)}
-                      type="button"
-                    >
-                      {props.t("sidebar.recoveryLoadPatchToReview")}
-                    </button>
                   </div>
-                </div>
-              </div>
+                ) : (
+                  <EmptyBox>{props.t("sidebar.recoveryEmpty")}</EmptyBox>
+                )}
+
+                {latestPatchRun ? (
+                  <div className="space-y-3 rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+                    <div className="space-y-1">
+                      <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                        {props.t("sidebar.recoveryLatestPatch")}
+                      </div>
+                      <div className="text-sm leading-6 text-[color:var(--muted)]">
+                        {props.t("sidebar.recoveryLatestPatchBody")}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[color:var(--line-soft)] bg-[color:var(--bg-warm)]/55 px-3 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm leading-6 text-[color:var(--text)]">
+                            {latestPatchRun.summary ?? latestPatchRun.id}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+                            <span className="rounded-full bg-white/90 px-2.5 py-1">
+                              {props.t("detail.activityOrigin", {
+                                value: latestPatchRun.origin,
+                              })}
+                            </span>
+                            <span className="rounded-full bg-white/90 px-2.5 py-1">
+                              {formatTimestamp(latestPatchRun.applied_at)}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          className={ghostButtonClass}
+                          onClick={() => props.onLoadPatchToReview(latestPatchRun.id)}
+                          type="button"
+                        >
+                          {props.t("sidebar.recoveryLoadPatchToReview")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </div>
         </div>
