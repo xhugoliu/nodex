@@ -32,7 +32,7 @@ Anthropic-compatible 路径继续保留为兼容与对照 lane。
 - plain JSON fallback
 - contract response completion
 - expand / explore patch normalization
-- source-backed fallback scaffold 响应会在共享 helper 层按 cited evidence 补最小 direct evidence，并留下 `runner_normalized:synthesized_direct_evidence_from_cited_evidence`
+- source-backed fallback scaffold 会按 cited evidence 补最小 direct evidence，并记录 `runner_normalized:synthesized_direct_evidence_from_cited_evidence`
 - runner metadata 中的 fallback / normalization 标记
 
 Anthropic-specific 的质量约束仍保留在 `langchain_anthropic_runner.py`，不把默认主路经验硬塞进所有 provider。

@@ -141,6 +141,44 @@ def build_cited_evidence_payload() -> list[dict]:
     ]
 
 
+def build_langchain_fallback_request_payload(
+    *,
+    node_id: str,
+    title: str,
+    body: str,
+    cited_evidence: Optional[list[dict]] = None,
+) -> dict:
+    payload = build_request_payload(node_id=node_id)
+    payload["target_node"]["title"] = title
+    payload["target_node"]["body"] = body
+    if cited_evidence is not None:
+        payload["cited_evidence"] = cited_evidence
+    return payload
+
+
+def normalize_langchain_fallback_response(
+    *,
+    request_payload: dict,
+    direct_evidence: Optional[list[dict]] = None,
+    patch_ops: Optional[list[dict]] = None,
+    rationale_summary: str = "Fallback scaffold response.",
+) -> dict:
+    return normalize_contract_response(
+        contract_response={
+            "explanation": {
+                "rationale_summary": rationale_summary,
+                "direct_evidence": direct_evidence or [],
+                "inferred_suggestions": [],
+            },
+            "notes": [],
+            "patch": {"ops": patch_ops or []},
+        },
+        request_payload=request_payload,
+        provider="langchain_openai",
+        model="gpt-5.4-mini",
+    )
+
+
 def write_request_paths(tmp_dir: str, request_payload: dict) -> tuple[Path, Path, Path]:
     request_path = Path(tmp_dir) / "request.json"
     response_path = Path(tmp_dir) / "response.json"
@@ -832,34 +870,14 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertGreater(len(normalized["patch"]["ops"]), 0)
 
     def test_shared_langchain_synthesizes_direct_evidence_for_source_backed_fallback_scaffold(self) -> None:
-        request_payload = {
-            "capability": "expand",
-            "target_node": {
-                "id": "node-fallback",
-                "title": "Provider Authentication Flow",
-                "body": "Fallback scaffold should still carry direct support.",
-            },
-            "contract": {
-                "version": 2,
-                "patch_version": 1,
-                "response_kind": "nodex_ai_patch_response",
-            },
-            "cited_evidence": build_cited_evidence_payload(),
-        }
-
-        normalized = normalize_contract_response(
-            contract_response={
-                "explanation": {
-                    "rationale_summary": "Fallback scaffold response.",
-                    "direct_evidence": [],
-                    "inferred_suggestions": [],
-                },
-                "notes": [],
-                "patch": {"ops": []},
-            },
-            request_payload=request_payload,
-            provider="langchain_openai",
-            model="gpt-5.4-mini",
+        request_payload = build_langchain_fallback_request_payload(
+            node_id="node-fallback",
+            title="Provider Authentication Flow",
+            body="Fallback scaffold should still carry direct support.",
+            cited_evidence=build_cited_evidence_payload(),
+        )
+        normalized = normalize_langchain_fallback_response(
+            request_payload=request_payload
         )
 
         self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
@@ -878,33 +896,13 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn("Provider Authentication Flow", evidence["why_it_matters"])
 
     def test_shared_langchain_does_not_synthesize_direct_evidence_without_cited_evidence(self) -> None:
-        request_payload = {
-            "capability": "expand",
-            "target_node": {
-                "id": "node-no-evidence",
-                "title": "Fallback Branches",
-                "body": "No cited chunks available.",
-            },
-            "contract": {
-                "version": 2,
-                "patch_version": 1,
-                "response_kind": "nodex_ai_patch_response",
-            },
-        }
-
-        normalized = normalize_contract_response(
-            contract_response={
-                "explanation": {
-                    "rationale_summary": "Fallback scaffold response.",
-                    "direct_evidence": [],
-                    "inferred_suggestions": [],
-                },
-                "notes": [],
-                "patch": {"ops": []},
-            },
-            request_payload=request_payload,
-            provider="langchain_openai",
-            model="gpt-5.4-mini",
+        request_payload = build_langchain_fallback_request_payload(
+            node_id="node-no-evidence",
+            title="Fallback Branches",
+            body="No cited chunks available.",
+        )
+        normalized = normalize_langchain_fallback_response(
+            request_payload=request_payload
         )
 
         self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
@@ -915,39 +913,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(normalized["explanation"]["direct_evidence"], [])
 
     def test_shared_langchain_keeps_existing_direct_evidence_during_fallback_scaffold(self) -> None:
-        request_payload = {
-            "capability": "expand",
-            "target_node": {
-                "id": "node-existing-evidence",
-                "title": "Provider Authentication Flow",
-                "body": "Existing direct evidence should survive fallback scaffolding.",
-            },
-            "contract": {
-                "version": 2,
-                "patch_version": 1,
-                "response_kind": "nodex_ai_patch_response",
-            },
-            "cited_evidence": build_cited_evidence_payload(),
-        }
-
-        normalized = normalize_contract_response(
-            contract_response={
-                "explanation": {
-                    "rationale_summary": "Fallback scaffold response.",
-                    "direct_evidence": [
-                        {
-                            "source_id": "source-1",
-                            "chunk_id": "chunk-1",
-                        }
-                    ],
-                    "inferred_suggestions": [],
-                },
-                "notes": [],
-                "patch": {"ops": []},
-            },
+        request_payload = build_langchain_fallback_request_payload(
+            node_id="node-existing-evidence",
+            title="Provider Authentication Flow",
+            body="Existing direct evidence should survive fallback scaffolding.",
+            cited_evidence=build_cited_evidence_payload(),
+        )
+        normalized = normalize_langchain_fallback_response(
             request_payload=request_payload,
-            provider="langchain_openai",
-            model="gpt-5.4-mini",
+            direct_evidence=[
+                {
+                    "source_id": "source-1",
+                    "chunk_id": "chunk-1",
+                }
+            ],
         )
 
         self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
@@ -961,43 +940,23 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(evidence["chunk_id"], "chunk-1")
 
     def test_shared_langchain_does_not_synthesize_direct_evidence_without_fallback_scaffold(self) -> None:
-        request_payload = {
-            "capability": "expand",
-            "target_node": {
-                "id": "node-non-fallback",
-                "title": "Provider Authentication Flow",
-                "body": "Normal runner output should not synthesize direct evidence.",
-            },
-            "contract": {
-                "version": 2,
-                "patch_version": 1,
-                "response_kind": "nodex_ai_patch_response",
-            },
-            "cited_evidence": build_cited_evidence_payload(),
-        }
-
-        normalized = normalize_contract_response(
-            contract_response={
-                "explanation": {
-                    "rationale_summary": "Normal response.",
-                    "direct_evidence": [],
-                    "inferred_suggestions": [],
-                },
-                "notes": [],
-                "patch": {
-                    "ops": [
-                        {
-                            "type": "add_node",
-                            "parent_id": "node-non-fallback",
-                            "title": "Normal Branch",
-                            "kind": "topic",
-                        }
-                    ]
-                },
-            },
+        request_payload = build_langchain_fallback_request_payload(
+            node_id="node-non-fallback",
+            title="Provider Authentication Flow",
+            body="Normal runner output should not synthesize direct evidence.",
+            cited_evidence=build_cited_evidence_payload(),
+        )
+        normalized = normalize_langchain_fallback_response(
             request_payload=request_payload,
-            provider="langchain_openai",
-            model="gpt-5.4-mini",
+            rationale_summary="Normal response.",
+            patch_ops=[
+                {
+                    "type": "add_node",
+                    "parent_id": "node-non-fallback",
+                    "title": "Normal Branch",
+                    "kind": "topic",
+                }
+            ],
         )
 
         self.assertNotIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
@@ -1286,6 +1245,70 @@ class ProviderToolScriptsTests(unittest.TestCase):
             metadata["normalization_notes"],
         )
         self.assertIsNone(metadata["last_error_category"])
+
+    def test_anthropic_runner_main_synthesizes_direct_evidence_for_source_backed_fallback_scaffold(self) -> None:
+        request_payload = build_request_payload(node_id="anthropic-fallback-node")
+        request_payload["target_node"]["title"] = "Provider Authentication Flow"
+        request_payload["target_node"]["body"] = (
+            "Fallback scaffold should keep cited support visible on the Anthropic lane."
+        )
+        request_payload["cited_evidence"] = build_cited_evidence_payload()
+        fallback_response = {
+            "explanation": {
+                "rationale_summary": "Fallback scaffold response.",
+                "direct_evidence": [],
+                "inferred_suggestions": [],
+            },
+            "notes": [],
+            "patch": {"ops": []},
+        }
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            request_path, response_path, metadata_path = write_request_paths(
+                tmp_dir,
+                request_payload,
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "NODEX_AI_REQUEST": str(request_path),
+                    "NODEX_AI_RESPONSE": str(response_path),
+                    "NODEX_AI_META": str(metadata_path),
+                },
+                clear=True,
+            ):
+                with patch.object(
+                    langchain_anthropic_runner_module,
+                    "load_anthropic_context",
+                    return_value=build_anthropic_context(),
+                ), patch.object(
+                    langchain_anthropic_runner_module,
+                    "invoke_langchain_anthropic",
+                    return_value=fallback_response,
+                ), patch.object(sys, "argv", ["langchain_anthropic_runner.py"]):
+                    exit_code = langchain_anthropic_runner_module.main()
+
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            response_payload = json.loads(response_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+        self.assertIn(
+            "runner_normalized:fallback_scaffold_ops",
+            metadata["normalization_notes"],
+        )
+        self.assertIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            metadata["normalization_notes"],
+        )
+        self.assertEqual(len(response_payload["explanation"]["direct_evidence"]), 1)
+        evidence = response_payload["explanation"]["direct_evidence"][0]
+        self.assertEqual(evidence["source_id"], "source-1")
+        self.assertEqual(evidence["source_name"], "fixture.md")
+        self.assertEqual(evidence["chunk_id"], "chunk-1")
+        self.assertEqual(evidence["start_line"], 7)
+        self.assertEqual(evidence["end_line"], 9)
 
     def test_openai_invoke_preserves_auth_failure_without_plain_json_fallback(self) -> None:
         class FakeStructuredLlm:

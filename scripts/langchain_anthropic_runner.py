@@ -23,6 +23,7 @@ from langchain_runner_common import (
     fallback_kind_for_request,
     fallback_scaffold_ops,
     invoke_plain_json_fallback,
+    normalize_contract_response as common_normalize_contract_response,
     normalize_expand_like_patch as common_normalize_expand_like_patch,
     normalize_langchain_output,
     should_use_plain_json_fallback,
@@ -118,14 +119,15 @@ def main() -> int:
             max_retries=args.max_retries,
             metadata=metadata,
         )
-        contract_response = coerce_contract_response(
+        contract_response = common_normalize_contract_response(
             contract_response=contract_response,
             request_payload=request_payload,
+            provider="langchain_anthropic_compat",
             model=context.model,
-        )
-        contract_response = normalize_expand_like_patch(
-            contract_response=contract_response,
-            request_payload=request_payload,
+            patch_ops_normalizer=lambda ops: normalize_patch_ops_for_quality(
+                ops,
+                request_payload=request_payload,
+            ),
         )
         metadata["normalization_notes"] = [
             note
@@ -306,8 +308,6 @@ def coerce_contract_response(
         provider="langchain_anthropic_compat",
         model=model,
     )
-
-
 def normalize_expand_like_patch(
     *,
     contract_response: dict[str, Any],
