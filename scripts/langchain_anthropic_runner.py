@@ -17,6 +17,7 @@ from ai_contract import (
 )
 from anthropic_context import load_anthropic_context
 from langchain_runner_common import (
+    classify_langchain_runtime_failure,
     coerce_contract_response as common_coerce_contract_response,
     coerce_direct_evidence,
     fallback_kind_for_request,
@@ -204,10 +205,9 @@ def invoke_langchain_anthropic(
     except RunnerFailure:
         raise
     except Exception as exc:
-        raise RunnerFailure(
-            category="runner_error",
-            message=f"LangChain Anthropic runner failed: {exc}",
-            retryable=False,
+        raise classify_langchain_runtime_failure(
+            exc,
+            runner_label="LangChain Anthropic runner",
         ) from exc
 
 

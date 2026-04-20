@@ -93,6 +93,52 @@ def strip_code_fence(text: str) -> str:
     return stripped
 
 
+def classify_langchain_runtime_failure(
+    exc: Exception,
+    *,
+    runner_label: str,
+) -> RunnerFailure:
+    detail = str(exc).strip() or type(exc).__name__
+    combined = f"{type(exc).__name__} {detail}".lower()
+
+    if "timeout" in combined or "timed out" in combined:
+        return RunnerFailure(
+            category="timeout",
+            message=f"{runner_label} failed: {detail}",
+            retryable=True,
+        )
+
+    if any(
+        token in combined
+        for token in (
+            "connection error",
+            "connectionerror",
+            "connect error",
+            "apiconnectionerror",
+            "connection refused",
+            "connection reset",
+            "connection aborted",
+            "network is unreachable",
+            "temporary failure in name resolution",
+            "name or service not known",
+            "nodename nor servname provided",
+            "failed to resolve",
+            "dns",
+        )
+    ):
+        return RunnerFailure(
+            category="network",
+            message=f"{runner_label} failed: {detail}",
+            retryable=True,
+        )
+
+    return RunnerFailure(
+        category="runner_error",
+        message=f"{runner_label} failed: {detail}",
+        retryable=False,
+    )
+
+
 def normalize_contract_response(
     *,
     contract_response: dict[str, Any],

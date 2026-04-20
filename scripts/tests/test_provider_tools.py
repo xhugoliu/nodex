@@ -116,6 +116,14 @@ def run_mixed_offline_compare(*, scenario: str) -> dict:
         )
 
 
+def fake_openai_key() -> str:
+    return "openai-test-key"
+
+
+def fake_anthropic_key() -> str:
+    return "anthropic-test-key"
+
+
 def write_request_paths(tmp_dir: str, request_payload: dict) -> tuple[Path, Path, Path]:
     request_path = Path(tmp_dir) / "request.json"
     response_path = Path(tmp_dir) / "response.json"
@@ -1161,6 +1169,84 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn("socket closed", ctx.exception.message)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
+    def test_openai_invoke_classifies_connection_error_as_network(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RuntimeError("Connection error.")
+
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema, method=None):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_openai_runner_module,
+            "load_langchain_openai_class",
+            return_value=FakeChatOpenAI,
+        ), patch.object(
+            langchain_openai_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_openai_runner_module.invoke_langchain_openai(
+                    request_payload=build_request_payload(node_id="network-node"),
+                    api_key=fake_openai_key(),
+                    model="gpt-5.4-mini",
+                    base_url="https://openai.example/v1",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "network")
+        self.assertIn("Connection error", ctx.exception.message)
+        self.assertTrue(ctx.exception.retryable)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
+    def test_openai_invoke_classifies_timeout_shaped_connection_error_as_timeout(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RuntimeError("Connection error: request timed out")
+
+        class FakeChatOpenAI:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema, method=None):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_openai_runner_module,
+            "load_langchain_openai_class",
+            return_value=FakeChatOpenAI,
+        ), patch.object(
+            langchain_openai_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_openai_runner_module.invoke_langchain_openai(
+                    request_payload=build_request_payload(node_id="timeout-node"),
+                    api_key=fake_openai_key(),
+                    model="gpt-5.4-mini",
+                    base_url="https://openai.example/v1",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "timeout")
+        self.assertIn("timed out", ctx.exception.message)
+        self.assertTrue(ctx.exception.retryable)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
     def test_openai_runner_normalizes_root_base_url_to_responses_endpoint(self) -> None:
         self.assertEqual(
             openai_runner_module.normalize_responses_base_url("https://openai.example/v1"),
@@ -1264,6 +1350,45 @@ class ProviderToolScriptsTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.category, "runner_error")
         self.assertIn("socket closed", ctx.exception.message)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
+    def test_anthropic_invoke_classifies_connection_error_as_network(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise RuntimeError("Connection error.")
+
+        class FakeChatAnthropic:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_anthropic_runner_module,
+            "load_langchain_anthropic_class",
+            return_value=FakeChatAnthropic,
+        ), patch.object(
+            langchain_anthropic_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_anthropic_runner_module.invoke_langchain_anthropic(
+                    request_payload=build_request_payload(node_id="anthropic-network-node"),
+                    api_key=fake_anthropic_key(),
+                    model="claude-test",
+                    base_url="https://anthropic.example",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "network")
+        self.assertIn("Connection error", ctx.exception.message)
+        self.assertTrue(ctx.exception.retryable)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_runner_compare_lists_presets(self) -> None:

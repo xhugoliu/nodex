@@ -16,6 +16,7 @@ from ai_contract import (
     write_runner_metadata,
 )
 from langchain_runner_common import (
+    classify_langchain_runtime_failure,
     invoke_plain_json_fallback,
     normalize_contract_response,
     normalize_langchain_output,
@@ -206,10 +207,9 @@ def invoke_langchain_openai(
     except RunnerFailure:
         raise
     except Exception as exc:
-        raise RunnerFailure(
-            category="runner_error",
-            message=f"LangChain runner failed: {exc}",
-            retryable=False,
+        raise classify_langchain_runtime_failure(
+            exc,
+            runner_label="LangChain runner",
         ) from exc
 
 
