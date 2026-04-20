@@ -277,7 +277,6 @@ function DraftSurface(props: {
     );
   }
 
-  const detail = props.nodeContext.node_detail;
   const currentDraftSummary =
     props.reviewDraft?.patch.summary ??
     props.reviewDraft?.report.summary ??
@@ -295,34 +294,6 @@ function DraftSurface(props: {
 
   return (
     <div className="space-y-4">
-      <section className={`${cardClass} space-y-3`}>
-        <div className="space-y-1">
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("workbench.draftScopeTitle")}
-          </div>
-          <div className="text-sm leading-6 text-[color:var(--muted)]">
-            {props.t("workbench.draftScopeNodeBody", {
-              title: detail.node.title,
-            })}
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
-          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-            {detail.node.title}
-          </span>
-          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-            {props.t("workbench.childrenStat", {
-              count: detail.children.length,
-            })}
-          </span>
-          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-            {props.t("workbench.sourcesStat", {
-              count: detail.sources.length + detail.evidence.length,
-            })}
-          </span>
-        </div>
-      </section>
-
       <AiDraftRouteSurface
         draftError={props.draftError}
         loading={props.loading}
