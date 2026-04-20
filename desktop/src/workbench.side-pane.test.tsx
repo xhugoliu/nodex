@@ -330,6 +330,7 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
   assert.match(html, /workbench\.draftReadyOps \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewWhyTitle/);
   assert.match(html, /Explore the node through one focused angle\./);
+  assert.doesNotMatch(html, /detail\.runInspectorRationale/);
   assert.match(
     html,
     /workbench\.reviewFocusNewNode \{&quot;title&quot;:&quot;Follow-up branch&quot;\}/,
@@ -547,6 +548,7 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     html,
     /Use this source-backed citation patch to preserve the current auth evidence\./,
   );
+  assert.doesNotMatch(html, /detail\.runInspectorRationale/);
   assert.match(html, /workbench\.reviewImpactCiteSourceChunk \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewEvidenceCount \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewSourceFocusTitle/);
@@ -1015,6 +1017,7 @@ test("WorkbenchSidePane Review falls back to source-backed rationale for the top
 
   assert.match(html, /workbench\.reviewWhyTitle/);
   assert.match(html, /This chunk directly supports the citation patch\./);
+  assert.doesNotMatch(html, /detail\.runInspectorRationale/);
   assert.match(html, /workbench\.reviewSourceFocusTitle/);
   assert.match(html, /workbench\.reviewAffectedSourceTitle/);
 });

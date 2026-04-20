@@ -1359,17 +1359,6 @@ function ReviewSurface(props: {
         </div>
       </section>
 
-      {props.reviewDraft?.explanation.rationale_summary ? (
-        <section className={`${cardClass} space-y-3`}>
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("detail.runInspectorRationale")}
-          </div>
-          <p className="text-sm leading-7 text-[color:var(--text)]">
-            {props.reviewDraft.explanation.rationale_summary}
-          </p>
-        </section>
-      ) : null}
-
       {props.reviewDraft?.explanation.direct_evidence.length ? (
         <section className={`${cardClass} space-y-3`}>
           <div className="text-sm font-medium text-[color:var(--text)]">
@@ -1844,7 +1833,7 @@ function deriveReviewWhyCue(
 ) {
   const rationaleSummary = trimmedString(reviewDraft?.explanation.rationale_summary);
   if (rationaleSummary) {
-    return clipText(normalizeInlineText(rationaleSummary), 180);
+    return normalizeInlineText(rationaleSummary);
   }
 
   const sourceBackedFallback = affectedSourceContext
