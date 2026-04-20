@@ -160,6 +160,10 @@ def normalize_contract_response(
         request_payload=request_payload,
         patch_ops_normalizer=patch_ops_normalizer,
     )
+    synthesize_direct_evidence_from_cited_evidence(
+        contract_response=normalized,
+        request_payload=request_payload,
+    )
     patch = normalized.get("patch")
     if isinstance(patch, dict):
         normalized["summary"] = patch.get("summary")
@@ -305,6 +309,81 @@ def build_evidence_lookup(request_payload: dict[str, Any]) -> dict[Any, dict[str
             if chunk.get("chunk_id"):
                 lookup[chunk.get("chunk_id")] = payload
     return lookup
+
+
+def synthesize_direct_evidence_from_cited_evidence(
+    *,
+    contract_response: dict[str, Any],
+    request_payload: dict[str, Any],
+) -> None:
+    explanation = contract_response.get("explanation")
+    if not isinstance(explanation, dict):
+        return
+
+    notes = contract_response.get("notes")
+    if not isinstance(notes, list) or "runner_normalized:fallback_scaffold_ops" not in notes:
+        return
+
+    if explanation.get("direct_evidence"):
+        return
+
+    lookup = build_evidence_lookup(request_payload)
+    if not lookup:
+        return
+
+    target_title = (
+        request_payload.get("target_node", {}).get("title") or "the current node"
+    )
+    synthesized = []
+    seen: set[tuple[str, str]] = set()
+    for source in request_payload.get("cited_evidence") or []:
+        if not isinstance(source, dict):
+            continue
+        source_id = source.get("source_id")
+        source_name = source.get("original_name") or source_id
+        if not source_id or not source_name:
+            continue
+        for chunk in source.get("chunks") or []:
+            if not isinstance(chunk, dict):
+                continue
+            chunk_id = chunk.get("chunk_id")
+            if not chunk_id:
+                continue
+            key = (source_id, chunk_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            fallback = lookup.get(key) or {}
+            start_line = coerce_line_number(
+                chunk.get("start_line"),
+                fallback.get("start_line"),
+            )
+            end_line = coerce_line_number(
+                chunk.get("end_line"),
+                fallback.get("end_line"),
+                start_line,
+            )
+            synthesized.append(
+                {
+                    "source_id": source_id,
+                    "source_name": source_name,
+                    "chunk_id": chunk_id,
+                    "label": chunk.get("label", fallback.get("label")),
+                    "start_line": start_line,
+                    "end_line": end_line,
+                    "why_it_matters": (
+                        f'This chunk is already cited on "{target_title}" and should '
+                        "be treated as direct support if the scaffolded draft depends on it."
+                    ),
+                }
+            )
+
+    if synthesized:
+        explanation["direct_evidence"] = synthesized
+        append_runner_note(
+            contract_response,
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+        )
 
 
 def coerce_line_number(

@@ -124,6 +124,23 @@ def fake_anthropic_key() -> str:
     return "anthropic-test-key"
 
 
+def build_cited_evidence_payload() -> list[dict]:
+    return [
+        {
+            "source_id": "source-1",
+            "original_name": "fixture.md",
+            "chunks": [
+                {
+                    "chunk_id": "chunk-1",
+                    "label": "Provider Authentication Flow",
+                    "start_line": 7,
+                    "end_line": 9,
+                }
+            ],
+        }
+    ]
+
+
 def write_request_paths(tmp_dir: str, request_payload: dict) -> tuple[Path, Path, Path]:
     request_path = Path(tmp_dir) / "request.json"
     response_path = Path(tmp_dir) / "response.json"
@@ -813,6 +830,182 @@ class ProviderToolScriptsTests(unittest.TestCase):
 
         self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
         self.assertGreater(len(normalized["patch"]["ops"]), 0)
+
+    def test_shared_langchain_synthesizes_direct_evidence_for_source_backed_fallback_scaffold(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-fallback",
+                "title": "Provider Authentication Flow",
+                "body": "Fallback scaffold should still carry direct support.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+            "cited_evidence": build_cited_evidence_payload(),
+        }
+
+        normalized = normalize_contract_response(
+            contract_response={
+                "explanation": {
+                    "rationale_summary": "Fallback scaffold response.",
+                    "direct_evidence": [],
+                    "inferred_suggestions": [],
+                },
+                "notes": [],
+                "patch": {"ops": []},
+            },
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
+        self.assertIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            normalized["notes"],
+        )
+        self.assertEqual(len(normalized["explanation"]["direct_evidence"]), 1)
+        evidence = normalized["explanation"]["direct_evidence"][0]
+        self.assertEqual(evidence["source_id"], "source-1")
+        self.assertEqual(evidence["source_name"], "fixture.md")
+        self.assertEqual(evidence["chunk_id"], "chunk-1")
+        self.assertEqual(evidence["label"], "Provider Authentication Flow")
+        self.assertEqual(evidence["start_line"], 7)
+        self.assertEqual(evidence["end_line"], 9)
+        self.assertIn("Provider Authentication Flow", evidence["why_it_matters"])
+
+    def test_shared_langchain_does_not_synthesize_direct_evidence_without_cited_evidence(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-no-evidence",
+                "title": "Fallback Branches",
+                "body": "No cited chunks available.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+        }
+
+        normalized = normalize_contract_response(
+            contract_response={
+                "explanation": {
+                    "rationale_summary": "Fallback scaffold response.",
+                    "direct_evidence": [],
+                    "inferred_suggestions": [],
+                },
+                "notes": [],
+                "patch": {"ops": []},
+            },
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
+        self.assertNotIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            normalized["notes"],
+        )
+        self.assertEqual(normalized["explanation"]["direct_evidence"], [])
+
+    def test_shared_langchain_keeps_existing_direct_evidence_during_fallback_scaffold(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-existing-evidence",
+                "title": "Provider Authentication Flow",
+                "body": "Existing direct evidence should survive fallback scaffolding.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+            "cited_evidence": build_cited_evidence_payload(),
+        }
+
+        normalized = normalize_contract_response(
+            contract_response={
+                "explanation": {
+                    "rationale_summary": "Fallback scaffold response.",
+                    "direct_evidence": [
+                        {
+                            "source_id": "source-1",
+                            "chunk_id": "chunk-1",
+                        }
+                    ],
+                    "inferred_suggestions": [],
+                },
+                "notes": [],
+                "patch": {"ops": []},
+            },
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        self.assertIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
+        self.assertNotIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            normalized["notes"],
+        )
+        self.assertEqual(len(normalized["explanation"]["direct_evidence"]), 1)
+        evidence = normalized["explanation"]["direct_evidence"][0]
+        self.assertEqual(evidence["source_name"], "fixture.md")
+        self.assertEqual(evidence["chunk_id"], "chunk-1")
+
+    def test_shared_langchain_does_not_synthesize_direct_evidence_without_fallback_scaffold(self) -> None:
+        request_payload = {
+            "capability": "expand",
+            "target_node": {
+                "id": "node-non-fallback",
+                "title": "Provider Authentication Flow",
+                "body": "Normal runner output should not synthesize direct evidence.",
+            },
+            "contract": {
+                "version": 2,
+                "patch_version": 1,
+                "response_kind": "nodex_ai_patch_response",
+            },
+            "cited_evidence": build_cited_evidence_payload(),
+        }
+
+        normalized = normalize_contract_response(
+            contract_response={
+                "explanation": {
+                    "rationale_summary": "Normal response.",
+                    "direct_evidence": [],
+                    "inferred_suggestions": [],
+                },
+                "notes": [],
+                "patch": {
+                    "ops": [
+                        {
+                            "type": "add_node",
+                            "parent_id": "node-non-fallback",
+                            "title": "Normal Branch",
+                            "kind": "topic",
+                        }
+                    ]
+                },
+            },
+            request_payload=request_payload,
+            provider="langchain_openai",
+            model="gpt-5.4-mini",
+        )
+
+        self.assertNotIn("runner_normalized:fallback_scaffold_ops", normalized["notes"])
+        self.assertNotIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            normalized["notes"],
+        )
+        self.assertEqual(normalized["explanation"]["direct_evidence"], [])
 
     def test_shared_langchain_preserves_non_add_patch_ops(self) -> None:
         request_payload = {
@@ -3160,6 +3353,80 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIsNone(ai_status["has_shell_env_conflict"])
         self.assertFalse(ai_status["uses_provider_defaults"])
         self.assertIn("does not map to a known provider runner", ai_status["status_error"])
+
+    def test_desktop_flow_smoke_reports_fallback_direct_evidence_quality(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "import sys",
+                        f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r})",
+                        "from langchain_runner_common import normalize_contract_response",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = normalize_contract_response(",
+                        "    contract_response={",
+                        "        'explanation': {",
+                        "            'rationale_summary': 'desktop flow fallback rationale',",
+                        "            'direct_evidence': [],",
+                        "            'inferred_suggestions': ['keep the focus on the first branch'],",
+                        "        },",
+                        "        'patch': {'ops': []},",
+                        "        'notes': [],",
+                        "    },",
+                        "    request_payload=request,",
+                        "    provider='langchain_openai',",
+                        "    model='fake',",
+                        ")",
+                        "meta_path = os.environ.get('NODEX_AI_META')",
+                        "if meta_path:",
+                        "    Path(meta_path).write_text(json.dumps({",
+                        "        'provider': 'langchain_openai',",
+                        "        'model': 'fake',",
+                        "        'provider_run_id': None,",
+                        "        'retry_count': 0,",
+                        "        'used_plain_json_fallback': False,",
+                        "        'normalization_notes': [",
+                        "            note for note in response.get('notes', [])",
+                        "            if isinstance(note, str) and note.startswith('runner_normalized:')",
+                        "        ],",
+                        "        'last_error_category': None,",
+                        "        'last_error_message': None,",
+                        "        'last_status_code': None,",
+                        "    }, indent=2))",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            command = shlex.join([sys.executable, str(fake_runner)])
+            result = run_script(
+                "scripts/desktop_flow_smoke.py",
+                "--runner-command",
+                command,
+                "--fixture",
+                str(FIXTURE_PATH),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["smoke"]["quality"]["has_direct_evidence"])
+        self.assertGreater(payload["smoke"]["quality"]["direct_evidence_count"], 0)
+        self.assertIn(
+            "runner_normalized:fallback_scaffold_ops",
+            payload["smoke"]["quality"]["normalization_notes"],
+        )
+        self.assertIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            payload["smoke"]["quality"]["normalization_notes"],
+        )
 
     def test_desktop_flow_smoke_apply_reports_created_node_focus(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
