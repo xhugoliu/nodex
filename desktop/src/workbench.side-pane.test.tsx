@@ -335,6 +335,12 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
     html,
     /workbench\.reviewFocusNewNode \{&quot;title&quot;:&quot;Follow-up branch&quot;\}/,
   );
+  assert.doesNotMatch(html, /workbench\.reviewFocusTitle/);
+  assert.ok(
+    html.indexOf(
+      "workbench.reviewFocusNewNode {&quot;title&quot;:&quot;Follow-up branch&quot;}",
+    ) < html.indexOf("workbench.reviewWhyTitle"),
+  );
   assert.match(html, /workbench\.reviewImpactTitle/);
   assert.match(html, /workbench\.reviewImpactAddNode \{&quot;count&quot;:1\}/);
   assert.match(html, /patchEditor\.preview/);
@@ -504,6 +510,7 @@ test("WorkbenchSidePane Review falls back to the current node when the draft doe
     html,
     /workbench\.reviewFocusCurrentNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
   );
+  assert.doesNotMatch(html, /workbench\.reviewFocusTitle/);
   assert.match(html, /workbench\.reviewImpactUpdateNode \{&quot;count&quot;:1\}/);
   assert.match(html, /workbench\.reviewAffectedNodesTitle/);
   assert.match(html, /workbench\.reviewAffectedNodeUpdate/);
@@ -1027,6 +1034,7 @@ test("WorkbenchSidePane Review hides the top why cue when no rationale is availa
     html,
     /workbench\.reviewFocusNewNode \{&quot;title&quot;:&quot;Follow-up branch&quot;\}/,
   );
+  assert.doesNotMatch(html, /workbench\.reviewFocusTitle/);
 });
 
 test("WorkbenchSidePane Review falls back to source-backed rationale for the top why cue when summary is missing", () => {

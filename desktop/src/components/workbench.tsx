@@ -1120,6 +1120,15 @@ function ReviewSurface(props: {
     props.reviewDraft,
     affectedSourceContext,
   );
+  const reviewFocusSummary = reviewFocusTarget
+    ? reviewFocusTarget.kind === "new"
+      ? props.t("workbench.reviewFocusNewNode", {
+          title: reviewFocusTarget.title,
+        })
+      : props.t("workbench.reviewFocusCurrentNode", {
+          title: reviewFocusTarget.title,
+        })
+    : null;
 
   return (
     <div className="space-y-4">
@@ -1147,6 +1156,12 @@ function ReviewSurface(props: {
           </div>
         </div>
 
+        {reviewFocusSummary ? (
+          <div className="border-t border-[color:var(--line-soft)] pt-3 text-sm leading-6 text-[color:var(--text)]">
+            {reviewFocusSummary}
+          </div>
+        ) : null}
+
         {reviewWhyCue ? (
           <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
             <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
@@ -1154,23 +1169,6 @@ function ReviewSurface(props: {
             </div>
             <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
               {reviewWhyCue}
-            </div>
-          </div>
-        ) : null}
-
-        {reviewFocusTarget ? (
-          <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
-            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-              {props.t("workbench.reviewFocusTitle")}
-            </div>
-            <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
-              {reviewFocusTarget.kind === "new"
-                ? props.t("workbench.reviewFocusNewNode", {
-                    title: reviewFocusTarget.title,
-                  })
-                : props.t("workbench.reviewFocusCurrentNode", {
-                    title: reviewFocusTarget.title,
-                  })}
             </div>
           </div>
         ) : null}
