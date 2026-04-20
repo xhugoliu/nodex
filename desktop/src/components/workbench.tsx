@@ -303,11 +303,6 @@ function DraftSurface(props: {
       />
 
       <section className={`${cardClass} space-y-3`}>
-        <div className="space-y-1">
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("workbench.draftActionsTitle")}
-          </div>
-        </div>
         <div className="flex flex-wrap gap-2">
           <button className={primaryButtonClass} onClick={props.onDraftAiExpand}>
             {props.t("nodeEditing.draftAiExpand")}
