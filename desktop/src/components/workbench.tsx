@@ -1130,6 +1130,10 @@ function ReviewSurface(props: {
     reviewOrigin,
     affectedSourceContext,
   );
+  const reviewWhyCue = deriveReviewWhyCue(
+    props.reviewDraft,
+    affectedSourceContext,
+  );
 
   return (
     <div className="space-y-4">
@@ -1156,6 +1160,17 @@ function ReviewSurface(props: {
             </div>
           </div>
         </div>
+
+        {reviewWhyCue ? (
+          <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              {props.t("workbench.reviewWhyTitle")}
+            </div>
+            <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+              {reviewWhyCue}
+            </div>
+          </div>
+        ) : null}
 
         {reviewFocusTarget ? (
           <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
@@ -1821,6 +1836,25 @@ function deriveReviewTopSummaryOriginCue(
   }
 
   return origin;
+}
+
+function deriveReviewWhyCue(
+  reviewDraft: DraftReviewPayload | null,
+  affectedSourceContext: ReturnType<typeof collectReviewAffectedSourceContext>,
+) {
+  const rationaleSummary = trimmedString(reviewDraft?.explanation.rationale_summary);
+  if (rationaleSummary) {
+    return clipText(normalizeInlineText(rationaleSummary), 180);
+  }
+
+  const sourceBackedFallback = affectedSourceContext
+    .map((target) => trimmedString(target.rationale))
+    .find(Boolean);
+  if (sourceBackedFallback) {
+    return clipText(normalizeInlineText(sourceBackedFallback), 180);
+  }
+
+  return null;
 }
 
 function resolveReviewSourceChunk(

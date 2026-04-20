@@ -119,6 +119,7 @@ const translations: Record<Locale, TranslationTree> = {
         "Use one focused assistant action at a time, then inspect the patch before applying.",
       draftReadyOps: "{count} draft ops ready",
       draftMoreOps: "{count} more draft ops",
+      reviewWhyTitle: "Why this draft",
       reviewFocusTitle: "Likely focus after apply",
       reviewFocusNewNode:
         "If this patch applies cleanly, the right rail will likely move to the new branch “{title}”.",
@@ -773,6 +774,7 @@ const translations: Record<Locale, TranslationTree> = {
       draftActionsBody: "每次只发起一个聚焦的 assistant 动作，然后先看 patch 再应用。",
       draftReadyOps: "已有 {count} 条草案操作",
       draftMoreOps: "还有 {count} 条草案操作",
+      reviewWhyTitle: "这次草案为什么要改",
       reviewFocusTitle: "应用后大概率会聚焦到哪",
       reviewFocusNewNode:
         "如果这次 patch 正常应用，右栏大概率会先落到新分支“{title}”。",
