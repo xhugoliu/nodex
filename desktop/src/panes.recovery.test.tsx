@@ -123,7 +123,7 @@ function renderTreePane(workspaceOverview: WorkspaceOverview | null) {
   );
 }
 
-test("TreePane renders a lightweight recovery card with recent patch review entries", () => {
+test("TreePane keeps Recovery as a lightweight latest-only entry", () => {
   const html = renderTreePane(makeOverview());
 
   assert.match(html, /sidebar\.recovery/);
@@ -131,18 +131,19 @@ test("TreePane renders a lightweight recovery card with recent patch review entr
   assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:4\}/);
   assert.match(html, /sidebar\.restoreLatestSnapshot/);
   assert.match(html, /sidebar\.recoveryRestoreNote/);
+  assert.match(html, /sidebar\.recoveryLatestSnapshot/);
   assert.match(html, /After review/);
-  assert.match(html, /Before apply|history\.noLabel/);
-  assert.match(html, /history\.restore/);
-  assert.match(html, /sidebar\.recoveryRecentPatches/);
+  assert.doesNotMatch(html, /Before apply/);
+  assert.doesNotMatch(html, /history\.restore/);
+  assert.match(html, /sidebar\.recoveryLatestPatch/);
   assert.match(html, /sidebar\.recoveryLoadPatchToReview/);
   assert.match(html, /Promote draft to review/);
   assert.match(
     html,
     /detail\.activityOrigin \{&quot;value&quot;:&quot;manual&quot;\}/,
   );
-  assert.match(html, /Attach source evidence/);
-  assert.match(html, /Tighten node wording/);
+  assert.doesNotMatch(html, /Attach source evidence/);
+  assert.doesNotMatch(html, /Tighten node wording/);
   assert.doesNotMatch(html, /Older patch that should stay hidden/);
   assert.doesNotMatch(html, /Older snapshot that should stay hidden/);
 });

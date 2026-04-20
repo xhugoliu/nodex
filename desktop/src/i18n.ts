@@ -199,6 +199,8 @@ const translations: Record<Locale, TranslationTree> = {
       recoveryPatchCount: "{count} applied patches",
       recoveryLatestSnapshot: "Latest snapshot",
       recoveryLatestPatch: "Latest patch",
+      recoveryLatestPatchBody:
+        "Keep the latest applied patch within reach so you can load it back into Review without applying it again.",
       recoveryRecentPatches: "Recent patches",
       recoveryRecentPatchesBody:
         "Load one of the latest applied patches back into Review without applying it again.",
@@ -848,6 +850,8 @@ const translations: Record<Locale, TranslationTree> = {
       recoveryPatchCount: "{count} 条已应用 patch",
       recoveryLatestSnapshot: "最近快照",
       recoveryLatestPatch: "最近一次 patch",
+      recoveryLatestPatchBody:
+        "把最近一次已应用 patch 留在手边，需要时再载回 Review，而不是重新直接应用。",
       recoveryRecentPatches: "最近 patch",
       recoveryRecentPatchesBody:
         "把最近已应用的 patch 重新载回 Review，只做复看，不直接再次应用。",
