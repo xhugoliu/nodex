@@ -155,6 +155,7 @@ test("TreePane keeps Recovery as a lightweight latest-only entry", () => {
   assert.match(html, /sidebar\.recoveryExpand/);
   assert.match(html, /sidebar\.recoverySnapshotCount \{&quot;count&quot;:4\}/);
   assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:4\}/);
+  assert.doesNotMatch(html, /sidebar\.recoveryBody/);
   assert.doesNotMatch(html, /sidebar\.restoreLatestSnapshot/);
   assert.doesNotMatch(html, /sidebar\.recoveryRestoreNote/);
   assert.doesNotMatch(html, /sidebar\.recoveryLatestSnapshot/);
@@ -170,6 +171,7 @@ test("TreePane shows latest-only recovery details when the secondary entry is ex
   const html = renderExpandedTreePane(makeOverview());
 
   assert.match(html, /sidebar\.recoveryCollapse/);
+  assert.match(html, /sidebar\.recoveryBody/);
   assert.match(html, /sidebar\.restoreLatestSnapshot/);
   assert.match(html, /sidebar\.recoveryRestoreNote/);
   assert.match(html, /sidebar\.recoveryLatestSnapshot/);

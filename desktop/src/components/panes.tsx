@@ -117,13 +117,8 @@ export function TreePane(props: {
           )}
 
           <div className="mt-3 space-y-3 rounded-2xl border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.86))] px-3 py-3">
-            <div className="space-y-1">
-              <div className="text-sm font-medium text-[color:var(--text)]">
-                {props.t("sidebar.recovery")}
-              </div>
-              <div className="text-sm leading-6 text-[color:var(--muted)]">
-                {props.t("sidebar.recoveryBody")}
-              </div>
+            <div className="text-sm font-medium text-[color:var(--text)]">
+              {props.t("sidebar.recovery")}
             </div>
 
             <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
@@ -151,6 +146,9 @@ export function TreePane(props: {
 
             {isRecoveryExpanded ? (
               <>
+                <div className="text-sm leading-6 text-[color:var(--muted)]">
+                  {props.t("sidebar.recoveryBody")}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button
                     className={secondaryButtonClass}
