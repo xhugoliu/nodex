@@ -282,6 +282,14 @@ function DraftSurface(props: {
     props.reviewDraft?.patch.summary ??
     props.reviewDraft?.report.summary ??
     props.patchDraftState.summary;
+  const currentDraftExplanation =
+    props.reviewDraft?.explanation.rationale_summary ||
+    currentDraftSummary ||
+    props.t("workbench.reviewBody");
+  const showCurrentDraftSummaryChip =
+    Boolean(currentDraftSummary) &&
+    normalizeInlineText(currentDraftSummary ?? "") !==
+      normalizeInlineText(currentDraftExplanation);
   const visibleDraftOps = props.patchDraftState.ops.slice(0, 2);
   const hiddenDraftOpCount = Math.max(props.patchDraftState.ops.length - 2, 0);
 
@@ -371,9 +379,7 @@ function DraftSurface(props: {
                 {props.t("detail.currentDraft")}
               </div>
               <div className="text-sm leading-6 text-[color:var(--muted)]">
-                {props.reviewDraft?.explanation.rationale_summary ||
-                  currentDraftSummary ||
-                  props.t("workbench.reviewBody")}
+                {currentDraftExplanation}
               </div>
             </div>
             <button className={ghostButtonClass} onClick={props.onOpenReview}>
@@ -386,7 +392,7 @@ function DraftSurface(props: {
                 count: props.patchDraftState.opCount,
               })}
             </span>
-            {currentDraftSummary ? (
+            {showCurrentDraftSummaryChip ? (
               <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
                 {currentDraftSummary}
               </span>

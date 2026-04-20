@@ -403,6 +403,29 @@ test("WorkbenchSidePane Draft reuses contextualized source-backed op description
   assert.doesNotMatch(html, /node-1/);
 });
 
+test("WorkbenchSidePane Draft hides the summary chip when it would repeat the main draft explanation", () => {
+  const reviewDraft = makeReviewDraft();
+  reviewDraft.explanation.rationale_summary = "";
+  reviewDraft.patch.summary = "Source-backed draft summary";
+  reviewDraft.report.summary = "Source-backed draft summary";
+
+  const html = renderSidePane({
+    selectionTab: "draft",
+    reviewDraft,
+    patchDraftState: {
+      state: "ready",
+      summary: "Source-backed draft summary",
+      opCount: 1,
+      opTypes: [{ type: "attach_source", count: 1 }],
+      ops: [{ type: "attach_source", source_id: "source-1", node_id: "node-1" }],
+      error: null,
+    },
+  });
+
+  assert.equal((html.match(/Source-backed draft summary/g) ?? []).length, 1);
+  assert.match(html, /workbench\.draftReadyOps \{&quot;count&quot;:1\}/);
+});
+
 test("WorkbenchSidePane returns to source context when the context tab is selected with a source open", () => {
   const html = renderSidePane({
     selectionTab: "context",
