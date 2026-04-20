@@ -361,10 +361,11 @@ test("WorkbenchSidePane renders Draft as a node-scoped assistant workspace witho
   assert.match(html, /workbench\.focusScopeNodeLabel/);
   assert.doesNotMatch(html, /workbench\.draftScopeTitle/);
   assert.match(html, /Authentication/);
-  assert.match(html, /workbench\.defaultRoute/);
+  assert.doesNotMatch(html, /workbench\.defaultRoute/);
   assert.doesNotMatch(html, /workbench\.draftActionsTitle/);
   assert.doesNotMatch(html, /workbench\.draftActionsBody/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftRouteMeta/);
+  assert.match(html, /nodeEditing\.aiDraftRefresh/);
   assert.match(html, /nodeEditing\.draftAiExpand/);
   assert.match(html, /nodeEditing\.draftAiExploreQuestion/);
   assert.match(html, /nodeEditing\.draftAiExploreRisk/);

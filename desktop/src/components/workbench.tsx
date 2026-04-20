@@ -464,16 +464,7 @@ export function AiDraftRouteSurface(props: {
   if (showCompactHealthyDefaultRoute) {
     return (
       <section className={`${cardClass} mb-4 space-y-2 ${toneClass}`}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            {props.t("workbench.defaultRoute")}
-          </div>
-          <button className={ghostButtonClass} onClick={props.onRefresh} type="button">
-            {props.t("nodeEditing.aiDraftRefresh")}
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--muted)]">
           <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
             {statusLabel}
           </span>
@@ -485,6 +476,9 @@ export function AiDraftRouteSurface(props: {
           <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
             {status?.runner || props.t("nodeEditing.aiDraftUnknown")}
           </span>
+          <button className={ghostButtonClass} onClick={props.onRefresh} type="button">
+            {props.t("nodeEditing.aiDraftRefresh")}
+          </button>
         </div>
       </section>
     );

@@ -80,10 +80,11 @@ test("AiDraftRouteSurface keeps command hidden for healthy default route", () =>
     status: makeStatus({}),
   });
 
-  assert.match(html, /workbench\.defaultRoute/);
+  assert.doesNotMatch(html, /workbench\.defaultRoute/);
   assert.match(html, /nodeEditing\.aiDraftReady/);
   assert.match(html, />openai</);
   assert.match(html, />provider_runner\.py</);
+  assert.match(html, /nodeEditing\.aiDraftRefresh/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftRouteMeta/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftSourceDefault/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftProvider:/);
@@ -101,8 +102,9 @@ test("AiDraftRouteSurface keeps the default openai route ready when only process
     }),
   });
 
-  assert.match(html, /workbench\.defaultRoute/);
+  assert.doesNotMatch(html, /workbench\.defaultRoute/);
   assert.match(html, /nodeEditing\.aiDraftReady/);
+  assert.match(html, /nodeEditing\.aiDraftRefresh/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftNeedsAttention/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftRouteMeta/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftCommand/);
