@@ -142,6 +142,9 @@ test("SourceContextSurface renders rationale summary, continue entries, and cite
   assert.match(html, /workbench\.openDraft/);
   assert.doesNotMatch(html, /workbench\.contextNextTitle/);
   assert.match(html, /detail\.sourceContinueTitle/);
+  assert.doesNotMatch(html, /detail\.sourceContinueBody/);
+  assert.match(html, /detail\.sourceContinueLinkedNodes/);
+  assert.match(html, /detail\.sourceContinueEvidenceNodes/);
   assert.match(html, /Provider Setup/);
   assert.match(html, /Auth Evidence/);
   assert.match(html, /detail\.citationContextReadyForNode/);
@@ -180,7 +183,9 @@ test("SourceContextSurface hides citation actions and shows empty continue state
   });
 
   assert.match(html, /detail\.citationContextMissing/);
+  assert.match(html, /detail\.sourceContinueTitle/);
   assert.match(html, /detail\.sourceContinueEmpty/);
+  assert.doesNotMatch(html, /detail\.sourceContinueBody/);
   assert.match(html, /workbench\.localProvenanceTitle/);
   assert.doesNotMatch(html, /detail\.draftCite/);
   assert.doesNotMatch(html, /detail\.draftUncite/);
@@ -214,6 +219,8 @@ test("SourceContextSurface keeps continue entries focused by hiding duplicate ev
 
   const html = renderSurface({ detail });
 
+  assert.match(html, /detail\.sourceContinueTitle/);
+  assert.doesNotMatch(html, /detail\.sourceContinueBody/);
   assert.match(html, /detail\.sourceContinueLinkedNodes/);
   assert.doesNotMatch(html, /detail\.sourceContinueEvidenceNodes/);
   assert.match(

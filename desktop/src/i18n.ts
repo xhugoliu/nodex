@@ -336,8 +336,6 @@ const translations: Record<Locale, TranslationTree> = {
       sourceContextStatCited: "{count} cited for this node",
       sourceContextStatContinue: "{count} continue nodes",
       sourceContinueTitle: "Continue from this source",
-      sourceContinueBody:
-        "Use these deduped shortcuts to move into related or evidence-backed nodes without losing your current thread.",
       sourceContinueLinkedNodes: "Related nodes",
       sourceContinueEvidenceNodes: "Evidence nodes",
       sourceContinueEmpty: "No related or evidence nodes are linked yet.",
@@ -986,8 +984,6 @@ const translations: Record<Locale, TranslationTree> = {
       sourceContextStatCited: "当前节点已引用 {count} 个",
       sourceContextStatContinue: "{count} 个可继续节点",
       sourceContinueTitle: "继续推进入口",
-      sourceContinueBody:
-        "去重后保留可直接跳转的相关节点和证据节点，方便沿当前线索继续推进。",
       sourceContinueLinkedNodes: "相关节点",
       sourceContinueEvidenceNodes: "证据节点",
       sourceContinueEmpty: "还没有可继续进入的相关节点或证据节点。",

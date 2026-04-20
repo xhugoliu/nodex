@@ -960,13 +960,8 @@ export function SourceContextSurface(props: {
       </section>
 
       <section className={`${cardClass} space-y-3`}>
-        <div className="space-y-1">
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("detail.sourceContinueTitle")}
-          </div>
-          <div className="text-sm leading-6 text-[color:var(--muted)]">
-            {props.t("detail.sourceContinueBody")}
-          </div>
+        <div className="text-sm font-medium text-[color:var(--text)]">
+          {props.t("detail.sourceContinueTitle")}
         </div>
         {quickEntry.linkedNodes.length ? (
           <div className="space-y-2">
