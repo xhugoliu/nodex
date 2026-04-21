@@ -1326,9 +1326,6 @@ function ReviewSurface(props: {
 
       {props.reviewDraft?.explanation.direct_evidence.length ? (
         <section className={`${cardClass} space-y-3`}>
-          <div className="text-sm font-medium text-[color:var(--text)]">
-            {props.t("workbench.reviewEvidenceTitle")}
-          </div>
           <div className="space-y-2">
             {props.reviewDraft.explanation.direct_evidence.map((item) => (
               <div
