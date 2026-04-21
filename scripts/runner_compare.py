@@ -453,6 +453,7 @@ def ensure_workspace_initialized(workspace_dir: Path) -> None:
 
 
 def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
+    previous_run_ids = snapshot_ai_run_ids(workspace_dir=workspace_dir, node_id=node_id)
     args = [
         "ai",
         "run-external",
@@ -484,7 +485,17 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "quality": build_run_quality_summary(run_payload),
         }
     except CommandFailure as exc:
-        failure = classify_run_failure(exc.detail, spec=spec)
+        failed_run_record = load_latest_failed_run_record(
+            workspace_dir=workspace_dir,
+            node_id=node_id,
+            command=spec["command"],
+            previous_run_ids=previous_run_ids,
+        )
+        failure = classify_run_failure(
+            exc.detail,
+            spec=spec,
+            failed_run_record=failed_run_record,
+        )
         return {
             "label": spec["label"],
             "command": spec["command"],
@@ -492,6 +503,11 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "offline_substitute": spec.get("offline_substitute") is True,
             "status": "failed",
             "error": exc.detail,
+            "failed_run_id": (
+                failed_run_record.get("id")
+                if isinstance(failed_run_record, dict)
+                else None
+            ),
             "failure_kind": failure["kind"],
             "failure_summary": failure["summary"],
             "failure_hint": failure["hint"],
@@ -566,6 +582,70 @@ def run_nodex_command(
         return json.loads(stdout)
     except json.JSONDecodeError as exc:
         raise CommandFailure(f"command did not return valid JSON: {exc}") from exc
+
+
+def load_ai_run_history(*, workspace_dir: Path, node_id: Optional[str]) -> Optional[list[dict]]:
+    args = ["ai", "history"]
+    if node_id:
+        args.extend(["--node-id", node_id])
+    args.extend(["--format", "json"])
+    try:
+        history = run_nodex_command(
+            args,
+            cwd=workspace_dir,
+            expect_json=True,
+        )
+    except CommandFailure:
+        return None
+    return history if isinstance(history, list) else None
+
+
+def snapshot_ai_run_ids(*, workspace_dir: Path, node_id: Optional[str]) -> Optional[set[str]]:
+    history = load_ai_run_history(workspace_dir=workspace_dir, node_id=node_id)
+    if history is None:
+        return None
+    run_ids = set()
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        run_id = normalize_optional_str(item.get("id"))
+        if run_id is not None:
+            run_ids.add(run_id)
+    return run_ids
+
+
+def load_latest_failed_run_record(
+    *,
+    workspace_dir: Path,
+    node_id: str,
+    command: str,
+    previous_run_ids: Optional[set[str]],
+) -> Optional[dict]:
+    if previous_run_ids is None:
+        return None
+
+    history = load_ai_run_history(workspace_dir=workspace_dir, node_id=node_id)
+    if history is None:
+        return None
+
+    matches = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        run_id = normalize_optional_str(item.get("id"))
+        if run_id is None or run_id in previous_run_ids:
+            continue
+        if item.get("status") != "failed":
+            continue
+        if item.get("node_id") != node_id:
+            continue
+        if item.get("command") != command:
+            continue
+        matches.append(item)
+
+    if len(matches) != 1:
+        return None
+    return matches[0]
 
 
 def print_text_report(result: dict) -> None:
@@ -1469,6 +1549,14 @@ def build_auth_error_failure() -> dict:
     }
 
 
+def build_auth_missing_failure() -> dict:
+    return {
+        "kind": "auth_missing",
+        "summary": "No provider credentials are configured.",
+        "hint": "Run `python3 scripts/provider_doctor.py --provider <provider>` and set the required auth env var.",
+    }
+
+
 def build_invalid_json_failure() -> dict:
     return {
         "kind": "invalid_json",
@@ -1477,7 +1565,12 @@ def build_invalid_json_failure() -> dict:
     }
 
 
-def classify_run_failure(detail: str, *, spec: Optional[dict] = None) -> dict:
+def classify_run_failure(
+    detail: str,
+    *,
+    spec: Optional[dict] = None,
+    failed_run_record: Optional[dict] = None,
+) -> dict:
     stripped = detail.strip()
     lower = stripped.lower()
     dependency_match = re.search(r"Missing `([^`]+)`", stripped)
@@ -1489,11 +1582,10 @@ def classify_run_failure(detail: str, *, spec: Optional[dict] = None) -> dict:
             "hint": f"Install it with `python3 -m pip install -U {package}`.",
         }
     if "[preflight]" in stripped and "no configured auth" in lower:
-        return {
-            "kind": "auth_missing",
-            "summary": "No provider credentials are configured.",
-            "hint": "Run `python3 scripts/provider_doctor.py --provider <provider>` and set the required auth env var.",
-        }
+        return build_auth_missing_failure()
+    recorded = classify_recorded_failure(failed_run_record, spec=spec)
+    if recorded is not None:
+        return recorded
     standardized = classify_standardized_failure(stripped, spec=spec)
     if standardized is not None:
         return standardized
@@ -1520,19 +1612,61 @@ def classify_run_failure(detail: str, *, spec: Optional[dict] = None) -> dict:
     }
 
 
+def classify_recorded_failure(
+    failed_run_record: Optional[dict], *, spec: Optional[dict] = None
+) -> Optional[dict]:
+    if not isinstance(failed_run_record, dict):
+        return None
+    category = normalize_optional_str(failed_run_record.get("last_error_category"))
+    if category is None:
+        return None
+    message = normalize_optional_str(failed_run_record.get("last_error_message")) or ""
+    status_code = failed_run_record.get("last_status_code")
+    if not isinstance(status_code, int):
+        status_code = None
+    if status_code is None:
+        status_code = extract_failure_status_code(message)
+    return classify_failure_category(
+        category=category,
+        detail=message,
+        status_code=status_code,
+        spec=spec,
+    )
+
+
 def classify_standardized_failure(
     detail: str, *, spec: Optional[dict] = None
 ) -> Optional[dict]:
-    lower = detail.lower()
     category = extract_failure_category(detail)
     status_code = extract_failure_status_code(detail)
+    return classify_failure_category(
+        category=category,
+        detail=detail,
+        status_code=status_code,
+        spec=spec,
+    )
 
+
+def classify_failure_category(
+    *,
+    category: Optional[str],
+    detail: str,
+    status_code: Optional[int],
+    spec: Optional[dict] = None,
+) -> Optional[dict]:
+    lower = detail.lower()
     if category == "auth":
         if status_code == 401 or is_auth_invalid_detail(detail):
             return build_standardized_auth_invalid_failure()
         return build_auth_error_failure()
     if status_code == 401 and is_auth_invalid_detail(detail):
         return build_standardized_auth_invalid_failure()
+    if category == "auth_invalid":
+        return build_standardized_auth_invalid_failure()
+    if category == "auth_error":
+        return build_auth_error_failure()
+    if category == "auth_missing":
+        return build_auth_missing_failure()
     if category == "server_error":
         code_text = f" (HTTP {status_code})" if status_code is not None else ""
         return {
