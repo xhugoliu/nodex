@@ -122,12 +122,14 @@ def main() -> int:
 
 
 def derive_scenario(request_payload: dict) -> str:
+    target_node = request_payload.get("target_node") or {}
+    # Imported source roots can legitimately carry direct cited evidence after
+    # the runner/runtime source-root cite flow, so target kind must win here.
+    if target_node.get("kind") == "source":
+        return "source-root"
     cited_evidence = request_payload.get("cited_evidence") or []
     if cited_evidence:
         return "source-context"
-    target_node = request_payload.get("target_node") or {}
-    if target_node.get("kind") == "source":
-        return "source-root"
     return "minimal"
 
 
