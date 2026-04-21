@@ -2550,10 +2550,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
 
         runs = {item["label"]: item for item in payload["runs"]}
         self.assertTrue(all(item["offline_substitute"] is True for item in runs.values()))
-        self.assertFalse(runs["openai-minimal"]["quality"]["has_direct_evidence"])
-        self.assertFalse(runs["openai-minimal"]["quality"]["has_normalization_notes"])
-        self.assertFalse(runs["langchain-openai"]["quality"]["has_direct_evidence"])
-        self.assertFalse(runs["langchain-anthropic"]["quality"]["has_direct_evidence"])
+        self.assertEqual(payload["scenario_context"]["evidence"]["citation_kind"], "direct")
+        self.assertTrue(all(item["quality"]["has_direct_evidence"] for item in runs.values()))
+        self.assertFalse(any(item["quality"]["has_normalization_notes"] for item in runs.values()))
 
         comparisons = {
             (item["left_label"], item["right_label"]): item
@@ -2561,7 +2560,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         }
         openai_pair = comparisons[("openai-minimal", "langchain-openai")]
         self.assertIn(
-            "source-root request shape",
+            "source-context request shape",
             openai_pair["difference_details"]["rationale_summary"]["left"],
         )
         self.assertNotIn("patch_summary", openai_pair["difference_details"])
@@ -2579,40 +2578,44 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
         self.assertFalse(patch_ops["shape_aligned"])
-        self.assertEqual(patch_ops["title_overlap_ratio"], 1.0)
-        self.assertEqual(patch_ops["body_overlap_ratio"], 1.0)
+        self.assertEqual(patch_ops["title_overlap_ratio"], 0.0)
+        self.assertEqual(patch_ops["body_overlap_ratio"], 0.0)
         self.assertEqual(
             patch_ops["field_mismatch_counts"],
-            {"title": 0, "kind": 1, "body": 0, "left_extra": 0, "right_extra": 0},
+            {"title": 4, "kind": 1, "body": 4, "left_extra": 0, "right_extra": 0},
         )
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
-        self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
-        self.assertEqual(patch_ops["position_details"]["body_match_count"], 4)
-        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 1)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 4)
         explanation = openai_pair["structure_details"]["explanation"]
-        self.assertEqual(explanation["left_direct_evidence_count"], 0)
-        self.assertEqual(explanation["right_direct_evidence_count"], 0)
+        self.assertEqual(explanation["left_direct_evidence_count"], 1)
+        self.assertEqual(explanation["right_direct_evidence_count"], 1)
+        self.assertEqual(explanation["shared_direct_evidence_count"], 1)
         self.assertEqual(explanation["left_only_direct_evidence_count"], 0)
         self.assertEqual(explanation["right_only_direct_evidence_count"], 0)
         self.assertEqual(explanation["direct_evidence_overlap_ratio"], 1.0)
-        self.assertEqual(explanation["shared_direct_evidence_refs"], [])
+        self.assertEqual(len(explanation["shared_direct_evidence_refs"]), 1)
+        self.assertEqual(explanation["shared_inferred_suggestions"], [])
+        self.assertEqual(explanation["shared_inferred_suggestions_count"], 0)
+        self.assertEqual(explanation["left_only_inferred_suggestions_count"], 2)
+        self.assertEqual(explanation["right_only_inferred_suggestions_count"], 2)
+        self.assertEqual(explanation["inferred_overlap_ratio"], 0.0)
         self.assertEqual(
-            explanation["shared_inferred_suggestions"],
+            explanation["left_only_inferred_suggestions"],
             [
-                "Expand Draft Path Trigger Conditions with specific input payloads or environment flags that activate the path.",
-                "Populate Regression Scope And Assertions with concrete pass/fail criteria once test specs are available.",
-                "Add LangChain chain topology details under OpenAI Model Configuration if chain structure is relevant.",
+                "Review how openai-minimal reacts to the source-context request payload.",
+                "Compare openai-minimal against the OpenAI default route for OpenAI LangChain Regression.",
             ],
         )
-        self.assertEqual(explanation["shared_inferred_suggestions_count"], 3)
-        self.assertEqual(explanation["left_only_inferred_suggestions_count"], 0)
-        self.assertEqual(explanation["right_only_inferred_suggestions_count"], 0)
-        self.assertEqual(explanation["inferred_overlap_ratio"], 1.0)
         self.assertEqual(
-            explanation["left_only_inferred_suggestions"], []
+            explanation["right_only_inferred_suggestions"],
+            [
+                "Review how langchain-openai reacts to the source-context request payload.",
+                "Compare langchain-openai against the OpenAI default route for OpenAI LangChain Regression.",
+            ],
         )
-        self.assertEqual(explanation["right_only_inferred_suggestions"], [])
         self.assertEqual(
             openai_pair["structure_details"]["response_notes"],
             {
@@ -2765,6 +2768,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
 
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["comparison_readiness"]["status"], "ready")
+        self.assertEqual(payload["scenario_context"]["evidence"]["citation_kind"], "direct")
         self.assertEqual(
             payload["comparison_metrics"],
             {
@@ -2784,6 +2788,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
             (item["left_label"], item["right_label"]): item
             for item in payload["comparisons"]
         }
+        runs = {item["label"]: item for item in payload["runs"]}
+        self.assertTrue(all(item["quality"]["has_direct_evidence"] for item in runs.values()))
         openai_pair = comparisons[("openai-minimal", "langchain-openai")]
         self.assertEqual(
             openai_pair["comparison"]["difference_kinds"],
@@ -2800,17 +2806,27 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(patch_ops["left_kind_counts"], {"topic": 4})
         self.assertEqual(patch_ops["right_kind_counts"], {"action": 1, "topic": 3})
         self.assertFalse(patch_ops["shape_aligned"])
-        self.assertEqual(patch_ops["title_overlap_ratio"], 1.0)
-        self.assertEqual(patch_ops["body_overlap_ratio"], 1.0)
+        self.assertEqual(patch_ops["title_overlap_ratio"], 0.0)
+        self.assertEqual(patch_ops["body_overlap_ratio"], 0.0)
         self.assertEqual(
             patch_ops["field_mismatch_counts"],
-            {"title": 0, "kind": 1, "body": 0, "left_extra": 0, "right_extra": 0},
+            {"title": 4, "kind": 1, "body": 4, "left_extra": 0, "right_extra": 0},
         )
         self.assertEqual(patch_ops["position_details"]["aligned_positions"], 4)
-        self.assertEqual(patch_ops["position_details"]["title_match_count"], 4)
+        self.assertEqual(patch_ops["position_details"]["title_match_count"], 0)
         self.assertEqual(patch_ops["position_details"]["kind_match_count"], 3)
-        self.assertEqual(patch_ops["position_details"]["body_match_count"], 4)
-        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 1)
+        self.assertEqual(patch_ops["position_details"]["body_match_count"], 0)
+        self.assertEqual(len(patch_ops["position_details"]["differing_positions"]), 4)
+        self.assertIn(
+            "source-context request shape",
+            openai_pair["difference_details"]["rationale_summary"]["left"],
+        )
+        explanation = openai_pair["structure_details"]["explanation"]
+        self.assertEqual(explanation["left_direct_evidence_count"], 1)
+        self.assertEqual(explanation["right_direct_evidence_count"], 1)
+        self.assertEqual(explanation["shared_direct_evidence_count"], 1)
+        self.assertEqual(explanation["direct_evidence_overlap_ratio"], 1.0)
+        self.assertEqual(len(explanation["shared_direct_evidence_refs"]), 1)
         self.assertEqual(
             openai_pair["structure_details"]["normalization_notes"],
             {

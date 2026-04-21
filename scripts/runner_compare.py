@@ -330,6 +330,7 @@ def compare_runners(
             manifest_path=MANIFEST_PATH,
             workspace_dir=workspace_dir,
             fixture_path=fixture_path,
+            cite_root_evidence=True,
         )
         effective_node_id = scenario_payload["target_node"]["id"]
     runs = [
