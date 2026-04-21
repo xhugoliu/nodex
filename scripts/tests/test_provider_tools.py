@@ -2991,6 +2991,96 @@ class ProviderToolScriptsTests(unittest.TestCase):
             result["scenario_context"]["target_node"]["id"],
             result["scenario_context"]["imported_root_node"]["id"],
         )
+        evidence = result["scenario_context"]["evidence"]
+        self.assertEqual(evidence["citation_kind"], "direct")
+        self.assertEqual(
+            evidence["rationale"],
+            "This imported section establishes the root source topic that the draft expands.",
+        )
+        node_show = result["scenario_context"]["steps"]["node_show"]
+        self.assertTrue(
+            any(
+                citation.get("chunk", {}).get("id") == evidence["chunk_id"]
+                and citation.get("citation_kind") == evidence["citation_kind"]
+                and citation.get("rationale") == evidence["rationale"]
+                for detail in node_show.get("evidence") or []
+                for citation in detail.get("citations") or []
+            )
+        )
+
+    def test_provider_smoke_source_root_fallback_synthesizes_direct_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "from pathlib import Path",
+                        "",
+                        "import sys",
+                        f"sys.path.insert(0, {str(REPO_ROOT / 'scripts')!r})",
+                        "from langchain_runner_common import normalize_contract_response",
+                        "",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = normalize_contract_response(",
+                        "    contract_response={",
+                        "        'explanation': {",
+                        "            'rationale_summary': 'provider smoke source-root fallback rationale',",
+                        "            'direct_evidence': [],",
+                        "            'inferred_suggestions': [],",
+                        "        },",
+                        "        'patch': {'ops': []},",
+                        "        'notes': [],",
+                        "    },",
+                        "    request_payload=request,",
+                        "    provider='langchain_openai',",
+                        "    model='fake',",
+                        ")",
+                        "meta_path = os.environ.get('NODEX_AI_META')",
+                        "if meta_path:",
+                        "    Path(meta_path).write_text(json.dumps({",
+                        "        'provider': 'langchain_openai',",
+                        "        'model': 'fake',",
+                        "        'provider_run_id': None,",
+                        "        'retry_count': 0,",
+                        "        'used_plain_json_fallback': False,",
+                        "        'normalization_notes': [",
+                        "            note for note in response.get('notes', [])",
+                        "            if isinstance(note, str) and note.startswith('runner_normalized:')",
+                        "        ],",
+                        "        'last_error_category': None,",
+                        "        'last_error_message': None,",
+                        "        'last_status_code': None,",
+                        "    }, indent=2))",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            result = run_smoke(
+                manifest_path=REPO_ROOT / "Cargo.toml",
+                workspace_dir=Path(tmp_dir),
+                node_id="root",
+                scenario="source-root",
+                fixture_path=FIXTURE_PATH,
+                runner_command_text=shlex.join([sys.executable, str(fake_runner)]),
+                apply=False,
+                json_mode=True,
+            )
+
+        self.assertTrue(result["quality"]["has_direct_evidence"])
+        self.assertGreater(result["quality"]["direct_evidence_count"], 0)
+        self.assertIn(
+            "runner_normalized:fallback_scaffold_ops",
+            result["quality"]["normalization_notes"],
+        )
+        self.assertIn(
+            "runner_normalized:synthesized_direct_evidence_from_cited_evidence",
+            result["quality"]["normalization_notes"],
+        )
+        self.assertTrue(result["verification"]["scenario"]["target_evidence_retained"])
+        self.assertTrue(result["verification"]["scenario"]["source_evidence_link_retained"])
 
     def test_provider_smoke_fixture_set_runs_multiple_cases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -14,6 +14,9 @@ DEFAULT_CITATION_KIND = "direct"
 DEFAULT_CITATION_RATIONALE = (
     "This imported section defines the OpenAI-compatible runner setup."
 )
+DEFAULT_ROOT_CITATION_RATIONALE = (
+    "This imported section establishes the root source topic that the draft expands."
+)
 DEFAULT_FIXTURE_SET = "openai-default"
 
 OPENAI_DEFAULT_FIXTURE_SET_CASES = [
@@ -61,6 +64,7 @@ def prepare_source_root_scenario(
     manifest_path: Path,
     workspace_dir: Path,
     fixture_path: Optional[Path] = None,
+    cite_root_evidence: bool = False,
 ) -> dict[str, Any]:
     fixture_path = (fixture_path or DEFAULT_FIXTURE_PATH).resolve()
     if not fixture_path.exists():
@@ -84,6 +88,12 @@ def prepare_source_root_scenario(
     if not isinstance(source_list, list) or not source_list:
         raise ScenarioFailure("source import did not produce any source records")
     source_id = source_list[0]["id"]
+    source_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["source", "show", source_id, "--format", "json"],
+        expect_json=True,
+    )
 
     imported_root_detail = run_nodex_command(
         manifest_path=manifest_path,
@@ -91,8 +101,7 @@ def prepare_source_root_scenario(
         args=["node", "show", imported_root["id"], "--format", "json"],
         expect_json=True,
     )
-
-    return {
+    result = {
         "scenario": "source-root",
         "fixture_path": str(fixture_path),
         "source_id": source_id,
@@ -101,9 +110,51 @@ def prepare_source_root_scenario(
         "steps": {
             "source_import": import_step,
             "source_list": source_list,
+            "source_show": source_detail,
             "imported_root_show": imported_root_detail,
         },
     }
+    if not cite_root_evidence:
+        return result
+
+    root_context = select_source_root_context(source_detail, imported_root["id"])
+    cite_step = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=[
+            "node",
+            "cite-chunk",
+            imported_root["id"],
+            root_context["chunk_id"],
+            "--citation-kind",
+            DEFAULT_CITATION_KIND,
+            "--rationale",
+            DEFAULT_ROOT_CITATION_RATIONALE,
+        ],
+        expect_json=False,
+    )
+    node_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["node", "show", imported_root["id"], "--format", "json"],
+        expect_json=True,
+    )
+    cited_source_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["source", "show", source_id, "--format", "json"],
+        expect_json=True,
+    )
+    result["evidence"] = {
+        "chunk_id": root_context["chunk_id"],
+        "chunk_label": root_context["chunk_label"],
+        "citation_kind": DEFAULT_CITATION_KIND,
+        "rationale": DEFAULT_ROOT_CITATION_RATIONALE,
+    }
+    result["steps"]["cite_chunk"] = cite_step
+    result["steps"]["node_show"] = node_detail
+    result["steps"]["source_show_after_cite"] = cited_source_detail
+    return result
 
 
 def prepare_source_context_scenario(
@@ -215,10 +266,18 @@ def verify_source_root_workspace_state(
     patch_ops: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     imported_root = scenario_payload["imported_root_node"]
+    target_node = scenario_payload.get("target_node") or imported_root
+    evidence = scenario_payload.get("evidence")
     imported_root_detail = run_nodex_command(
         manifest_path=manifest_path,
         workspace_dir=workspace_dir,
         args=["node", "show", imported_root["id"], "--format", "json"],
+        expect_json=True,
+    )
+    source_detail = run_nodex_command(
+        manifest_path=manifest_path,
+        workspace_dir=workspace_dir,
+        args=["source", "show", scenario_payload["source_id"], "--format", "json"],
         expect_json=True,
     )
 
@@ -230,6 +289,22 @@ def verify_source_root_workspace_state(
         for detail in (imported_root_detail.get("sources") or [])
         if isinstance(detail, dict)
     )
+    target_evidence_retained = None
+    source_evidence_link_retained = None
+    if isinstance(evidence, dict):
+        target_evidence_retained = target_has_expected_evidence(
+            node_detail=imported_root_detail,
+            expected_chunk_id=evidence["chunk_id"],
+            expected_citation_kind=evidence["citation_kind"],
+            expected_rationale=evidence["rationale"],
+        )
+        source_evidence_link_retained = source_has_expected_evidence_link(
+            source_detail=source_detail,
+            expected_chunk_id=evidence["chunk_id"],
+            expected_node_id=target_node["id"],
+            expected_citation_kind=evidence["citation_kind"],
+            expected_rationale=evidence["rationale"],
+        )
 
     created_node_checks = []
     created_nodes_present = None
@@ -275,13 +350,19 @@ def verify_source_root_workspace_state(
             )
 
     ok = imported_root_under_workspace_root and imported_root_source_link_retained
+    if isinstance(evidence, dict):
+        ok = ok and bool(target_evidence_retained) and bool(source_evidence_link_retained)
     if created_nodes is not None:
         ok = ok and bool(created_nodes_present) and bool(created_nodes_match_patch)
 
     return {
         "imported_root_node_id": imported_root["id"],
+        "target_node_id": target_node["id"],
+        "expected_chunk_id": evidence["chunk_id"] if isinstance(evidence, dict) else None,
         "imported_root_under_workspace_root": imported_root_under_workspace_root,
         "imported_root_source_link_retained": imported_root_source_link_retained,
+        "target_evidence_retained": target_evidence_retained,
+        "source_evidence_link_retained": source_evidence_link_retained,
         "created_nodes_present": created_nodes_present,
         "created_nodes_match_patch": created_nodes_match_patch,
         "created_node_checks": created_node_checks,
@@ -423,6 +504,35 @@ def select_target_context(source_detail: dict[str, Any], target_label: str) -> d
     ]
     raise ScenarioFailure(
         f"source context chunk `{target_label}` was not found; available labels: {available_labels}"
+    )
+
+
+def select_source_root_context(
+    source_detail: dict[str, Any],
+    imported_root_id: str,
+) -> dict[str, str]:
+    chunks = source_detail.get("chunks")
+    if not isinstance(chunks, list):
+        raise ScenarioFailure("source detail did not include a chunks array")
+
+    for chunk_detail in chunks:
+        chunk = chunk_detail.get("chunk") or {}
+        linked_nodes = chunk_detail.get("linked_nodes") or []
+        if not any(
+            isinstance(node, dict) and node.get("id") == imported_root_id
+            for node in linked_nodes
+        ):
+            continue
+        chunk_id = chunk.get("id")
+        if not chunk_id:
+            continue
+        return {
+            "chunk_id": chunk_id,
+            "chunk_label": chunk.get("label") or "",
+        }
+
+    raise ScenarioFailure(
+        f"source root context for imported root `{imported_root_id}` was not found"
     )
 
 

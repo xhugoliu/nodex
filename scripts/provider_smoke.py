@@ -258,6 +258,7 @@ def run_smoke(
             manifest_path=manifest_path,
             workspace_dir=workspace_dir,
             fixture_path=fixture_path,
+            cite_root_evidence=True,
         )
         effective_node_id = scenario_payload["target_node"]["id"]
     args = [
