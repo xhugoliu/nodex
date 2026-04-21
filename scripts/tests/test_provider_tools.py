@@ -1591,20 +1591,23 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_anthropic_invoke_classifies_http_auth_runtime_error_as_auth(self) -> None:
+        auth_message = STANDARDIZED_COMPAT_AUTH_MESSAGE
+        runtime_error_message = (
+            "Error code: 401 - {'error': {'message': '%s', 'type': '1000'}}"
+            % auth_message
+        )
+
         class FakeStructuredLlm:
             def invoke(self, messages):
                 raise FakeHttpStatusError(
                     status_code=401,
                     body={
                         "error": {
-                            "message": "身份验证失败。",
+                            "message": auth_message,
                             "type": "1000",
                         }
                     },
-                    message=(
-                        "Error code: 401 - {'error': {'message': '身份验证失败。', "
-                        "'type': '1000'}}"
-                    ),
+                    message=runtime_error_message,
                 )
 
         class FakeChatAnthropic:
@@ -1638,7 +1641,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.category, "auth")
         self.assertEqual(ctx.exception.status_code, 401)
-        self.assertIn("身份验证失败", ctx.exception.message)
+        self.assertIn(auth_message, ctx.exception.message)
         self.assertFalse(ctx.exception.retryable)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
