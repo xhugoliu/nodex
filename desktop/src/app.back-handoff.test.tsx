@@ -5394,7 +5394,7 @@ test("App keeps source-backed Review explainability humanized when loading a his
     renderedText,
     /This Review was re-opened from patch run patch-2 \(manual\)\. Inspect it before applying again\./,
   );
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.equal((renderedText.match(/Will link source/g) ?? []).length, 2);
   assert.equal((renderedText.match(/Will link chunk/g) ?? []).length, 2);
   assert.match(renderedText, /Will link source/);
@@ -5540,7 +5540,7 @@ test("App keeps history-loaded citation review humanized after source-detail han
     requireSidePaneProps().patchDraftState.summary,
     "Loaded citation patch from history",
   );
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.equal((renderedText.match(/Will cite/g) ?? []).length, 2);
   assert.match(renderedText, /Source-backed focus/);
   assert.match(renderedText, /Node: Authentication/);
@@ -5694,7 +5694,7 @@ test("App keeps history-loaded source removal review humanized after source-deta
     requireSidePaneProps().patchDraftState.summary,
     "Loaded source removal patch from history",
   );
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.match(renderedText, /Source-backed focus/);
   assert.match(renderedText, /Node: Authentication/);
   assert.match(renderedText, /Source: source\.md/);
@@ -5851,7 +5851,7 @@ test("App keeps source-backed history patches humanized when Recovery loads them
     requireSidePaneProps().patchDraftState.summary,
     "Loaded source patch from history",
   );
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.match(renderedText, /Source-backed focus/);
   assert.match(renderedText, /Node: Authentication/);
   assert.match(renderedText, /Source: source\.md/);
@@ -6001,7 +6001,7 @@ test("App keeps citation history patches humanized when Recovery loads them into
     requireSidePaneProps().patchDraftState.summary,
     "Loaded citation patch from history",
   );
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.match(renderedText, /Source-backed focus/);
   assert.match(renderedText, /Node: Authentication/);
   assert.match(renderedText, /Source: source\.md/);
@@ -6155,7 +6155,7 @@ test("App keeps source-removal history patches humanized when Recovery loads the
     requireSidePaneProps().patchDraftState.summary,
     "Loaded source removal patch from history",
   );
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.match(renderedText, /Will remove citation/);
   assert.match(renderedText, /Will unlink chunk/);
   assert.match(renderedText, /Will unlink source/);
@@ -6759,7 +6759,7 @@ test("App keeps source-backed Review explainability humanized for source link op
   assert.equal(requireSidePaneProps().selectionTab, "review");
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.equal(requireSidePaneProps().selectedSourceDetail?.source.id, "source-1");
-  assert.match(renderedText, /Affected source context/);
+  assert.doesNotMatch(renderedText, /Affected source context/);
   assert.match(renderedText, /Source-backed focus/);
   assert.match(renderedText, /Node: Authentication/);
   assert.match(renderedText, /Source: source\.md/);

@@ -1226,9 +1226,6 @@ function ReviewSurface(props: {
 
         {affectedSourceContext.length ? (
           <div className="space-y-2">
-            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-              {props.t("workbench.reviewAffectedSourceTitle")}
-            </div>
             <div className="space-y-2">
               {affectedSourceContext.map((target) => (
                 <div

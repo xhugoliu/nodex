@@ -614,7 +614,7 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     html,
     /workbench\.reviewSourceFocusCitation \{&quot;kind&quot;:&quot;detail\.citationKindDirect&quot;\}/,
   );
-  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceTitle/);
   assert.match(
     html,
     /workbench\.reviewAffectedSourceNode \{&quot;title&quot;:&quot;Authentication&quot;\}/,
@@ -713,7 +713,7 @@ test("WorkbenchSidePane Review keeps source and source-chunk ops humanized beyon
     reviewDraft: null,
   });
 
-  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceTitle/);
   assert.equal((html.match(/workbench\.reviewAffectedSourceAttachSource/g) ?? []).length, 2);
   assert.equal((html.match(/workbench\.reviewAffectedSourceAttachChunk/g) ?? []).length, 2);
   assert.match(
@@ -920,7 +920,7 @@ test("WorkbenchSidePane Review keeps affected source context visible for uncite 
     reviewDraft: null,
   });
 
-  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceTitle/);
   assert.match(html, /workbench\.reviewAffectedSourceUncite/);
   assert.match(
     html,
@@ -955,7 +955,7 @@ test("WorkbenchSidePane Review falls back to direct evidence why-it-matters for 
     reviewDraft: makeDirectEvidenceReviewDraftWithoutCitationRationale(),
   });
 
-  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceTitle/);
   assert.match(html, /workbench\.reviewAffectedSourceCite/);
   assert.match(
     html,
@@ -1065,7 +1065,7 @@ test("WorkbenchSidePane Review falls back to source-backed rationale for the top
   assert.match(html, /This chunk directly supports the citation patch\./);
   assert.doesNotMatch(html, /detail\.runInspectorRationale/);
   assert.match(html, /workbench\.reviewSourceFocusTitle/);
-  assert.match(html, /workbench\.reviewAffectedSourceTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedSourceTitle/);
 });
 
 test("source-detail handoff clears stale review/apply state before node context renders", () => {
