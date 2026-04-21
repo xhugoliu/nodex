@@ -7,6 +7,16 @@ from ai_contract import RunnerFailure
 
 
 PatchOpsNormalizer = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+RETRYABLE_HTTP_STATUS_CODES = {408, 409, 500, 502, 503, 504}
+QUOTA_ERROR_CODES = {"insufficient_quota", "billing_hard_limit_reached"}
+QUOTA_MESSAGE_TOKENS = (
+    "insufficient quota",
+    "billing hard limit",
+    "insufficient balance",
+    "balance insufficient",
+    "余额不足",
+    "账户余额不足",
+)
 
 
 def normalize_langchain_output(
@@ -132,11 +142,214 @@ def classify_langchain_runtime_failure(
             retryable=True,
         )
 
+    http_failure = classify_http_like_runtime_failure(
+        exc,
+        runner_label=runner_label,
+        detail=detail,
+    )
+    if http_failure is not None:
+        return http_failure
+
     return RunnerFailure(
         category="runner_error",
         message=f"{runner_label} failed: {detail}",
         retryable=False,
     )
+
+
+def classify_http_like_runtime_failure(
+    exc: Exception,
+    *,
+    runner_label: str,
+    detail: str,
+) -> Optional[RunnerFailure]:
+    status_code = extract_exception_status_code(exc)
+    if status_code is None:
+        return None
+
+    payload = extract_exception_payload(exc)
+    message = extract_http_error_message(payload) or detail or "HTTP error"
+    retry_after = extract_exception_retry_after(exc)
+    error_code = extract_http_error_code(payload)
+    error_type = extract_http_error_type(payload)
+
+    if status_code == 401:
+        return RunnerFailure(
+            category="auth",
+            message=f"{runner_label} failed: {message}",
+            retryable=False,
+            status_code=status_code,
+        )
+    if status_code == 403:
+        return RunnerFailure(
+            category="permission",
+            message=f"{runner_label} failed: {message}",
+            retryable=False,
+            status_code=status_code,
+        )
+    if status_code == 429:
+        if is_quota_error_signal(
+            error_code=error_code,
+            error_type=error_type,
+            message=message,
+        ):
+            return RunnerFailure(
+                category="quota",
+                message=f"{runner_label} failed: {message}",
+                retryable=False,
+                status_code=status_code,
+                retry_after=retry_after,
+            )
+        return RunnerFailure(
+            category="rate_limit",
+            message=f"{runner_label} failed: {message}",
+            retryable=True,
+            status_code=status_code,
+            retry_after=retry_after,
+        )
+    if status_code in {400, 404, 422}:
+        category = (
+            "quota"
+            if is_quota_error_signal(
+                error_code=error_code,
+                error_type=error_type,
+                message=message,
+            )
+            else "invalid_request"
+        )
+        return RunnerFailure(
+            category=category,
+            message=f"{runner_label} failed: {message}",
+            retryable=False,
+            status_code=status_code,
+        )
+    if status_code in RETRYABLE_HTTP_STATUS_CODES:
+        return RunnerFailure(
+            category="server_error",
+            message=f"{runner_label} failed: {message}",
+            retryable=True,
+            status_code=status_code,
+            retry_after=retry_after,
+        )
+    return RunnerFailure(
+        category="http_error",
+        message=f"{runner_label} failed: {message}",
+        retryable=False,
+        status_code=status_code,
+    )
+
+
+def extract_exception_status_code(exc: Exception) -> Optional[int]:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+    response = getattr(exc, "response", None)
+    response_status = getattr(response, "status_code", None)
+    if isinstance(response_status, int):
+        return response_status
+    return None
+
+
+def extract_exception_payload(exc: Exception) -> Optional[dict[str, Any]]:
+    for candidate in (
+        getattr(exc, "body", None),
+        extract_response_payload(getattr(exc, "response", None)),
+    ):
+        payload = coerce_json_object(candidate)
+        if payload is not None:
+            return payload
+    return None
+
+
+def extract_response_payload(response: Any) -> Any:
+    if response is None:
+        return None
+    json_method = getattr(response, "json", None)
+    if callable(json_method):
+        try:
+            return json_method()
+        except Exception:
+            pass
+    text = getattr(response, "text", None)
+    if isinstance(text, str):
+        return text
+    return None
+
+
+def coerce_json_object(value: Any) -> Optional[dict[str, Any]]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
+def extract_http_error_message(payload: Optional[dict[str, Any]]) -> Optional[str]:
+    return extract_http_error_field(payload, "message")
+
+
+def extract_http_error_code(payload: Optional[dict[str, Any]]) -> Optional[str]:
+    return extract_http_error_field(payload, "code")
+
+
+def extract_http_error_type(payload: Optional[dict[str, Any]]) -> Optional[str]:
+    return extract_http_error_field(payload, "type")
+
+
+def extract_http_error_field(
+    payload: Optional[dict[str, Any]],
+    field_name: str,
+) -> Optional[str]:
+    if not payload:
+        return None
+    error = payload.get("error")
+    if isinstance(error, dict):
+        value = error.get(field_name)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def is_quota_error_signal(
+    *,
+    error_code: Optional[str],
+    error_type: Optional[str],
+    message: str,
+) -> bool:
+    code = (error_code or "").strip().lower()
+    if code in QUOTA_ERROR_CODES:
+        return True
+    error_type_lower = (error_type or "").strip().lower()
+    if error_type_lower in QUOTA_ERROR_CODES:
+        return True
+    message_lower = message.lower()
+    return any(token in message_lower for token in QUOTA_MESSAGE_TOKENS)
+
+
+def extract_exception_retry_after(exc: Exception) -> Optional[float]:
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return None
+    if isinstance(headers, dict):
+        value = headers.get("Retry-After")
+    else:
+        getter = getattr(headers, "get", None)
+        value = getter("Retry-After") if callable(getter) else None
+    return parse_retry_after(value)
+
+
+def parse_retry_after(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def normalize_contract_response(

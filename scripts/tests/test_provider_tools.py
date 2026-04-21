@@ -245,6 +245,83 @@ def build_anthropic_context() -> AnthropicContext:
     )
 
 
+class FakeHttpResponse:
+    def __init__(self, *, status_code: int, body: dict, headers: Optional[dict] = None):
+        self.status_code = status_code
+        self._body = body
+        self.headers = headers or {}
+        self.text = json.dumps(body)
+
+    def json(self) -> dict:
+        return self._body
+
+
+class FakeHttpStatusError(Exception):
+    def __init__(
+        self,
+        *,
+        status_code: int,
+        body: dict,
+        message: str,
+        headers: Optional[dict] = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.body = body
+        self.response = FakeHttpResponse(
+            status_code=status_code,
+            body=body,
+            headers=headers,
+        )
+
+
+def build_fake_openai_chat_class_for_structured_error(error: Exception):
+    class FakeStructuredLlm:
+        def invoke(self, messages):
+            raise error
+
+    class FakeChatOpenAI:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def with_structured_output(self, schema, method=None):
+            return FakeStructuredLlm()
+
+    return FakeChatOpenAI
+
+
+def capture_openai_invoke_runner_failure(
+    *,
+    node_id: str,
+    error: Exception,
+) -> tuple[RunnerFailure, dict]:
+    metadata = {"used_plain_json_fallback": False}
+
+    with patch.object(
+        langchain_openai_runner_module,
+        "load_langchain_openai_class",
+        return_value=build_fake_openai_chat_class_for_structured_error(error),
+    ), patch.object(
+        langchain_openai_runner_module,
+        "invoke_plain_json_fallback",
+        side_effect=AssertionError("fallback should not be called"),
+    ):
+        try:
+            langchain_openai_runner_module.invoke_langchain_openai(
+                request_payload=build_request_payload(node_id=node_id),
+                api_key=fake_openai_key(),
+                model="gpt-5.4-mini",
+                base_url="https://openai.example/v1",
+                timeout=30,
+                max_retries=1,
+                metadata=metadata,
+            )
+        except RunnerFailure as exc:
+            return exc, metadata
+
+    raise AssertionError("expected invoke_langchain_openai to raise RunnerFailure")
+
+
 class ProviderToolScriptsTests(unittest.TestCase):
     def test_desktop_flow_smoke_defaults_to_openai_provider_route(self) -> None:
         self.assertEqual(DEFAULT_DESKTOP_FLOW_PROVIDER, "openai")
@@ -1354,156 +1431,96 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(evidence["end_line"], 9)
 
     def test_openai_invoke_preserves_auth_failure_without_plain_json_fallback(self) -> None:
-        class FakeStructuredLlm:
-            def invoke(self, messages):
-                raise RunnerFailure(category="auth", message="401 unauthorized")
+        exc, metadata = capture_openai_invoke_runner_failure(
+            node_id="auth-node",
+            error=RunnerFailure(category="auth", message="401 unauthorized"),
+        )
 
-        class FakeChatOpenAI:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-            def with_structured_output(self, schema, method=None):
-                return FakeStructuredLlm()
-
-        metadata = {"used_plain_json_fallback": False}
-
-        with patch.object(
-            langchain_openai_runner_module,
-            "load_langchain_openai_class",
-            return_value=FakeChatOpenAI,
-        ), patch.object(
-            langchain_openai_runner_module,
-            "invoke_plain_json_fallback",
-            side_effect=AssertionError("fallback should not be called"),
-        ):
-            with self.assertRaises(RunnerFailure) as ctx:
-                langchain_openai_runner_module.invoke_langchain_openai(
-                    request_payload=build_request_payload(node_id="auth-node"),
-                    api_key="test-openai-key-123456789012",
-                    model="gpt-5.4-mini",
-                    base_url="https://openai.example/v1",
-                    timeout=30,
-                    max_retries=1,
-                    metadata=metadata,
-                )
-
-        self.assertEqual(ctx.exception.category, "auth")
+        self.assertEqual(exc.category, "auth")
         self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_openai_invoke_wraps_runtime_error_without_plain_json_fallback(self) -> None:
-        class FakeStructuredLlm:
-            def invoke(self, messages):
-                raise RuntimeError("socket closed")
+        exc, metadata = capture_openai_invoke_runner_failure(
+            node_id="runtime-node",
+            error=RuntimeError("socket closed"),
+        )
 
-        class FakeChatOpenAI:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-            def with_structured_output(self, schema, method=None):
-                return FakeStructuredLlm()
-
-        metadata = {"used_plain_json_fallback": False}
-
-        with patch.object(
-            langchain_openai_runner_module,
-            "load_langchain_openai_class",
-            return_value=FakeChatOpenAI,
-        ), patch.object(
-            langchain_openai_runner_module,
-            "invoke_plain_json_fallback",
-            side_effect=AssertionError("fallback should not be called"),
-        ):
-            with self.assertRaises(RunnerFailure) as ctx:
-                langchain_openai_runner_module.invoke_langchain_openai(
-                    request_payload=build_request_payload(node_id="runtime-node"),
-                    api_key="test-openai-key-123456789012",
-                    model="gpt-5.4-mini",
-                    base_url="https://openai.example/v1",
-                    timeout=30,
-                    max_retries=1,
-                    metadata=metadata,
-                )
-
-        self.assertEqual(ctx.exception.category, "runner_error")
-        self.assertIn("socket closed", ctx.exception.message)
+        self.assertEqual(exc.category, "runner_error")
+        self.assertIn("socket closed", exc.message)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_openai_invoke_classifies_connection_error_as_network(self) -> None:
-        class FakeStructuredLlm:
-            def invoke(self, messages):
-                raise RuntimeError("Connection error.")
+        exc, metadata = capture_openai_invoke_runner_failure(
+            node_id="network-node",
+            error=RuntimeError("Connection error."),
+        )
 
-        class FakeChatOpenAI:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
-
-            def with_structured_output(self, schema, method=None):
-                return FakeStructuredLlm()
-
-        metadata = {"used_plain_json_fallback": False}
-
-        with patch.object(
-            langchain_openai_runner_module,
-            "load_langchain_openai_class",
-            return_value=FakeChatOpenAI,
-        ), patch.object(
-            langchain_openai_runner_module,
-            "invoke_plain_json_fallback",
-            side_effect=AssertionError("fallback should not be called"),
-        ):
-            with self.assertRaises(RunnerFailure) as ctx:
-                langchain_openai_runner_module.invoke_langchain_openai(
-                    request_payload=build_request_payload(node_id="network-node"),
-                    api_key=fake_openai_key(),
-                    model="gpt-5.4-mini",
-                    base_url="https://openai.example/v1",
-                    timeout=30,
-                    max_retries=1,
-                    metadata=metadata,
-                )
-
-        self.assertEqual(ctx.exception.category, "network")
-        self.assertIn("Connection error", ctx.exception.message)
-        self.assertTrue(ctx.exception.retryable)
+        self.assertEqual(exc.category, "network")
+        self.assertIn("Connection error", exc.message)
+        self.assertTrue(exc.retryable)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_openai_invoke_classifies_timeout_shaped_connection_error_as_timeout(self) -> None:
-        class FakeStructuredLlm:
-            def invoke(self, messages):
-                raise RuntimeError("Connection error: request timed out")
+        exc, metadata = capture_openai_invoke_runner_failure(
+            node_id="timeout-node",
+            error=RuntimeError("Connection error: request timed out"),
+        )
 
-        class FakeChatOpenAI:
-            def __init__(self, **kwargs):
-                self.kwargs = kwargs
+        self.assertEqual(exc.category, "timeout")
+        self.assertIn("timed out", exc.message)
+        self.assertTrue(exc.retryable)
+        self.assertFalse(metadata["used_plain_json_fallback"])
 
-            def with_structured_output(self, schema, method=None):
-                return FakeStructuredLlm()
+    def test_openai_invoke_classifies_http_quota_shaped_runtime_error_as_quota(
+        self,
+    ) -> None:
+        exc, metadata = capture_openai_invoke_runner_failure(
+            node_id="quota-node",
+            error=FakeHttpStatusError(
+                status_code=400,
+                body={
+                    "error": {
+                        "message": "relay: 账户余额不足",
+                        "type": "invalid_request_error",
+                    }
+                },
+                message=(
+                    "Error code: 400 - {'error': {'message': 'relay: 账户余额不足', "
+                    "'type': 'invalid_request_error'}}"
+                ),
+            ),
+        )
 
-        metadata = {"used_plain_json_fallback": False}
+        self.assertEqual(exc.category, "quota")
+        self.assertEqual(exc.status_code, 400)
+        self.assertIn("账户余额不足", exc.message)
+        self.assertFalse(exc.retryable)
+        self.assertFalse(metadata["used_plain_json_fallback"])
 
-        with patch.object(
-            langchain_openai_runner_module,
-            "load_langchain_openai_class",
-            return_value=FakeChatOpenAI,
-        ), patch.object(
-            langchain_openai_runner_module,
-            "invoke_plain_json_fallback",
-            side_effect=AssertionError("fallback should not be called"),
-        ):
-            with self.assertRaises(RunnerFailure) as ctx:
-                langchain_openai_runner_module.invoke_langchain_openai(
-                    request_payload=build_request_payload(node_id="timeout-node"),
-                    api_key=fake_openai_key(),
-                    model="gpt-5.4-mini",
-                    base_url="https://openai.example/v1",
-                    timeout=30,
-                    max_retries=1,
-                    metadata=metadata,
-                )
+    def test_openai_invoke_classifies_http_invalid_request_runtime_error(
+        self,
+    ) -> None:
+        exc, metadata = capture_openai_invoke_runner_failure(
+            node_id="invalid-request-node",
+            error=FakeHttpStatusError(
+                status_code=400,
+                body={
+                    "error": {
+                        "message": "Prompt field is invalid",
+                        "type": "invalid_request_error",
+                    }
+                },
+                message=(
+                    "Error code: 400 - {'error': {'message': 'Prompt field is invalid', "
+                    "'type': 'invalid_request_error'}}"
+                ),
+            ),
+        )
 
-        self.assertEqual(ctx.exception.category, "timeout")
-        self.assertIn("timed out", ctx.exception.message)
-        self.assertTrue(ctx.exception.retryable)
+        self.assertEqual(exc.category, "invalid_request")
+        self.assertEqual(exc.status_code, 400)
+        self.assertIn("Prompt field is invalid", exc.message)
+        self.assertFalse(exc.retryable)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
     def test_openai_runner_normalizes_root_base_url_to_responses_endpoint(self) -> None:
