@@ -5200,7 +5200,7 @@ test("App wires the lightweight recovery entry through save-snapshot and restore
   });
   assert.equal(requireSidePaneProps().patchDraftState.state, "ready");
   assert.equal(requireSidePaneProps().patchDraftState.summary, "Loaded patch from history");
-  assert.match(dom.container.textContent ?? "", /Affected nodes/);
+  assert.doesNotMatch(dom.container.textContent ?? "", /Affected nodes/);
   assert.match(dom.container.textContent ?? "", /Will update node/);
   assert.match(dom.container.textContent ?? "", /Fields: Body/);
   assert.match(dom.container.textContent ?? "", /Update Authentication/);
@@ -7036,7 +7036,7 @@ test("App keeps tree, canvas, and right rail aligned on the updated node after m
     ),
     "manual draft update should use the current node and edited title",
   );
-  assert.match(dom.container.textContent ?? "", /Affected nodes/);
+  assert.doesNotMatch(dom.container.textContent ?? "", /Affected nodes/);
   assert.match(dom.container.textContent ?? "", /Will update node/);
   assert.match(dom.container.textContent ?? "", /Fields: Title, Body/);
   assert.match(dom.container.textContent ?? "", /New title: Authentication Updated/);
@@ -7488,7 +7488,7 @@ test("App refocuses tree, canvas, and right rail onto the created child after ad
     ),
     "add-child draft should use the selected node as parent and the typed title",
   );
-  assert.match(dom.container.textContent ?? "", /Affected nodes/);
+  assert.doesNotMatch(dom.container.textContent ?? "", /Affected nodes/);
   assert.match(dom.container.textContent ?? "", /Will add node/);
   assert.match(dom.container.textContent ?? "", /Parent: Authentication/);
 

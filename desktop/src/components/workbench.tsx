@@ -1199,33 +1199,28 @@ function ReviewSurface(props: {
 
         {affectedNodes.length ? (
           <div className="space-y-2">
-            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-              {props.t("workbench.reviewAffectedNodesTitle")}
-            </div>
-            <div className="space-y-2">
-              {affectedNodes.map((target) => (
-                <div
-                  key={target.key}
-                  className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
-                      {target.actionLabel}
-                    </span>
-                    <span className="text-sm font-medium text-[color:var(--text)]">
-                      {target.title}
-                    </span>
-                  </div>
-                  {target.metaLines.length ? (
-                    <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
-                      {target.metaLines.map((line) => (
-                        <div key={line}>{line}</div>
-                      ))}
-                    </div>
-                  ) : null}
+            {affectedNodes.map((target) => (
+              <div
+                key={target.key}
+                className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
+                    {target.actionLabel}
+                  </span>
+                  <span className="text-sm font-medium text-[color:var(--text)]">
+                    {target.title}
+                  </span>
                 </div>
-              ))}
-            </div>
+                {target.metaLines.length ? (
+                  <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
+                    {target.metaLines.map((line) => (
+                      <div key={line}>{line}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ))}
           </div>
         ) : null}
 

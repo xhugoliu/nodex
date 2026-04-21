@@ -513,7 +513,7 @@ test("WorkbenchSidePane Review falls back to the current node when the draft doe
   );
   assert.doesNotMatch(html, /workbench\.reviewFocusTitle/);
   assert.match(html, /workbench\.reviewImpactUpdateNode \{&quot;count&quot;:1\}/);
-  assert.match(html, /workbench\.reviewAffectedNodesTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedNodesTitle/);
   assert.match(html, /workbench\.reviewAffectedNodeUpdate/);
   assert.match(
     html,
@@ -549,7 +549,7 @@ test("WorkbenchSidePane Review explains parent scope for add-node drafts", () =>
     reviewDraft: null,
   });
 
-  assert.match(html, /workbench\.reviewAffectedNodesTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedNodesTitle/);
   assert.match(html, /workbench\.reviewAffectedNodeAdd/);
   assert.match(
     html,
@@ -786,7 +786,7 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
     html,
     /workbench\.reviewHistoryOriginBody \{&quot;runId&quot;:&quot;patch-2&quot;,&quot;origin&quot;:&quot;manual&quot;\}/,
   );
-  assert.match(html, /workbench\.reviewAffectedNodesTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewAffectedNodesTitle/);
   assert.match(html, /workbench\.reviewAffectedNodeUpdate/);
   assert.match(
     html,
