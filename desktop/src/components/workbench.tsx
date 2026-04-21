@@ -1348,9 +1348,6 @@ function ReviewSurface(props: {
       ) : null}
 
       <section className={`${cardClass} space-y-3`}>
-        <div className="text-sm font-medium text-[color:var(--text)]">
-          {props.t("workbench.reviewOpsTitle")}
-        </div>
         <div className="space-y-2">
           {props.patchDraftState.ops.map((op, index) => (
             <div

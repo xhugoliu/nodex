@@ -586,7 +586,7 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
     /Use this source-backed citation patch to preserve the current auth evidence\./,
   );
   assert.doesNotMatch(html, /workbench\.reviewEvidenceTitle/);
-  assert.match(html, /workbench\.reviewOpsTitle/);
+  assert.doesNotMatch(html, /workbench\.reviewOpsTitle/);
   assert.doesNotMatch(html, /detail\.runInspectorDirectEvidence/);
   assert.doesNotMatch(html, /detail\.runInspectorPatchPreview/);
   assert.doesNotMatch(html, /detail\.runInspectorRationale/);
@@ -601,6 +601,10 @@ test("WorkbenchSidePane Review surfaces evidence-oriented impact summary when th
   assert.match(
     html,
     /workbench\.reviewSourceFocusSource \{&quot;title&quot;:&quot;source\.md&quot;\}/,
+  );
+  assert.match(
+    html,
+    /composer\.opCiteSourceChunkWithRationale \{&quot;chunk&quot;:&quot;Provider Authentication Flow&quot;,&quot;node&quot;:&quot;Authentication&quot;,&quot;citationKind&quot;:&quot;detail\.citationKindDirect&quot;,&quot;rationale&quot;:&quot;This section explains why the current node should reuse the default auth route\.&quot;\}/,
   );
   assert.match(
     html,
