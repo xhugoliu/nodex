@@ -1590,6 +1590,58 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(ctx.exception.category, "auth")
         self.assertFalse(metadata["used_plain_json_fallback"])
 
+    def test_anthropic_invoke_classifies_http_auth_runtime_error_as_auth(self) -> None:
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise FakeHttpStatusError(
+                    status_code=401,
+                    body={
+                        "error": {
+                            "message": "身份验证失败。",
+                            "type": "1000",
+                        }
+                    },
+                    message=(
+                        "Error code: 401 - {'error': {'message': '身份验证失败。', "
+                        "'type': '1000'}}"
+                    ),
+                )
+
+        class FakeChatAnthropic:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_anthropic_runner_module,
+            "load_langchain_anthropic_class",
+            return_value=FakeChatAnthropic,
+        ), patch.object(
+            langchain_anthropic_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_anthropic_runner_module.invoke_langchain_anthropic(
+                    request_payload=build_request_payload(node_id="anthropic-http-auth-node"),
+                    api_key=fake_anthropic_key(),
+                    model="claude-test",
+                    base_url="https://anthropic.example",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "auth")
+        self.assertEqual(ctx.exception.status_code, 401)
+        self.assertIn("身份验证失败", ctx.exception.message)
+        self.assertFalse(ctx.exception.retryable)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
     def test_anthropic_invoke_wraps_runtime_error_without_plain_json_fallback(self) -> None:
         class FakeStructuredLlm:
             def invoke(self, messages):
