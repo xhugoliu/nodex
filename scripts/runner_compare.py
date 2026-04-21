@@ -484,7 +484,7 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "quality": build_run_quality_summary(run_payload),
         }
     except CommandFailure as exc:
-        failure = classify_run_failure(exc.detail)
+        failure = classify_run_failure(exc.detail, spec=spec)
         return {
             "label": spec["label"],
             "command": spec["command"],
@@ -1453,7 +1453,31 @@ def build_comparison_readiness(
     }
 
 
-def classify_run_failure(detail: str) -> dict:
+def build_standardized_auth_invalid_failure() -> dict:
+    return {
+        "kind": "auth_invalid",
+        "summary": "Provider rejected the configured credentials.",
+        "hint": "Refresh the provider token/key in the environment or `.env.local`, then rerun compare.",
+    }
+
+
+def build_auth_error_failure() -> dict:
+    return {
+        "kind": "auth_error",
+        "summary": "Authentication failed before the runner could complete.",
+        "hint": "Check provider credentials and retry.",
+    }
+
+
+def build_invalid_json_failure() -> dict:
+    return {
+        "kind": "invalid_json",
+        "summary": "Runner completed without valid JSON output.",
+        "hint": "Inspect the runner stdout/stderr and contract response formatting.",
+    }
+
+
+def classify_run_failure(detail: str, *, spec: Optional[dict] = None) -> dict:
     stripped = detail.strip()
     lower = stripped.lower()
     dependency_match = re.search(r"Missing `([^`]+)`", stripped)
@@ -1470,6 +1494,9 @@ def classify_run_failure(detail: str) -> dict:
             "summary": "No provider credentials are configured.",
             "hint": "Run `python3 scripts/provider_doctor.py --provider <provider>` and set the required auth env var.",
         }
+    standardized = classify_standardized_failure(stripped, spec=spec)
+    if standardized is not None:
+        return standardized
     if "[auth]" in stripped and "invalid api key" in lower:
         return {
             "kind": "auth_invalid",
@@ -1477,11 +1504,7 @@ def classify_run_failure(detail: str) -> dict:
             "hint": "Refresh the provider API key in the environment or `.env.local`, then rerun compare.",
         }
     if "[auth]" in stripped:
-        return {
-            "kind": "auth_error",
-            "summary": "Authentication failed before the runner could complete.",
-            "hint": "Check provider credentials and retry.",
-        }
+        return build_auth_error_failure()
     if "[config]" in stripped:
         return {
             "kind": "config_error",
@@ -1489,16 +1512,157 @@ def classify_run_failure(detail: str) -> dict:
             "hint": "Review the runner error detail and local provider/runtime setup.",
         }
     if "command did not return valid json" in lower:
-        return {
-            "kind": "invalid_json",
-            "summary": "Runner completed without valid JSON output.",
-            "hint": "Inspect the runner stdout/stderr and contract response formatting.",
-        }
+        return build_invalid_json_failure()
     return {
         "kind": "runner_error",
         "summary": "Runner failed before compare could collect artifacts.",
         "hint": None,
     }
+
+
+def classify_standardized_failure(
+    detail: str, *, spec: Optional[dict] = None
+) -> Optional[dict]:
+    lower = detail.lower()
+    category = extract_failure_category(detail)
+    status_code = extract_failure_status_code(detail)
+
+    if category == "auth":
+        if status_code == 401 or is_auth_invalid_detail(detail):
+            return build_standardized_auth_invalid_failure()
+        return build_auth_error_failure()
+    if status_code == 401 and is_auth_invalid_detail(detail):
+        return build_standardized_auth_invalid_failure()
+    if category == "server_error":
+        code_text = f" (HTTP {status_code})" if status_code is not None else ""
+        return {
+            "kind": "server_error",
+            "summary": f"Runner hit a retry-exhausted upstream server error{code_text}.",
+            "hint": build_retry_later_hint(spec),
+        }
+    if category == "rate_limit":
+        return {
+            "kind": "rate_limit",
+            "summary": "Runner was throttled before compare could collect artifacts.",
+            "hint": "Wait for provider rate limits to reset, then rerun compare.",
+        }
+    if category == "quota":
+        return {
+            "kind": "quota",
+            "summary": "Runner exhausted provider quota before compare could complete.",
+            "hint": build_quota_hint(spec),
+        }
+    if category == "network":
+        return {
+            "kind": "network",
+            "summary": "Runner hit a network error before compare could collect artifacts.",
+            "hint": "Check network reachability and provider base URL, then rerun compare.",
+        }
+    if category == "timeout":
+        return {
+            "kind": "timeout",
+            "summary": "Runner timed out before compare could collect artifacts.",
+            "hint": "Retry compare later or raise the provider timeout for this lane.",
+        }
+    if category == "permission":
+        return {
+            "kind": "permission",
+            "summary": "Runner was denied permission by the provider.",
+            "hint": "Check provider permissions and model access for the configured credentials.",
+        }
+    if category == "invalid_request":
+        return {
+            "kind": "invalid_request",
+            "summary": "Runner request was rejected as invalid.",
+            "hint": "Inspect the runner error detail and request contract for incompatible fields.",
+        }
+    if category == "http_error":
+        code_text = f" (HTTP {status_code})" if status_code is not None else ""
+        return {
+            "kind": "http_error",
+            "summary": f"Runner returned a non-retryable HTTP error{code_text}.",
+            "hint": "Inspect provider compatibility and request configuration before rerunning compare.",
+        }
+    if category == "parse_error":
+        return build_invalid_json_failure()
+    if category == "schema_error":
+        return {
+            "kind": "schema_error",
+            "summary": "Runner returned output that did not match the Nodex contract.",
+            "hint": "Inspect the runner response payload and normalization path before rerunning compare.",
+        }
+    if category == "refusal":
+        return {
+            "kind": "refusal",
+            "summary": "Runner model refused the request before compare could collect artifacts.",
+            "hint": "Inspect the refusal detail and prompt/contract shape before retrying.",
+        }
+    if category == "runner_error" and "command did not return valid json" in lower:
+        return build_invalid_json_failure()
+    return None
+
+
+def extract_failure_category(detail: str) -> Optional[str]:
+    matches = re.findall(r"\[([a-z_]+)\]", detail)
+    if not matches:
+        return None
+    return matches[-1]
+
+
+def extract_failure_status_code(detail: str) -> Optional[int]:
+    for pattern in (r"HTTP\s+(\d{3})", r"Error code:\s*(\d{3})"):
+        match = re.search(pattern, detail, flags=re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    return None
+
+
+def is_auth_invalid_detail(detail: str) -> bool:
+    lower = detail.lower()
+    return any(
+        token in lower
+        for token in (
+            "invalid api key",
+            "unauthorized",
+            "authentication failed",
+            "credential",
+            "api key",
+        )
+    ) or "\u8eab\u4efd\u9a8c\u8bc1\u5931\u8d25" in detail
+
+
+def build_retry_later_hint(spec: Optional[dict]) -> str:
+    structural_hint = build_structural_regression_hint(spec)
+    if structural_hint is None:
+        return "Retry compare later."
+    return f"Retry compare later. {structural_hint}"
+
+
+def build_quota_hint(spec: Optional[dict]) -> str:
+    structural_hint = build_structural_regression_hint(spec)
+    if structural_hint is None:
+        return "Restore provider quota or billing, then rerun compare."
+    return f"Restore provider quota or billing, then rerun compare. {structural_hint}"
+
+
+def build_structural_regression_hint(spec: Optional[dict]) -> Optional[str]:
+    if not spec or spec.get("offline_substitute") is True:
+        return None
+    if spec.get("source") != "langchain-pilot":
+        return None
+
+    label = spec.get("label")
+    if label in {"openai-minimal", "langchain-openai"}:
+        return (
+            "If you only need structural regression coverage, rerun with "
+            "`--preset-offline openai` or `--preset-offline all`."
+        )
+    if label == "langchain-anthropic":
+        return (
+            "If you only need structural regression coverage for this preset, "
+            "rerun with `--preset-offline all`."
+        )
+    return None
 
 
 def aggregate_failure_metrics(runs: list[dict]) -> dict:

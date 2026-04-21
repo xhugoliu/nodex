@@ -141,6 +141,21 @@ def build_cited_evidence_payload() -> list[dict]:
     ]
 
 
+STANDARDIZED_SERVER_ERROR_DETAIL = "[server_error] HTTP 502: Upstream request failed"
+STANDARDIZED_COMPAT_AUTH_MESSAGE = (
+    "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
+    .encode("utf-8")
+    .decode("unicode_escape")
+)
+
+
+def build_standardized_compat_auth_detail() -> str:
+    return (
+        "[runner_error] LangChain Anthropic runner failed: "
+        f"Error code: 401 - {{'error': {{'message': '{STANDARDIZED_COMPAT_AUTH_MESSAGE}', 'type': '1000'}}}}"
+    )
+
+
 def build_langchain_fallback_request_payload(
     *,
     node_id: str,
@@ -1959,6 +1974,152 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertCountEqual(
             blocked[frozenset(("missing", "auth"))]["blocker_kinds"],
             ["missing_dependency", "auth_invalid"],
+        )
+
+    def test_runner_compare_classifies_standardized_online_failures(self) -> None:
+        server_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_SERVER_ERROR_DETAIL,
+            spec={
+                "label": "openai-minimal",
+                "source": "langchain-pilot",
+                "offline_substitute": False,
+            },
+        )
+        self.assertEqual(server_failure["kind"], "server_error")
+        self.assertIn("HTTP 502", server_failure["summary"])
+        self.assertIn("--preset-offline openai", server_failure["hint"])
+
+        anthropic_server_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_SERVER_ERROR_DETAIL,
+            spec={
+                "label": "langchain-anthropic",
+                "source": "langchain-pilot",
+                "offline_substitute": False,
+            },
+        )
+        self.assertEqual(anthropic_server_failure["hint"], "Retry compare later. If you only need structural regression coverage for this preset, rerun with `--preset-offline all`.")
+
+        explicit_server_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_SERVER_ERROR_DETAIL,
+            spec={
+                "label": "custom-runner",
+                "source": "explicit",
+                "offline_substitute": False,
+            },
+        )
+        self.assertEqual(explicit_server_failure["hint"], "Retry compare later.")
+
+        auth_failure = runner_compare.classify_run_failure(
+            build_standardized_compat_auth_detail()
+        )
+        self.assertEqual(auth_failure["kind"], "auth_invalid")
+        self.assertIn("credentials", auth_failure["summary"].lower())
+        self.assertIn(".env.local", auth_failure["hint"])
+
+    def test_runner_compare_aggregates_server_and_auth_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fake_runner = Path(tmp_dir) / "fake_runner.py"
+            fake_runner.write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env python3",
+                        "import json",
+                        "import os",
+                        "import sys",
+                        "from pathlib import Path",
+                        "",
+                        "mode = sys.argv[1]",
+                        "if mode == 'server-error':",
+                        f"    sys.stderr.write({STANDARDIZED_SERVER_ERROR_DETAIL!r} + '\\n')",
+                        "    raise SystemExit(1)",
+                        "if mode == 'compat-auth-401':",
+                        f"    sys.stderr.write({build_standardized_compat_auth_detail()!r} + '\\n')",
+                        "    raise SystemExit(1)",
+                        "request = json.loads(Path(os.environ['NODEX_AI_REQUEST']).read_text())",
+                        "response = {",
+                        "    'version': request['contract']['version'],",
+                        "    'kind': request['contract']['response_kind'],",
+                        "    'capability': request['capability'],",
+                        "    'request_node_id': request['target_node']['id'],",
+                        "    'status': 'ok',",
+                        "    'summary': request['target_node']['title'],",
+                        "    'explanation': {",
+                        "        'rationale_summary': request['target_node']['title'],",
+                        "        'direct_evidence': [],",
+                        "        'inferred_suggestions': [],",
+                        "    },",
+                        "    'generator': {",
+                        "        'provider': 'fake_runner',",
+                        "        'model': mode,",
+                        "        'run_id': request['target_node']['id'],",
+                        "    },",
+                        "    'patch': {",
+                        "        'version': request['contract']['patch_version'],",
+                        "        'summary': request['target_node']['title'],",
+                        "        'ops': [",
+                        "            {",
+                        "                'type': 'add_node',",
+                        "                'parent_id': request['target_node']['id'],",
+                        "                'title': 'Success Branch',",
+                        "                'kind': 'topic',",
+                        "                'body': 'Generated by success runner',",
+                        "            }",
+                        "        ],",
+                        "    },",
+                        "    'notes': [],",
+                        "}",
+                        "Path(os.environ['NODEX_AI_RESPONSE']).write_text(json.dumps(response, indent=2))",
+                    ]
+                )
+            )
+            success_command = shlex.join([sys.executable, str(fake_runner), "success"])
+            server_command = shlex.join([sys.executable, str(fake_runner), "server-error"])
+            auth_command = shlex.join([sys.executable, str(fake_runner), "compat-auth-401"])
+
+            result = run_script(
+                "scripts/runner_compare.py",
+                "--json",
+                "--scenario",
+                "source-root",
+                "--fixture",
+                str(FIXTURE_PATH),
+                "--runner",
+                f"success={success_command}",
+                "--runner",
+                f"server={server_command}",
+                "--runner",
+                f"auth={auth_command}",
+            )
+
+        self.assertEqual(result.returncode, 1, result.stderr)
+        payload = json.loads(result.stdout)
+        failed = {item["label"]: item for item in payload["runs"] if item["status"] == "failed"}
+        self.assertEqual(failed["server"]["failure_kind"], "server_error")
+        self.assertEqual(failed["server"]["failure_hint"], "Retry compare later.")
+        self.assertEqual(failed["auth"]["failure_kind"], "auth_invalid")
+        self.assertEqual(
+            payload["failure_metrics"]["counts"],
+            {"auth_invalid": 1, "server_error": 1},
+        )
+        self.assertEqual(
+            payload["comparison_readiness"]["blocker_counts"],
+            {"auth_invalid": 2, "server_error": 2},
+        )
+        blocked = {
+            frozenset((item["left_label"], item["right_label"])): item
+            for item in payload["blocked_comparisons"]
+        }
+        self.assertEqual(
+            blocked[frozenset(("success", "server"))]["blocker_kinds"],
+            ["server_error"],
+        )
+        self.assertEqual(
+            blocked[frozenset(("success", "auth"))]["blocker_kinds"],
+            ["auth_invalid"],
+        )
+        self.assertCountEqual(
+            blocked[frozenset(("server", "auth"))]["blocker_kinds"],
+            ["server_error", "auth_invalid"],
         )
 
     def test_runner_compare_can_compare_two_fake_runners(self) -> None:
