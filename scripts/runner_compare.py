@@ -511,6 +511,7 @@ def run_one_runner(*, workspace_dir: Path, node_id: str, spec: dict) -> dict:
             "failure_kind": failure["kind"],
             "failure_summary": failure["summary"],
             "failure_hint": failure["hint"],
+            "failure_source": failure.get("source"),
         }
 
 
@@ -648,6 +649,28 @@ def load_latest_failed_run_record(
     return matches[0]
 
 
+def with_failure_source(failure: dict, source: str) -> dict:
+    return {
+        **failure,
+        "source": source,
+    }
+
+
+def format_failure_provenance_text(
+    failure_source: Optional[str], failed_run_id: Optional[str]
+) -> str:
+    parts: list[str] = []
+    if failure_source == "history_metadata":
+        parts.append("classified from history metadata")
+    elif failure_source == "stderr":
+        parts.append("classified from stderr")
+    elif failure_source:
+        parts.append(f"classified from {failure_source}")
+    if failed_run_id:
+        parts.append(f"failed run {failed_run_id}")
+    return "; ".join(parts) or "unknown"
+
+
 def print_text_report(result: dict) -> None:
     print(f"Workspace: {result['workspace_dir']}")
     print(f"Scenario: {result['scenario']}")
@@ -693,6 +716,11 @@ def print_text_report(result: dict) -> None:
                 print(f"  blocker: {item['failure_kind']}")
             if item.get("failure_summary"):
                 print(f"  summary: {item['failure_summary']}")
+            if item.get("failure_source") or item.get("failed_run_id"):
+                print(
+                    "  provenance: "
+                    f"{format_failure_provenance_text(item.get('failure_source'), item.get('failed_run_id'))}"
+                )
             if item.get("failure_hint"):
                 print(f"  hint: {item['failure_hint']}")
             continue
@@ -725,6 +753,11 @@ def print_text_report(result: dict) -> None:
                     print(f"  blocker: {label} -> {kind}")
                     if blocker.get("summary"):
                         print(f"  summary: {blocker['summary']}")
+                    if blocker.get("failure_source") or blocker.get("failed_run_id"):
+                        print(
+                            "  provenance: "
+                            f"{format_failure_provenance_text(blocker.get('failure_source'), blocker.get('failed_run_id'))}"
+                        )
         return
 
     print()
@@ -775,6 +808,11 @@ def print_text_report(result: dict) -> None:
                 print(f"  blocker: {label} -> {kind}")
                 if blocker.get("summary"):
                     print(f"  summary: {blocker['summary']}")
+                if blocker.get("failure_source") or blocker.get("failed_run_id"):
+                    print(
+                        "  provenance: "
+                        f"{format_failure_provenance_text(blocker.get('failure_source'), blocker.get('failed_run_id'))}"
+                    )
 
 
 def print_fixture_set_report(result: dict) -> None:
@@ -988,6 +1026,8 @@ def build_runner_blocker(run: dict) -> dict:
         "kind": run.get("failure_kind"),
         "summary": run.get("failure_summary"),
         "hint": run.get("failure_hint"),
+        "failed_run_id": run.get("failed_run_id"),
+        "failure_source": run.get("failure_source"),
     }
 
 
@@ -1571,45 +1611,56 @@ def classify_run_failure(
     spec: Optional[dict] = None,
     failed_run_record: Optional[dict] = None,
 ) -> dict:
+    def stderr_failure(failure: dict) -> dict:
+        return with_failure_source(failure, "stderr")
+
     stripped = detail.strip()
     lower = stripped.lower()
     dependency_match = re.search(r"Missing `([^`]+)`", stripped)
     if dependency_match:
         package = dependency_match.group(1)
-        return {
-            "kind": "missing_dependency",
-            "summary": f"Missing Python package: {package}",
-            "hint": f"Install it with `python3 -m pip install -U {package}`.",
-        }
+        return stderr_failure(
+            {
+                "kind": "missing_dependency",
+                "summary": f"Missing Python package: {package}",
+                "hint": f"Install it with `python3 -m pip install -U {package}`.",
+            }
+        )
     if "[preflight]" in stripped and "no configured auth" in lower:
-        return build_auth_missing_failure()
+        return stderr_failure(build_auth_missing_failure())
     recorded = classify_recorded_failure(failed_run_record, spec=spec)
     if recorded is not None:
-        return recorded
+        return with_failure_source(recorded, "history_metadata")
     standardized = classify_standardized_failure(stripped, spec=spec)
     if standardized is not None:
-        return standardized
+        return stderr_failure(standardized)
     if "[auth]" in stripped and "invalid api key" in lower:
-        return {
-            "kind": "auth_invalid",
-            "summary": "Provider rejected the configured API key.",
-            "hint": "Refresh the provider API key in the environment or `.env.local`, then rerun compare.",
-        }
+        return stderr_failure(
+            {
+                "kind": "auth_invalid",
+                "summary": "Provider rejected the configured API key.",
+                "hint": "Refresh the provider API key in the environment or `.env.local`, then rerun compare.",
+            }
+        )
     if "[auth]" in stripped:
-        return build_auth_error_failure()
+        return stderr_failure(build_auth_error_failure())
     if "[config]" in stripped:
-        return {
-            "kind": "config_error",
-            "summary": "Runner configuration is incomplete or incompatible.",
-            "hint": "Review the runner error detail and local provider/runtime setup.",
-        }
+        return stderr_failure(
+            {
+                "kind": "config_error",
+                "summary": "Runner configuration is incomplete or incompatible.",
+                "hint": "Review the runner error detail and local provider/runtime setup.",
+            }
+        )
     if "command did not return valid json" in lower:
-        return build_invalid_json_failure()
-    return {
-        "kind": "runner_error",
-        "summary": "Runner failed before compare could collect artifacts.",
-        "hint": None,
-    }
+        return stderr_failure(build_invalid_json_failure())
+    return stderr_failure(
+        {
+            "kind": "runner_error",
+            "summary": "Runner failed before compare could collect artifacts.",
+            "hint": None,
+        }
+    )
 
 
 def classify_recorded_failure(

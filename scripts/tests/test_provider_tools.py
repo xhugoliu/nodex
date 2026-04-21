@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import re
@@ -6,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from typing import Optional
 from unittest.mock import patch
@@ -1952,7 +1954,9 @@ class ProviderToolScriptsTests(unittest.TestCase):
         failed = {item["label"]: item for item in payload["runs"] if item["status"] == "failed"}
         self.assertEqual(failed["missing"]["failure_kind"], "missing_dependency")
         self.assertIn("langchain-openai", failed["missing"]["failure_summary"])
+        self.assertEqual(failed["missing"]["failure_source"], "stderr")
         self.assertEqual(failed["auth"]["failure_kind"], "auth_invalid")
+        self.assertEqual(failed["auth"]["failure_source"], "history_metadata")
         self.assertEqual(
             payload["failure_metrics"]["counts"],
             {"auth_invalid": 1, "missing_dependency": 1},
@@ -1981,10 +1985,14 @@ class ProviderToolScriptsTests(unittest.TestCase):
             blocked[frozenset(("success", "missing"))]["blocker_kinds"],
             ["missing_dependency"],
         )
+        missing_blocker = blocked[frozenset(("success", "missing"))]["blocked_by"][0]
+        self.assertEqual(missing_blocker["failure_source"], "stderr")
         self.assertEqual(
             blocked[frozenset(("success", "auth"))]["blocker_kinds"],
             ["auth_invalid"],
         )
+        auth_blocker = blocked[frozenset(("success", "auth"))]["blocked_by"][0]
+        self.assertEqual(auth_blocker["failure_source"], "history_metadata")
         self.assertCountEqual(
             blocked[frozenset(("missing", "auth"))]["blocker_kinds"],
             ["missing_dependency", "auth_invalid"],
@@ -2216,6 +2224,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertIsNotNone(failed["failed_run_id"])
         self.assertEqual(failed["failure_kind"], "server_error")
+        self.assertEqual(failed["failure_source"], "history_metadata")
         self.assertEqual(
             failed["failure_summary"],
             "Runner hit a retry-exhausted upstream server error (HTTP 502).",
@@ -2230,6 +2239,8 @@ class ProviderToolScriptsTests(unittest.TestCase):
             item for item in blocked["blocked_by"] if item["label"] == "metadata"
         )
         self.assertEqual(blocker["kind"], "server_error")
+        self.assertEqual(blocker["failure_source"], "history_metadata")
+        self.assertEqual(blocker["failed_run_id"], failed["failed_run_id"])
 
     def test_runner_compare_ignores_preexisting_failed_run_matches(self) -> None:
         command = "python3 fake_runner.py repeated-failure"
@@ -2272,6 +2283,170 @@ class ProviderToolScriptsTests(unittest.TestCase):
             failed_run_record=failed_run_record,
         )
         self.assertEqual(failure["kind"], "missing_dependency")
+        self.assertEqual(failure["source"], "stderr")
+
+    def test_runner_compare_text_report_surfaces_failure_provenance(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            runner_compare.print_text_report(
+                {
+                    "workspace_dir": "/tmp/nodex-compare",
+                    "scenario": "source-root",
+                    "node_id": "root",
+                    "successful_runs": 1,
+                    "failed_runs": 1,
+                    "runner_count": 2,
+                    "runs": [
+                        {
+                            "label": "success",
+                            "command": "python3 success.py",
+                            "status": "ok",
+                            "run_id": "run-ok",
+                            "metadata": {"provider": "fake", "model": "ok"},
+                            "report": {
+                                "explanation": {"rationale_summary": "ok"},
+                                "report": {"summary": "ok"},
+                            },
+                            "quality": {
+                                "used_plain_json_fallback": False,
+                                "normalization_note_count": 0,
+                            },
+                        },
+                        {
+                            "label": "metadata",
+                            "command": "python3 fail.py",
+                            "status": "failed",
+                            "error": "runner crashed without structured stderr",
+                            "failed_run_id": "run-failed",
+                            "failure_kind": "server_error",
+                            "failure_summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                            "failure_hint": "Retry compare later.",
+                            "failure_source": "history_metadata",
+                        },
+                    ],
+                    "comparisons": [],
+                    "blocked_comparisons": [
+                        {
+                            "left_label": "success",
+                            "right_label": "metadata",
+                            "status": "blocked",
+                            "blocked_by": [
+                                {
+                                    "label": "metadata",
+                                    "kind": "server_error",
+                                    "summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                                    "failed_run_id": "run-failed",
+                                    "failure_source": "history_metadata",
+                                }
+                            ],
+                            "blocker_kinds": ["server_error"],
+                        }
+                    ],
+                    "comparison_readiness": {
+                        "status": "blocked",
+                        "comparable_pairs": 0,
+                        "blocked_pairs": 1,
+                    },
+                    "failure_metrics": {"counts": {"server_error": 1}},
+                    "comparison_metrics": {},
+                }
+            )
+        rendered = buffer.getvalue()
+        self.assertIn(
+            "provenance: classified from history metadata; failed run run-failed",
+            rendered,
+        )
+
+    def test_runner_compare_text_report_surfaces_blocked_provenance_in_partial_mode(
+        self,
+    ) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            runner_compare.print_text_report(
+                {
+                    "workspace_dir": "/tmp/nodex-compare",
+                    "scenario": "source-root",
+                    "node_id": "root",
+                    "successful_runs": 1,
+                    "failed_runs": 1,
+                    "runner_count": 2,
+                    "runs": [
+                        {
+                            "label": "success",
+                            "command": "python3 success.py",
+                            "status": "ok",
+                            "run_id": "run-ok",
+                            "metadata": {"provider": "fake", "model": "ok"},
+                            "report": {
+                                "explanation": {"rationale_summary": "ok"},
+                                "report": {"summary": "ok"},
+                            },
+                            "quality": {
+                                "used_plain_json_fallback": False,
+                                "normalization_note_count": 0,
+                            },
+                        },
+                        {
+                            "label": "metadata",
+                            "command": "python3 fail.py",
+                            "status": "failed",
+                            "error": "runner crashed without structured stderr",
+                            "failed_run_id": "run-failed",
+                            "failure_kind": "server_error",
+                            "failure_summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                            "failure_hint": "Retry compare later.",
+                            "failure_source": "history_metadata",
+                        },
+                    ],
+                    "comparisons": [
+                        {
+                            "left_label": "success",
+                            "right_label": "other-success",
+                            "status": "ok",
+                            "comparison": {
+                                "same_used_plain_json_fallback": True,
+                                "same_normalization_notes": True,
+                                "same_rationale_summary": True,
+                                "same_patch_summary": True,
+                                "same_patch_preview": True,
+                                "same_response_notes": True,
+                                "difference_kinds": [],
+                            },
+                            "difference_details": {},
+                        }
+                    ],
+                    "blocked_comparisons": [
+                        {
+                            "left_label": "success",
+                            "right_label": "metadata",
+                            "status": "blocked",
+                            "blocked_by": [
+                                {
+                                    "label": "metadata",
+                                    "kind": "server_error",
+                                    "summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                                    "failed_run_id": "run-failed",
+                                    "failure_source": "history_metadata",
+                                }
+                            ],
+                            "blocker_kinds": ["server_error"],
+                        }
+                    ],
+                    "comparison_readiness": {
+                        "status": "partial",
+                        "comparable_pairs": 1,
+                        "blocked_pairs": 1,
+                    },
+                    "failure_metrics": {"counts": {"server_error": 1}},
+                    "comparison_metrics": {"compared_pairs": 1, "differing_pairs": 0},
+                }
+            )
+        rendered = buffer.getvalue()
+        self.assertIn("[blocked comparisons]", rendered)
+        self.assertIn(
+            "provenance: classified from history metadata; failed run run-failed",
+            rendered,
+        )
 
     def test_runner_compare_can_compare_two_fake_runners(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -116,6 +116,9 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - 汇总 runner pair 是否可比较、哪里被 blocker 卡住
 - 给出 patch / explanation / normalization 的结构级差异摘要
 - 输出 machine-readable 的 readiness / metrics / difference kinds，方便回归和对照
+- 对失败 lane，额外保留最小 provenance：
+  `failure_source` 会说明分类来自 `history_metadata` 还是 `stderr`；
+  如果当前工作区历史里能定位到对应的 failed run，也会继续带出 `failed_run_id`，并在线路被 blocker 卡住时透传到 blocked-comparison payload / 文本报告里
 
 如果想在本地缺少 OpenAI 依赖或凭据时继续做 preset compare，也可以显式用：
 
