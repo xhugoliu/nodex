@@ -2295,6 +2295,21 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(failure["source"], "stderr")
 
+    def test_runner_compare_classifies_invalid_json_fallback_from_stderr(self) -> None:
+        failure = runner_compare.classify_run_failure(
+            "[runner] Command did not return valid JSON output."
+        )
+        self.assertEqual(failure["kind"], "invalid_json")
+        self.assertEqual(
+            failure["summary"],
+            "Runner completed without valid JSON output.",
+        )
+        self.assertEqual(
+            failure["hint"],
+            "Inspect the runner stdout/stderr and contract response formatting.",
+        )
+        self.assertEqual(failure["source"], "stderr")
+
     def test_runner_compare_aggregates_server_and_auth_blockers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fake_runner = Path(tmp_dir) / "fake_runner.py"
