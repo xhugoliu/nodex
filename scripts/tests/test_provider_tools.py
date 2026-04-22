@@ -146,6 +146,9 @@ def build_cited_evidence_payload() -> list[dict]:
 STANDARDIZED_SERVER_ERROR_DETAIL = "[server_error] HTTP 502: Upstream request failed"
 STANDARDIZED_RATE_LIMIT_DETAIL = "[rate_limit] HTTP 429: Too many requests"
 STANDARDIZED_PERMISSION_DETAIL = "[permission] HTTP 403: Access denied"
+STANDARDIZED_INVALID_REQUEST_DETAIL = (
+    "[invalid_request] HTTP 400: Request contract contains incompatible fields"
+)
 STANDARDIZED_COMPAT_AUTH_MESSAGE = (
     "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
     .encode("utf-8")
@@ -2190,6 +2193,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Check provider permissions and model access for the configured credentials.",
         )
         self.assertEqual(permission_failure["source"], "stderr")
+
+        invalid_request_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_INVALID_REQUEST_DETAIL
+        )
+        self.assertEqual(invalid_request_failure["kind"], "invalid_request")
+        self.assertEqual(
+            invalid_request_failure["summary"],
+            "Runner request was rejected as invalid.",
+        )
+        self.assertEqual(
+            invalid_request_failure["hint"],
+            "Inspect the runner error detail and request contract for incompatible fields.",
+        )
+        self.assertEqual(invalid_request_failure["source"], "stderr")
 
         auth_failure = runner_compare.classify_run_failure(
             build_standardized_compat_auth_detail()
