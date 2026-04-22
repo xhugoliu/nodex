@@ -2338,6 +2338,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(failure["source"], "stderr")
 
+    def test_runner_compare_classifies_runner_error_fallback_from_generic_stderr(
+        self,
+    ) -> None:
+        failure = runner_compare.classify_run_failure(
+            "[runner] Process exited with status 17 while preparing result bundle."
+        )
+        self.assertEqual(failure["kind"], "runner_error")
+        self.assertEqual(
+            failure["summary"],
+            "Runner failed before compare could collect artifacts.",
+        )
+        self.assertIsNone(failure["hint"])
+        self.assertEqual(failure["source"], "stderr")
+
     def test_runner_compare_aggregates_server_and_auth_blockers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fake_runner = Path(tmp_dir) / "fake_runner.py"
