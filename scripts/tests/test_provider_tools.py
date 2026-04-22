@@ -2295,6 +2295,27 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(failure["source"], "stderr")
 
+    def test_runner_compare_classifies_schema_error_from_failed_run_metadata(
+        self,
+    ) -> None:
+        failure = runner_compare.classify_run_failure(
+            "[runner] Process exited with status 17 while preparing result bundle.",
+            failed_run_record=build_history_backed_failure_metadata(
+                category="schema_error",
+                message="Normalized contract response missing required `patch` object.",
+            ),
+        )
+        self.assertEqual(failure["kind"], "schema_error")
+        self.assertEqual(
+            failure["summary"],
+            "Runner returned output that did not match the Nodex contract.",
+        )
+        self.assertEqual(
+            failure["hint"],
+            "Inspect the runner response payload and normalization path before rerunning compare.",
+        )
+        self.assertEqual(failure["source"], "history_metadata")
+
     def test_runner_compare_classifies_auth_missing_fallback_from_stderr(self) -> None:
         failure = runner_compare.classify_run_failure(
             "[preflight] Runner has no configured auth for this provider."
