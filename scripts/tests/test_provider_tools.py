@@ -2295,6 +2295,21 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(failure["source"], "stderr")
 
+    def test_runner_compare_classifies_auth_missing_fallback_from_stderr(self) -> None:
+        failure = runner_compare.classify_run_failure(
+            "[preflight] Runner has no configured auth for this provider."
+        )
+        self.assertEqual(failure["kind"], "auth_missing")
+        self.assertEqual(
+            failure["summary"],
+            "No provider credentials are configured.",
+        )
+        self.assertEqual(
+            failure["hint"],
+            "Run `python3 scripts/provider_doctor.py --provider <provider>` and set the required auth env var.",
+        )
+        self.assertEqual(failure["source"], "stderr")
+
     def test_runner_compare_classifies_invalid_json_fallback_from_stderr(self) -> None:
         failure = runner_compare.classify_run_failure(
             "[runner] Command did not return valid JSON output."
