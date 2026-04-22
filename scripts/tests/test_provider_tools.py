@@ -145,6 +145,7 @@ def build_cited_evidence_payload() -> list[dict]:
 
 STANDARDIZED_SERVER_ERROR_DETAIL = "[server_error] HTTP 502: Upstream request failed"
 STANDARDIZED_RATE_LIMIT_DETAIL = "[rate_limit] HTTP 429: Too many requests"
+STANDARDIZED_PERMISSION_DETAIL = "[permission] HTTP 403: Access denied"
 STANDARDIZED_COMPAT_AUTH_MESSAGE = (
     "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
     .encode("utf-8")
@@ -2175,6 +2176,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Wait for provider rate limits to reset, then rerun compare.",
         )
         self.assertEqual(rate_limit_failure["source"], "stderr")
+
+        permission_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_PERMISSION_DETAIL
+        )
+        self.assertEqual(permission_failure["kind"], "permission")
+        self.assertEqual(
+            permission_failure["summary"],
+            "Runner was denied permission by the provider.",
+        )
+        self.assertEqual(
+            permission_failure["hint"],
+            "Check provider permissions and model access for the configured credentials.",
+        )
+        self.assertEqual(permission_failure["source"], "stderr")
 
         auth_failure = runner_compare.classify_run_failure(
             build_standardized_compat_auth_detail()
