@@ -2338,6 +2338,27 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(failure["source"], "history_metadata")
 
+    def test_runner_compare_classifies_parse_error_from_failed_run_metadata(
+        self,
+    ) -> None:
+        failure = runner_compare.classify_run_failure(
+            GENERIC_RUNNER_BUNDLE_ERROR_DETAIL,
+            failed_run_record=build_history_backed_failure_metadata(
+                category="parse_error",
+                message="model output was not valid JSON: Expecting value",
+            ),
+        )
+        self.assertEqual(failure["kind"], "invalid_json")
+        self.assertEqual(
+            failure["summary"],
+            "Runner completed without valid JSON output.",
+        )
+        self.assertEqual(
+            failure["hint"],
+            "Inspect the runner stdout/stderr and contract response formatting.",
+        )
+        self.assertEqual(failure["source"], "history_metadata")
+
     def test_runner_compare_classifies_auth_missing_fallback_from_stderr(self) -> None:
         failure = runner_compare.classify_run_failure(
             "[preflight] Runner has no configured auth for this provider."
