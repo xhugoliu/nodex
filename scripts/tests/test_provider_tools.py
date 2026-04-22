@@ -150,6 +150,7 @@ STANDARDIZED_INVALID_REQUEST_DETAIL = (
     "[invalid_request] HTTP 400: Request contract contains incompatible fields"
 )
 STANDARDIZED_HTTP_ERROR_DETAIL = "[http_error] HTTP 404: Resource not found"
+STANDARDIZED_NETWORK_DETAIL = "[network] Connection error while contacting provider"
 STANDARDIZED_TIMEOUT_DETAIL = "[timeout] Runner request timed out"
 STANDARDIZED_COMPAT_AUTH_MESSAGE = (
     "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
@@ -2223,6 +2224,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Inspect provider compatibility and request configuration before rerunning compare.",
         )
         self.assertEqual(http_error_failure["source"], "stderr")
+
+        network_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_NETWORK_DETAIL
+        )
+        self.assertEqual(network_failure["kind"], "network")
+        self.assertEqual(
+            network_failure["summary"],
+            "Runner hit a network error before compare could collect artifacts.",
+        )
+        self.assertEqual(
+            network_failure["hint"],
+            "Check network reachability and provider base URL, then rerun compare.",
+        )
+        self.assertEqual(network_failure["source"], "stderr")
 
         timeout_failure = runner_compare.classify_run_failure(
             STANDARDIZED_TIMEOUT_DETAIL
