@@ -2310,6 +2310,19 @@ class ProviderToolScriptsTests(unittest.TestCase):
         )
         self.assertEqual(failure["source"], "stderr")
 
+    def test_runner_compare_classifies_auth_error_fallback_from_preset_runner_stderr(
+        self,
+    ) -> None:
+        failure = runner_compare.classify_run_failure(
+            "[auth] OPENAI_API_KEY is missing. Set it in the environment or in "
+            ".env.local next to the repo."
+        )
+        expected = runner_compare.build_auth_error_failure()
+        self.assertEqual(failure["kind"], "auth_error")
+        self.assertEqual(failure["summary"], expected["summary"])
+        self.assertEqual(failure["hint"], expected["hint"])
+        self.assertEqual(failure["source"], "stderr")
+
     def test_runner_compare_classifies_invalid_json_fallback_from_stderr(self) -> None:
         failure = runner_compare.classify_run_failure(
             "[runner] Command did not return valid JSON output."
