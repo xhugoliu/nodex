@@ -1645,6 +1645,64 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertFalse(ctx.exception.retryable)
         self.assertFalse(metadata["used_plain_json_fallback"])
 
+    def test_anthropic_invoke_classifies_http_rate_limit_runtime_error(self) -> None:
+        rate_limit_message = "Too many requests, retry later."
+
+        class FakeStructuredLlm:
+            def invoke(self, messages):
+                raise FakeHttpStatusError(
+                    status_code=429,
+                    body={
+                        "error": {
+                            "message": rate_limit_message,
+                            "type": "rate_limit_error",
+                        }
+                    },
+                    message=(
+                        "Error code: 429 - {'error': {'message': "
+                        f"'{rate_limit_message}', 'type': 'rate_limit_error'}}"
+                    ),
+                    headers={"Retry-After": "2"},
+                )
+
+        class FakeChatAnthropic:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def with_structured_output(self, schema):
+                return FakeStructuredLlm()
+
+        metadata = {"used_plain_json_fallback": False}
+
+        with patch.object(
+            langchain_anthropic_runner_module,
+            "load_langchain_anthropic_class",
+            return_value=FakeChatAnthropic,
+        ), patch.object(
+            langchain_anthropic_runner_module,
+            "invoke_plain_json_fallback",
+            side_effect=AssertionError("fallback should not be called"),
+        ):
+            with self.assertRaises(RunnerFailure) as ctx:
+                langchain_anthropic_runner_module.invoke_langchain_anthropic(
+                    request_payload=build_request_payload(
+                        node_id="anthropic-rate-limit-node"
+                    ),
+                    api_key=fake_anthropic_key(),
+                    model="claude-test",
+                    base_url="https://anthropic.example",
+                    timeout=30,
+                    max_retries=1,
+                    metadata=metadata,
+                )
+
+        self.assertEqual(ctx.exception.category, "rate_limit")
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertIn(rate_limit_message, ctx.exception.message)
+        self.assertTrue(ctx.exception.retryable)
+        self.assertEqual(ctx.exception.retry_after, 2.0)
+        self.assertFalse(metadata["used_plain_json_fallback"])
+
     def test_anthropic_invoke_wraps_runtime_error_without_plain_json_fallback(self) -> None:
         class FakeStructuredLlm:
             def invoke(self, messages):
