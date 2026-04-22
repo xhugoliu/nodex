@@ -153,6 +153,9 @@ STANDARDIZED_INVALID_REQUEST_DETAIL = (
 STANDARDIZED_HTTP_ERROR_DETAIL = "[http_error] HTTP 404: Resource not found"
 STANDARDIZED_NETWORK_DETAIL = "[network] Connection error while contacting provider"
 STANDARDIZED_TIMEOUT_DETAIL = "[timeout] Runner request timed out"
+GENERIC_RUNNER_BUNDLE_ERROR_DETAIL = (
+    "[runner] Process exited with status 17 while preparing result bundle."
+)
 STANDARDIZED_COMPAT_AUTH_MESSAGE = (
     "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
     .encode("utf-8")
@@ -2299,7 +2302,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self,
     ) -> None:
         failure = runner_compare.classify_run_failure(
-            "[runner] Process exited with status 17 while preparing result bundle.",
+            GENERIC_RUNNER_BUNDLE_ERROR_DETAIL,
             failed_run_record=build_history_backed_failure_metadata(
                 category="schema_error",
                 message="Normalized contract response missing required `patch` object.",
@@ -2313,6 +2316,25 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(
             failure["hint"],
             "Inspect the runner response payload and normalization path before rerunning compare.",
+        )
+        self.assertEqual(failure["source"], "history_metadata")
+
+    def test_runner_compare_classifies_refusal_from_failed_run_metadata(self) -> None:
+        failure = runner_compare.classify_run_failure(
+            GENERIC_RUNNER_BUNDLE_ERROR_DETAIL,
+            failed_run_record=build_history_backed_failure_metadata(
+                category="refusal",
+                message="model refused the request: safety policy refusal",
+            ),
+        )
+        self.assertEqual(failure["kind"], "refusal")
+        self.assertEqual(
+            failure["summary"],
+            "Runner model refused the request before compare could collect artifacts.",
+        )
+        self.assertEqual(
+            failure["hint"],
+            "Inspect the refusal detail and prompt/contract shape before retrying.",
         )
         self.assertEqual(failure["source"], "history_metadata")
 
@@ -2362,9 +2384,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
     def test_runner_compare_classifies_runner_error_fallback_from_generic_stderr(
         self,
     ) -> None:
-        failure = runner_compare.classify_run_failure(
-            "[runner] Process exited with status 17 while preparing result bundle."
-        )
+        failure = runner_compare.classify_run_failure(GENERIC_RUNNER_BUNDLE_ERROR_DETAIL)
         self.assertEqual(failure["kind"], "runner_error")
         self.assertEqual(
             failure["summary"],
