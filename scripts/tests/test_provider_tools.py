@@ -145,6 +145,7 @@ def build_cited_evidence_payload() -> list[dict]:
 
 STANDARDIZED_SERVER_ERROR_DETAIL = "[server_error] HTTP 502: Upstream request failed"
 STANDARDIZED_RATE_LIMIT_DETAIL = "[rate_limit] HTTP 429: Too many requests"
+STANDARDIZED_QUOTA_DETAIL = "[quota] HTTP 429: Insufficient balance"
 STANDARDIZED_PERMISSION_DETAIL = "[permission] HTTP 403: Access denied"
 STANDARDIZED_INVALID_REQUEST_DETAIL = (
     "[invalid_request] HTTP 400: Request contract contains incompatible fields"
@@ -2182,6 +2183,25 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Wait for provider rate limits to reset, then rerun compare.",
         )
         self.assertEqual(rate_limit_failure["source"], "stderr")
+
+        quota_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_QUOTA_DETAIL,
+            spec={
+                "label": "langchain-openai",
+                "source": "langchain-pilot",
+                "offline_substitute": False,
+            },
+        )
+        self.assertEqual(quota_failure["kind"], "quota")
+        self.assertEqual(
+            quota_failure["summary"],
+            "Runner exhausted provider quota before compare could complete.",
+        )
+        self.assertEqual(
+            quota_failure["hint"],
+            "Restore provider quota or billing, then rerun compare. If you only need structural regression coverage, rerun with `--preset-offline openai` or `--preset-offline all`.",
+        )
+        self.assertEqual(quota_failure["source"], "stderr")
 
         permission_failure = runner_compare.classify_run_failure(
             STANDARDIZED_PERMISSION_DETAIL
