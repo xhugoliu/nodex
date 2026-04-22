@@ -144,6 +144,7 @@ def build_cited_evidence_payload() -> list[dict]:
 
 
 STANDARDIZED_SERVER_ERROR_DETAIL = "[server_error] HTTP 502: Upstream request failed"
+STANDARDIZED_RATE_LIMIT_DETAIL = "[rate_limit] HTTP 429: Too many requests"
 STANDARDIZED_COMPAT_AUTH_MESSAGE = (
     "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
     .encode("utf-8")
@@ -2160,6 +2161,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
             },
         )
         self.assertEqual(explicit_server_failure["hint"], "Retry compare later.")
+
+        rate_limit_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_RATE_LIMIT_DETAIL
+        )
+        self.assertEqual(rate_limit_failure["kind"], "rate_limit")
+        self.assertEqual(
+            rate_limit_failure["summary"],
+            "Runner was throttled before compare could collect artifacts.",
+        )
+        self.assertEqual(
+            rate_limit_failure["hint"],
+            "Wait for provider rate limits to reset, then rerun compare.",
+        )
+        self.assertEqual(rate_limit_failure["source"], "stderr")
 
         auth_failure = runner_compare.classify_run_failure(
             build_standardized_compat_auth_detail()
