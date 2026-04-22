@@ -149,6 +149,7 @@ STANDARDIZED_PERMISSION_DETAIL = "[permission] HTTP 403: Access denied"
 STANDARDIZED_INVALID_REQUEST_DETAIL = (
     "[invalid_request] HTTP 400: Request contract contains incompatible fields"
 )
+STANDARDIZED_HTTP_ERROR_DETAIL = "[http_error] HTTP 404: Resource not found"
 STANDARDIZED_COMPAT_AUTH_MESSAGE = (
     "\\u8eab\\u4efd\\u9a8c\\u8bc1\\u5931\\u8d25\\u3002"
     .encode("utf-8")
@@ -2207,6 +2208,20 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "Inspect the runner error detail and request contract for incompatible fields.",
         )
         self.assertEqual(invalid_request_failure["source"], "stderr")
+
+        http_error_failure = runner_compare.classify_run_failure(
+            STANDARDIZED_HTTP_ERROR_DETAIL
+        )
+        self.assertEqual(http_error_failure["kind"], "http_error")
+        self.assertEqual(
+            http_error_failure["summary"],
+            "Runner returned a non-retryable HTTP error (HTTP 404).",
+        )
+        self.assertEqual(
+            http_error_failure["hint"],
+            "Inspect provider compatibility and request configuration before rerunning compare.",
+        )
+        self.assertEqual(http_error_failure["source"], "stderr")
 
         auth_failure = runner_compare.classify_run_failure(
             build_standardized_compat_auth_detail()
