@@ -2280,6 +2280,21 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertIn("credentials", auth_failure["summary"].lower())
         self.assertIn(".env.local", auth_failure["hint"])
 
+    def test_runner_compare_classifies_config_error_fallback_from_stderr(self) -> None:
+        failure = runner_compare.classify_run_failure(
+            "[config] Local provider/runtime setup is incomplete for this runner."
+        )
+        self.assertEqual(failure["kind"], "config_error")
+        self.assertEqual(
+            failure["summary"],
+            "Runner configuration is incomplete or incompatible.",
+        )
+        self.assertEqual(
+            failure["hint"],
+            "Review the runner error detail and local provider/runtime setup.",
+        )
+        self.assertEqual(failure["source"], "stderr")
+
     def test_runner_compare_aggregates_server_and_auth_blockers(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fake_runner = Path(tmp_dir) / "fake_runner.py"
