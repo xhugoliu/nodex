@@ -151,10 +151,11 @@ function renderExpandedTreePane(workspaceOverview: WorkspaceOverview | null) {
 test("TreePane keeps Recovery as a lightweight latest-only entry", () => {
   const html = renderTreePane(makeOverview());
 
-  assert.match(html, /sidebar\.recovery/);
   assert.match(html, /sidebar\.recoveryExpand/);
-  assert.match(html, /sidebar\.recoverySnapshotCount \{&quot;count&quot;:4\}/);
-  assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:4\}/);
+  assert.doesNotMatch(html, /sidebar\.recovery"/);
+  assert.doesNotMatch(html, /sidebar\.recovery</);
+  assert.doesNotMatch(html, /sidebar\.recoverySnapshotCount/);
+  assert.doesNotMatch(html, /sidebar\.recoveryPatchCount/);
   assert.doesNotMatch(html, /sidebar\.recoveryBody/);
   assert.doesNotMatch(html, /sidebar\.restoreLatestSnapshot/);
   assert.doesNotMatch(html, /sidebar\.recoveryRestoreNote/);
@@ -170,6 +171,7 @@ test("TreePane keeps Recovery as a lightweight latest-only entry", () => {
 test("TreePane shows latest-only recovery details when the secondary entry is expanded", () => {
   const html = renderExpandedTreePane(makeOverview());
 
+  assert.match(html, /sidebar\.recovery/);
   assert.match(html, /sidebar\.recoveryCollapse/);
   assert.match(html, /sidebar\.recoveryBody/);
   assert.match(html, /sidebar\.restoreLatestSnapshot/);
@@ -184,6 +186,8 @@ test("TreePane shows latest-only recovery details when the secondary entry is ex
     html,
     /detail\.activityOrigin \{&quot;value&quot;:&quot;manual&quot;\}/,
   );
+  assert.doesNotMatch(html, /sidebar\.recoverySnapshotCount/);
+  assert.doesNotMatch(html, /sidebar\.recoveryPatchCount/);
   assert.doesNotMatch(html, /Attach source evidence/);
   assert.doesNotMatch(html, /Tighten node wording/);
   assert.doesNotMatch(html, /Older patch that should stay hidden/);
@@ -199,7 +203,7 @@ test("TreePane recovery card falls back to an empty restore state before any sna
 
   assert.match(html, /sidebar\.recovery/);
   assert.match(html, /sidebar\.recoveryEmpty/);
-  assert.match(html, /sidebar\.recoverySnapshotCount \{&quot;count&quot;:0\}/);
-  assert.match(html, /sidebar\.recoveryPatchCount \{&quot;count&quot;:0\}/);
+  assert.doesNotMatch(html, /sidebar\.recoverySnapshotCount/);
+  assert.doesNotMatch(html, /sidebar\.recoveryPatchCount/);
   assert.match(html, /disabled=""/);
 });

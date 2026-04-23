@@ -616,6 +616,12 @@ const translations: Record<Locale, TranslationTree> = {
         "For Codex, clear conflicting OPENAI_* environment variables or inspect the doctor output before retrying.",
       aiDraftNextRateLimit:
         "Wait and retry, or lower model and reasoning settings if the provider keeps rate limiting.",
+      aiDraftNextQuota:
+        "Restore provider quota or billing, then retry the draft on the default route.",
+      aiDraftNextPermission:
+        "Check provider permissions and model access for the configured credentials before retrying.",
+      aiDraftNextInvalidRequest:
+        "Inspect the runner error detail and request contract for incompatible fields before retrying.",
       aiDraftNextSchema:
         "Inspect the Response and Meta artifacts, then compare them with the expected contract fields to find the schema mismatch.",
       aiDraftNextParse:
@@ -624,6 +630,10 @@ const translations: Record<Locale, TranslationTree> = {
         "Retry once first; if the relay keeps returning 502, re-check provider auth and network status.",
       aiDraftNextNetwork:
         "Check local network and provider reachability, then retry the draft.",
+      aiDraftNextRefusal:
+        "Inspect the refusal detail and prompt or contract shape before retrying the draft.",
+      aiDraftNextRunnerError:
+        "Inspect the runner error detail plus the Response and Meta artifacts before retrying the draft.",
       aiDraftNextRunDoctor:
         "Run `cargo run -- ai doctor --provider {provider} --format json` to inspect the current provider route.",
       patchDraftOriginTraceUnavailable:
@@ -1249,6 +1259,12 @@ const translations: Record<Locale, TranslationTree> = {
         "如果当前走的是 Codex，请先清理冲突的 OPENAI_* 环境变量，或先查看 doctor 输出再重试。",
       aiDraftNextRateLimit:
         "可以稍后重试；如果仍然限流，再考虑降低模型或 reasoning 设置。",
+      aiDraftNextQuota:
+        "请先恢复 provider 的 quota 或计费状态，再沿默认路径重新起草。",
+      aiDraftNextPermission:
+        "请先检查当前凭据的 provider 权限和模型访问权限，再重新起草。",
+      aiDraftNextInvalidRequest:
+        "请先检查 runner 错误详情和请求 contract，确认没有不兼容字段后再重试。",
       aiDraftNextSchema:
         "先查看 Response 和 Meta 工件，再对照期望的 contract 字段，定位 schema 不匹配的位置。",
       aiDraftNextParse:
@@ -1257,6 +1273,10 @@ const translations: Record<Locale, TranslationTree> = {
         "先重试一次；如果 relay 仍然返回 502，再回头检查 provider 认证和网络状态。",
       aiDraftNextNetwork:
         "请先检查本地网络和 provider 可达性，再重新起草。",
+      aiDraftNextRefusal:
+        "请先查看 refusal 详情以及 prompt / contract 形状，再重新起草。",
+      aiDraftNextRunnerError:
+        "请先查看 runner 错误详情，以及 Response / Meta 工件，再重新起草。",
       aiDraftNextRunDoctor:
         "运行 `cargo run -- ai doctor --provider {provider} --format json`，检查当前 provider 路径。",
       patchDraftOriginTraceUnavailable:

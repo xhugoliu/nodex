@@ -155,6 +155,74 @@ test("buildAiDraftNextSteps surfaces auth-check guidance for explicit auth failu
   assert.ok(steps.includes("messages.aiDraftNextCheckAuth"));
 });
 
+test("buildAiDraftNextSteps treats bracketed quota failures as the primary classifier", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      status_error: "[quota] HTTP 429: Insufficient balance while the provider still reports rate limit hints",
+    }),
+    t,
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextQuota"));
+  assert.ok(!steps.includes("messages.aiDraftNextRateLimit"));
+});
+
+test("buildAiDraftNextSteps treats bracketed permission failures as the primary classifier", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      status_error: "[permission] HTTP 403: Access denied",
+    }),
+    t,
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextPermission"));
+});
+
+test("buildAiDraftNextSteps treats bracketed invalid-request failures as the primary classifier", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      status_error:
+        "[invalid_request] HTTP 400: Request contract contains incompatible fields",
+    }),
+    t,
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextInvalidRequest"));
+});
+
+test("buildAiDraftNextSteps treats bracketed refusal failures as the primary classifier", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      status_error: "[refusal] model refused the request: safety policy refusal",
+    }),
+    t,
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextRefusal"));
+});
+
+test("buildAiDraftNextSteps treats bracketed runner errors as the primary classifier", () => {
+  const steps = buildAiDraftNextSteps(
+    makeStatus({
+      status_error: "[runner_error] codex runner exited unexpectedly",
+    }),
+    t,
+  );
+
+  assert.ok(steps.includes("messages.aiDraftNextRunnerError"));
+});
+
+test("renderAiDraftFailure surfaces the new bracketed-category guidance", () => {
+  const message = renderAiDraftFailure(
+    new Error("[permission] HTTP 403: Access denied"),
+    makeStatus({}),
+    t,
+  );
+
+  assert.match(message, /nodeEditing\.aiDraftNextTitle/);
+  assert.match(message, /messages\.aiDraftNextPermission/);
+});
+
 test("describePatchOperation treats cite_source_chunk as direct evidence by default", () => {
   const description = describePatchOperation(
     {

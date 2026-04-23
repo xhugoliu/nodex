@@ -685,6 +685,12 @@ export function formatError(error: unknown): string {
   return String(error);
 }
 
+function extractBracketedFailureCategories(detail: string): Set<string> {
+  return new Set(
+    Array.from(detail.matchAll(/\[([a-z_]+)\]/g), (match) => match[1].toLowerCase()),
+  );
+}
+
 export function buildAiDraftNextSteps(
   status: DesktopAiStatus | null,
   t: Translator,
@@ -693,11 +699,12 @@ export function buildAiDraftNextSteps(
   const detail = [
     formatError(error ?? ""),
     status?.status_error ?? "",
-    status?.command ?? "",
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+  const categories = extractBracketedFailureCategories(detail);
+  const hasBracketedCategory = categories.size > 0;
   const provider = status?.provider ?? t("nodeEditing.aiDraftUnknown");
   const actions = new Array<string>();
 
@@ -717,42 +724,99 @@ export function buildAiDraftNextSteps(
   }
 
   if (
-    detail.includes("[auth]") ||
-    detail.includes("invalid api key") ||
-    detail.includes("authentication required") ||
-    detail.includes("unauthorized") ||
-    detail.includes("401")
+    categories.has("auth") ||
+    (!hasBracketedCategory &&
+      (detail.includes("invalid api key") ||
+        detail.includes("authentication required") ||
+        detail.includes("unauthorized") ||
+        detail.includes("401")))
   ) {
     actions.push(t("messages.aiDraftNextCheckAuth"));
   }
 
-  if (detail.includes("[rate_limit]") || detail.includes("rate limit")) {
+  if (
+    categories.has("rate_limit") ||
+    (!hasBracketedCategory && detail.includes("rate limit"))
+  ) {
     actions.push(t("messages.aiDraftNextRateLimit"));
   }
 
-  if (detail.includes("502") || detail.includes("bad gateway")) {
+  if (!hasBracketedCategory && (detail.includes("502") || detail.includes("bad gateway"))) {
     actions.push(t("messages.aiDraftNextRelay502"));
   }
 
   if (
-    detail.includes("[network]") ||
-    detail.includes("[timeout]") ||
-    detail.includes("timeout")
+    categories.has("quota") ||
+    (!hasBracketedCategory &&
+      (detail.includes("insufficient quota") ||
+        detail.includes("insufficient balance") ||
+        detail.includes("billing hard limit") ||
+        detail.includes("billing_hard_limit")))
+  ) {
+    actions.push(t("messages.aiDraftNextQuota"));
+  }
+
+  if (
+    categories.has("permission") ||
+    (!hasBracketedCategory &&
+      (detail.includes("access denied") ||
+        detail.includes("permission denied") ||
+        detail.includes("forbidden")))
+  ) {
+    actions.push(t("messages.aiDraftNextPermission"));
+  }
+
+  if (
+    categories.has("invalid_request") ||
+    (!hasBracketedCategory &&
+      (detail.includes("invalid request") ||
+        detail.includes("request was rejected as invalid") ||
+        detail.includes("incompatible fields")))
+  ) {
+    actions.push(t("messages.aiDraftNextInvalidRequest"));
+  }
+
+  if (
+    categories.has("network") ||
+    categories.has("timeout") ||
+    (!hasBracketedCategory && detail.includes("timeout"))
   ) {
     actions.push(t("messages.aiDraftNextNetwork"));
   }
 
-  if (detail.includes("[schema_error]") || detail.includes("schema_error")) {
+  if (
+    categories.has("schema_error") ||
+    (!hasBracketedCategory && detail.includes("schema_error"))
+  ) {
     actions.push(t("messages.aiDraftNextSchema"));
   }
 
   if (
-    detail.includes("[parse_error]") ||
-    detail.includes("parse_error") ||
-    detail.includes("did not return valid json") ||
-    detail.includes("returned non-object json")
+    categories.has("parse_error") ||
+    (!hasBracketedCategory &&
+      (detail.includes("parse_error") ||
+        detail.includes("did not return valid json") ||
+        detail.includes("returned non-object json")))
   ) {
     actions.push(t("messages.aiDraftNextParse"));
+  }
+
+  if (
+    categories.has("refusal") ||
+    (!hasBracketedCategory &&
+      (detail.includes("refused the request") || detail.includes("refusal")))
+  ) {
+    actions.push(t("messages.aiDraftNextRefusal"));
+  }
+
+  if (
+    categories.has("runner_error") ||
+    (!hasBracketedCategory &&
+      (detail.includes("runner failed") ||
+        detail.includes("runner exited unexpectedly") ||
+        detail.includes("runner exited with code")))
+  ) {
+    actions.push(t("messages.aiDraftNextRunnerError"));
   }
 
   if (!actions.length && status?.provider) {

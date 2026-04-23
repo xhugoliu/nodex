@@ -116,36 +116,21 @@ export function TreePane(props: {
             <EmptyBox>{props.t("navigator.searchEmpty")}</EmptyBox>
           )}
 
-          <div className="mt-3 space-y-3 rounded-2xl border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.86))] px-3 py-3">
-            <div className="text-sm font-medium text-[color:var(--text)]">
-              {props.t("sidebar.recovery")}
-            </div>
-
-            <div className="flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
-              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-                {props.t("sidebar.recoverySnapshotCount", {
-                  count: props.workspaceOverview.snapshots.length,
-                })}
-              </span>
-              <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-                {props.t("sidebar.recoveryPatchCount", {
-                  count: props.workspaceOverview.patch_history.length,
-                })}
-              </span>
-            </div>
-
-            <button
-              className={ghostButtonClass}
-              onClick={() => setIsRecoveryExpanded((current) => !current)}
-              type="button"
-            >
-              {isRecoveryExpanded
-                ? props.t("sidebar.recoveryCollapse")
-                : props.t("sidebar.recoveryExpand")}
-            </button>
-
+          <div className="mt-3">
             {isRecoveryExpanded ? (
-              <>
+              <div className="space-y-3 rounded-2xl border border-[color:var(--line-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,244,246,0.86))] px-3 py-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium text-[color:var(--text)]">
+                    {props.t("sidebar.recovery")}
+                  </div>
+                  <button
+                    className={ghostButtonClass}
+                    onClick={() => setIsRecoveryExpanded(false)}
+                    type="button"
+                  >
+                    {props.t("sidebar.recoveryCollapse")}
+                  </button>
+                </div>
                 <div className="text-sm leading-6 text-[color:var(--muted)]">
                   {props.t("sidebar.recoveryBody")}
                 </div>
@@ -228,8 +213,16 @@ export function TreePane(props: {
                     </div>
                   </div>
                 ) : null}
-              </>
-            ) : null}
+              </div>
+            ) : (
+              <button
+                className={`${secondaryButtonClass} w-full`}
+                onClick={() => setIsRecoveryExpanded(true)}
+                type="button"
+              >
+                {props.t("sidebar.recoveryExpand")}
+              </button>
+            )}
           </div>
         </div>
       ) : (
