@@ -3198,6 +3198,141 @@ class ProviderToolScriptsTests(unittest.TestCase):
         self.assertEqual(payload["aggregate"]["blocked_comparison_pairs"], 0)
         self.assertEqual(payload["aggregate"]["blocked_comparison_kinds"], {})
 
+    def test_runner_compare_fixture_set_text_report_surfaces_metadata_failure_explainability(
+        self,
+    ) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            runner_compare.print_fixture_set_report(
+                {
+                    "fixture_set": "openai-default",
+                    "aggregate": {
+                        "successful_cases": 0,
+                        "failed_cases": 1,
+                        "total_cases": 1,
+                        "patch_legal_rate": 0.0,
+                        "direct_evidence_cases": 0,
+                        "explainability_complete_cases": 1,
+                        "fallback_used_cases": 0,
+                        "normalization_note_cases": 0,
+                        "blocked_comparison_cases": 1,
+                        "blocked_comparison_pairs": 1,
+                        "compared_pairs": 0,
+                        "differing_pairs": 0,
+                    },
+                    "cases": [
+                        {
+                            "case_id": "config",
+                            "scenario_context": {
+                                "target_node": {"title": "Provider Authentication Flow"}
+                            },
+                            "runs": [
+                                {
+                                    "label": "success",
+                                    "status": "ok",
+                                    "quality": {
+                                        "patch_legal": True,
+                                        "direct_evidence_count": 0,
+                                        "explainability_complete": True,
+                                        "used_plain_json_fallback": False,
+                                        "normalization_note_count": 0,
+                                    },
+                                },
+                                {
+                                    "label": "metadata",
+                                    "status": "failed",
+                                    "error": "runner crashed without structured stderr",
+                                    "failure_kind": "server_error",
+                                    "failure_summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                                    "failure_hint": "Retry compare later.",
+                                    "failure_source": "history_metadata",
+                                    "failed_run_id": "run-failed",
+                                },
+                            ],
+                            "comparison_readiness": {
+                                "blocked_pairs": 1,
+                                "blocker_kinds": ["server_error"],
+                            },
+                            "comparison_metrics": {},
+                        }
+                    ],
+                }
+            )
+        rendered = buffer.getvalue()
+        self.assertNotIn("    error: runner crashed without structured stderr\n", rendered)
+        self.assertIn(
+            "- config: Provider Authentication Flow\n"
+            "  - success: ok\n"
+            "    patch_legal=True direct_evidence=0 explainability_complete=True fallback=False normalization_notes=0\n"
+            "  - metadata: failed\n"
+            "    blocker: server_error\n"
+            "    summary: Runner hit a retry-exhausted upstream server error (HTTP 502).\n"
+            "    provenance: classified from history metadata; failed run run-failed\n"
+            "    hint: Retry compare later.\n"
+            "    blocked_pairs=1 blocker_kinds=server_error\n",
+            rendered,
+        )
+
+    def test_runner_compare_fixture_set_text_report_keeps_stderr_error_detail(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            runner_compare.print_fixture_set_report(
+                {
+                    "fixture_set": "openai-default",
+                    "aggregate": {
+                        "successful_cases": 0,
+                        "failed_cases": 1,
+                        "total_cases": 1,
+                        "patch_legal_rate": 0.0,
+                        "direct_evidence_cases": 0,
+                        "explainability_complete_cases": 1,
+                        "fallback_used_cases": 0,
+                        "normalization_note_cases": 0,
+                        "blocked_comparison_cases": 1,
+                        "blocked_comparison_pairs": 1,
+                        "compared_pairs": 0,
+                        "differing_pairs": 0,
+                    },
+                    "cases": [
+                        {
+                            "case_id": "config",
+                            "scenario_context": {
+                                "target_node": {"title": "Provider Authentication Flow"}
+                            },
+                            "runs": [
+                                {
+                                    "label": "stderr",
+                                    "status": "failed",
+                                    "error": "[auth] HTTP 401: invalid api key",
+                                    "failure_kind": "auth_invalid",
+                                    "failure_summary": "Provider rejected the configured API key.",
+                                    "failure_hint": "Refresh the provider API key in the environment or `.env.local`, then rerun compare.",
+                                    "failure_source": "stderr",
+                                }
+                            ],
+                            "comparison_readiness": {
+                                "blocked_pairs": 1,
+                                "blocker_kinds": ["auth_invalid"],
+                            },
+                            "comparison_metrics": {},
+                        }
+                    ],
+                }
+            )
+        rendered = buffer.getvalue()
+        self.assertIn("    error: [auth] HTTP 401: invalid api key\n", rendered)
+        self.assertIn(
+            "- config: Provider Authentication Flow\n"
+            "  - stderr: failed\n"
+            "    error: [auth] HTTP 401: invalid api key\n"
+            "    blocker: auth_invalid\n"
+            "    summary: Provider rejected the configured API key.\n"
+            "    provenance: classified from stderr\n"
+            "    hint: Refresh the provider API key in the environment or `.env.local`, then rerun compare.\n"
+            "    blocked_pairs=1 blocker_kinds=auth_invalid\n",
+            rendered,
+        )
+
     def test_runner_compare_fixture_set_aggregates_blocked_comparisons(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fake_runner = Path(tmp_dir) / "fake_runner.py"

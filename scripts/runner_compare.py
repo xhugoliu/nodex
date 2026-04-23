@@ -850,7 +850,22 @@ def print_fixture_set_report(result: dict) -> None:
         for item in case["runs"]:
             print(f"  - {item['label']}: {item['status']}")
             if item["status"] != "ok":
-                print(f"    error: {item['error']}")
+                if not (
+                    item.get("failure_source") == "history_metadata"
+                    and item.get("failure_summary")
+                ):
+                    print(f"    error: {item['error']}")
+                if item.get("failure_kind"):
+                    print(f"    blocker: {item['failure_kind']}")
+                if item.get("failure_summary"):
+                    print(f"    summary: {item['failure_summary']}")
+                if item.get("failure_source") or item.get("failed_run_id"):
+                    print(
+                        "    provenance: "
+                        f"{format_failure_provenance_text(item.get('failure_source'), item.get('failed_run_id'))}"
+                    )
+                if item.get("failure_hint"):
+                    print(f"    hint: {item['failure_hint']}")
                 continue
             quality = item["quality"]
             print(
