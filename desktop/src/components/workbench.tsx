@@ -1113,7 +1113,10 @@ function ReviewSurface(props: {
 
   return (
     <div className="space-y-4">
-      <section className={`${cardClass} space-y-3`}>
+      <section
+        className={`${cardClass} space-y-3`}
+        data-review-section="confirmation"
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="text-sm font-medium text-[color:var(--text)]">
@@ -1197,116 +1200,10 @@ function ReviewSurface(props: {
           </div>
         ) : null}
 
-        {affectedNodes.length ? (
-          <div className="space-y-2">
-            {affectedNodes.map((target) => (
-              <div
-                key={target.key}
-                className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
-                    {target.actionLabel}
-                  </span>
-                  <span className="text-sm font-medium text-[color:var(--text)]">
-                    {target.title}
-                  </span>
-                </div>
-                {target.metaLines.length ? (
-                  <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
-                    {target.metaLines.map((line) => (
-                      <div key={line}>{line}</div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {affectedSourceContext.length ? (
-          <div className="space-y-2">
-            <div className="space-y-2">
-              {affectedSourceContext.map((target) => (
-                <div
-                  key={target.key}
-                  className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
-                      {formatReviewAffectedSourceAction(target.action, props.t)}
-                    </span>
-                    <span className="text-sm font-medium text-[color:var(--text)]">
-                      {target.sourceName}
-                    </span>
-                  </div>
-                  {target.chunk ? (
-                    <>
-                      <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
-                        {target.chunk.label || props.t("detail.noLabel")}
-                      </div>
-                      <div className="mt-1 text-xs text-[color:var(--muted)]">
-                        {props.t("detail.chunkMeta", {
-                          ordinal: target.chunk.ordinal + 1,
-                          start: target.chunk.start_line,
-                          end: target.chunk.end_line,
-                        })}
-                      </div>
-                    </>
-                  ) : null}
-                  {target.nodeTitle || target.citationKind ? (
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
-                      {target.nodeTitle ? (
-                        <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-                          {props.t("workbench.reviewAffectedSourceNode", {
-                            title: target.nodeTitle,
-                          })}
-                        </span>
-                      ) : null}
-                      {target.citationKind ? (
-                        <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-white/85 px-2.5 py-1 uppercase tracking-[0.12em] text-[color:var(--muted)]">
-                          {formatCitationKind(target.citationKind, props.t)}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {target.rationale ? (
-                    <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
-                      {props.t("reports.rationale", {
-                        value: clipText(normalizeInlineText(target.rationale), 160),
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {reviewOrigin ? (
-          <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
-            <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
-              {formatPatchDraftOriginTitle(reviewOrigin, props.t)}
-            </div>
-            {reviewOriginMeta ? (
-              <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
-                {reviewOriginMeta}
-              </div>
-            ) : null}
-            {reviewOrigin.kind === "patch_history" ? (
-              <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
-                {props.t("workbench.reviewHistoryOriginBody", {
-                  runId: reviewOrigin.run_id,
-                  origin: reviewOrigin.origin,
-                })}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      <section className={`${cardClass} space-y-3`}>
-        <div className="flex gap-2">
+        <div
+          className="flex gap-2 border-t border-[color:var(--line-soft)] pt-3"
+          data-review-section-actions="confirmation"
+        >
           <button className={secondaryButtonClass} onClick={props.onPreviewPatch}>
             {props.t("patchEditor.preview")}
           </button>
@@ -1316,8 +1213,119 @@ function ReviewSurface(props: {
         </div>
       </section>
 
+      {affectedNodes.length || affectedSourceContext.length || reviewOrigin ? (
+        <section className={`${cardClass} space-y-3`} data-review-section="details">
+          {affectedNodes.length ? (
+            <div className="space-y-2">
+              {affectedNodes.map((target) => (
+                <div
+                  key={target.key}
+                  className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
+                      {target.actionLabel}
+                    </span>
+                    <span className="text-sm font-medium text-[color:var(--text)]">
+                      {target.title}
+                    </span>
+                  </div>
+                  {target.metaLines.length ? (
+                    <div className="mt-2 space-y-1 text-xs text-[color:var(--muted)]">
+                      {target.metaLines.map((line) => (
+                        <div key={line}>{line}</div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {affectedSourceContext.length ? (
+            <div className="space-y-2">
+              <div className="space-y-2">
+                {affectedSourceContext.map((target) => (
+                  <div
+                    key={target.key}
+                    className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1 text-xs text-[color:var(--muted)]">
+                        {formatReviewAffectedSourceAction(target.action, props.t)}
+                      </span>
+                      <span className="text-sm font-medium text-[color:var(--text)]">
+                        {target.sourceName}
+                      </span>
+                    </div>
+                    {target.chunk ? (
+                      <>
+                        <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                          {target.chunk.label || props.t("detail.noLabel")}
+                        </div>
+                        <div className="mt-1 text-xs text-[color:var(--muted)]">
+                          {props.t("detail.chunkMeta", {
+                            ordinal: target.chunk.ordinal + 1,
+                            start: target.chunk.start_line,
+                            end: target.chunk.end_line,
+                          })}
+                        </div>
+                      </>
+                    ) : null}
+                    {target.nodeTitle || target.citationKind ? (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-[color:var(--muted)]">
+                        {target.nodeTitle ? (
+                          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
+                            {props.t("workbench.reviewAffectedSourceNode", {
+                              title: target.nodeTitle,
+                            })}
+                          </span>
+                        ) : null}
+                        {target.citationKind ? (
+                          <span className="rounded-full border border-[rgba(15,118,110,0.18)] bg-white/85 px-2.5 py-1 uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                            {formatCitationKind(target.citationKind, props.t)}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {target.rationale ? (
+                      <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                        {props.t("reports.rationale", {
+                          value: clipText(normalizeInlineText(target.rationale), 160),
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {reviewOrigin ? (
+            <div className="rounded-xl border border-[color:var(--line-soft)] bg-white/80 px-3 py-3">
+              <div className="text-xs font-medium uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                {formatPatchDraftOriginTitle(reviewOrigin, props.t)}
+              </div>
+              {reviewOriginMeta ? (
+                <div className="mt-2 text-sm leading-6 text-[color:var(--text)]">
+                  {reviewOriginMeta}
+                </div>
+              ) : null}
+              {reviewOrigin.kind === "patch_history" ? (
+                <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+                  {props.t("workbench.reviewHistoryOriginBody", {
+                    runId: reviewOrigin.run_id,
+                    origin: reviewOrigin.origin,
+                  })}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {props.reviewDraft?.explanation.direct_evidence.length ? (
-        <section className={`${cardClass} space-y-3`}>
+        <section className={`${cardClass} space-y-3`} data-review-section="evidence">
           <div className="space-y-2">
             {props.reviewDraft.explanation.direct_evidence.map((item) => (
               <div
@@ -1339,7 +1347,7 @@ function ReviewSurface(props: {
         </section>
       ) : null}
 
-      <section className={`${cardClass} space-y-3`}>
+      <section className={`${cardClass} space-y-3`} data-review-section="ops">
         <div className="space-y-2">
           {props.patchDraftState.ops.map((op, index) => (
             <div

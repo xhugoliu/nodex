@@ -316,10 +316,35 @@ function renderSidePane(options: {
   );
 }
 
+function extractReviewSection(html: string, name: string) {
+  const marker = `data-review-section="${name}"`;
+  const start = html.indexOf(marker);
+  assert.ok(start >= 0, `expected review section ${name}`);
+
+  const contentStart = html.indexOf(">", start);
+  assert.ok(contentStart >= 0, `expected section start tag for ${name}`);
+
+  const nextSectionMarkers = [
+    'data-review-section="confirmation"',
+    'data-review-section="details"',
+    'data-review-section="evidence"',
+    'data-review-section="ops"',
+  ]
+    .map((candidate) => html.indexOf(candidate, contentStart + 1))
+    .filter((index) => index >= 0);
+  const end = nextSectionMarkers.length
+    ? Math.min(...nextSectionMarkers)
+    : html.length;
+
+  return html.slice(contentStart + 1, end);
+}
+
 test("WorkbenchSidePane keeps Review visible across source-context state when review tab is selected", () => {
   const html = renderSidePane({
     selectionTab: "review",
   });
+  const confirmationSection = extractReviewSection(html, "confirmation");
+  const detailsSection = extractReviewSection(html, "details");
 
   assert.match(html, /workbench\.focusScopeTitle/);
   assert.match(html, /workbench\.focusScopeNodeLabel/);
@@ -337,19 +362,72 @@ test("WorkbenchSidePane keeps Review visible across source-context state when re
   );
   assert.doesNotMatch(html, /workbench\.reviewFocusTitle/);
   assert.ok(
-    html.indexOf(
+    confirmationSection.indexOf(
       "workbench.reviewFocusNewNode {&quot;title&quot;:&quot;Follow-up branch&quot;}",
-    ) < html.indexOf("workbench.reviewWhyTitle"),
+    ) < confirmationSection.indexOf("workbench.reviewWhyTitle"),
   );
   assert.match(html, /workbench\.reviewImpactTitle/);
   assert.match(html, /workbench\.reviewImpactAddNode \{&quot;count&quot;:1\}/);
-  assert.match(html, /patchEditor\.preview/);
-  assert.match(html, /patchEditor\.apply/);
+  assert.match(confirmationSection, /patchEditor\.preview/);
+  assert.match(confirmationSection, /patchEditor\.apply/);
+  assert.match(
+    confirmationSection,
+    /data-review-section-actions="confirmation"/,
+  );
+  assert.doesNotMatch(html, /data-review-section="actions"/);
+  assert.doesNotMatch(confirmationSection, /workbench\.reviewAffectedNodeAdd/);
+  assert.match(detailsSection, /workbench\.reviewAffectedNodeAdd/);
   assert.doesNotMatch(html, /run-1/);
   assert.doesNotMatch(html, /\/tmp\/request\.json/);
   assert.doesNotMatch(html, /\/tmp\/response\.json/);
   assert.doesNotMatch(html, /detail\.sourceContextSummaryTitle/);
   assert.doesNotMatch(html, /workbench\.applyResultTitle/);
+});
+
+test("WorkbenchSidePane Review keeps confirmation actions and summary cues in one seam while leaving lower detail outside", () => {
+  const html = renderSidePane({
+    selectionTab: "review",
+    patchDraftOrigin: {
+      kind: "patch_history",
+      run_id: "patch-2",
+      origin: "manual",
+    },
+    nodeContext: makeNodeContextWithEvidence(),
+    selectedSourceDetail: makeSourceDetail(),
+    reviewDraft: makeDirectEvidenceReviewDraft(),
+    patchDraftState: {
+      state: "ready",
+      summary: "Draft citation summary",
+      opCount: 1,
+      opTypes: [{ type: "cite_source_chunk", count: 1 }],
+      ops: [
+        {
+          type: "cite_source_chunk",
+          chunk_id: "chunk-1",
+          node_id: "node-1",
+          citation_kind: "direct",
+        },
+      ],
+      error: null,
+    },
+  });
+  const confirmationSection = extractReviewSection(html, "confirmation");
+  const detailsSection = extractReviewSection(html, "details");
+  const evidenceSection = extractReviewSection(html, "evidence");
+  const opsSection = extractReviewSection(html, "ops");
+
+  assert.match(confirmationSection, /patchEditor\.preview/);
+  assert.match(confirmationSection, /patchEditor\.apply/);
+  assert.match(confirmationSection, /workbench\.reviewWhyTitle/);
+  assert.match(confirmationSection, /workbench\.reviewImpactTitle/);
+  assert.match(confirmationSection, /workbench\.reviewSourceFocusTitle/);
+  assert.doesNotMatch(confirmationSection, /workbench\.reviewHistoryOriginBody/);
+  assert.doesNotMatch(confirmationSection, /reports\.rationale/);
+
+  assert.match(detailsSection, /workbench\.reviewHistoryOriginBody/);
+  assert.match(detailsSection, /reports\.rationale/);
+  assert.match(evidenceSection, /This chunk directly supports the citation patch\./);
+  assert.match(opsSection, /composer\.opCiteSourceChunk/);
 });
 
 test("WorkbenchSidePane renders Draft as a node-scoped assistant workspace without switching into review or apply surfaces", () => {
