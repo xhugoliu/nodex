@@ -26,7 +26,6 @@ export function TreePane(props: {
   onImportSource: () => void;
   onSaveSnapshot: () => void;
   onRestoreLatestSnapshot: () => void;
-  onRestoreSnapshot: (snapshotId: string) => void;
   onLoadPatchToReview: (runId: string) => void;
   onQueryChange: (value: string) => void;
   onSelectNode: (nodeId: string) => void;

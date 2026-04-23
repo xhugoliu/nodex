@@ -1302,9 +1302,6 @@ export default function App(props: AppProps = {}) {
               onRestoreLatestSnapshot={() => {
                 void restoreLatestSnapshot();
               }}
-              onRestoreSnapshot={(snapshotId) => {
-                void restoreSnapshot(snapshotId);
-              }}
               onLoadPatchToReview={(runId) => {
                 void loadPatchRunToReview(runId);
               }}

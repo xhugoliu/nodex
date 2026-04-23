@@ -24,6 +24,11 @@ check:
 test:
     cargo test
 
+default-path-gate:
+    cargo fmt --check
+    cargo test
+    cd desktop && npm run default-path-gate
+
 desktop-check:
     cargo check --manifest-path desktop/src-tauri/Cargo.toml
 

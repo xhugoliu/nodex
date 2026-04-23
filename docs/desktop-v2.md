@@ -76,10 +76,24 @@
 
 ## 当前回归门
 
-- `python3 scripts/desktop_flow_smoke.py`
-  守主流程闭环、`next_focus_candidate`、`ai_status`
-- `python3 scripts/provider_smoke.py --provider openai --scenario source-root --json`
-  守 imported root 上的真实材料 draft/apply 路径
+默认路径统一回归门：
+
+```bash
+just default-path-gate
+```
+
+固定顺序：
+
+1. `cargo fmt --check`
+2. `cargo test`
+3. `cd desktop && npm run test:logic`
+4. `python3 scripts/desktop_flow_smoke.py --json`
+5. `python3 scripts/provider_smoke.py --provider openai --scenario source-root --json`
+
+如果当前环境没有安装 `just`，就直接按这 5 步手动执行。
+
+其中：
+
 - `cd desktop && npm run test:logic`
   守 helper seam、右栏 surface 和 mounted App 级主路径交接。
   当前重点覆盖：
@@ -88,6 +102,12 @@
   - `update / add child / cite / uncite` 这几类高频 patch 的三栏收口
   - imported-root apply 后继续进入二级、三级节点时的连续收口
   - apply 末态统一 contract：tree / canvas / right rail 对齐同一 focus node，右栏回到 `Context`
+- `python3 scripts/desktop_flow_smoke.py --json`
+  守主流程闭环、`next_focus_candidate`、`ai_status`
+- `python3 scripts/provider_smoke.py --provider openai --scenario source-root --json`
+  守 imported root 上的真实材料 draft/apply 路径
+
+`cd desktop && npm run check:all` 继续保留，但它属于更宽的桌面开发 convenience superset，不作为默认路径回归门命名。
 
 ## 如果继续推进
 

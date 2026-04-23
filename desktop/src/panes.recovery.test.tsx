@@ -109,7 +109,6 @@ function renderTreePane(workspaceOverview: WorkspaceOverview | null) {
       onImportSource={() => {}}
       onLoadPatchToReview={() => {}}
       onQueryChange={() => {}}
-      onRestoreSnapshot={() => {}}
       onRestoreLatestSnapshot={() => {}}
       onSaveSnapshot={() => {}}
       onSelectNode={() => {}}
@@ -133,7 +132,6 @@ function renderExpandedTreePane(workspaceOverview: WorkspaceOverview | null) {
       onImportSource={() => {}}
       onLoadPatchToReview={() => {}}
       onQueryChange={() => {}}
-      onRestoreSnapshot={() => {}}
       onRestoreLatestSnapshot={() => {}}
       onSaveSnapshot={() => {}}
       onSelectNode={() => {}}

@@ -12,6 +12,7 @@
     "check:tauri": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test:core": "cargo test --manifest-path ../Cargo.toml",
     "test:logic": "node --import tsx --test src/app-helpers.ai-route.test.ts src/app.back-handoff.test.tsx src/panes.recovery.test.tsx src/workbench.ai-route-surface.test.tsx src/workbench.source-context-surface.test.tsx src/workbench.node-context-surface.test.tsx src/workbench.side-pane.test.tsx",
+    "default-path-gate": "npm run test:logic && python3 ../scripts/desktop_flow_smoke.py --json && python3 ../scripts/provider_smoke.py --provider openai --scenario source-root --json",
     "check:all": "npm run check && npm run test:logic && npm run check:tauri && npm run test:core"
   },
   "devDependencies": {

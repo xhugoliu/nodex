@@ -133,14 +133,33 @@ python3 scripts/runner_compare.py --preset langchain-pilot --preset-offline open
 - `all` 替换整个 preset，主要给测试或无依赖回归使用
 - 不改变默认 provider 路由，也不影响 `provider_smoke.py` 或桌面默认 draft route
 
-## 当前桌面回归入口
+## 当前默认路径回归门
 
-如果目标是守住桌面主路径，不是看单条 CLI 命令，优先跑：
+如果目标是守住 Nodex 的默认桌面路径，优先跑同一个命名回归门：
 
 ```bash
-python3 scripts/desktop_flow_smoke.py --json
-cd desktop && npm run test:logic
+just default-path-gate
 ```
+
+它会按固定顺序执行这 5 步：
+
+```bash
+cargo fmt --check
+cargo test
+cd desktop && npm run test:logic
+python3 scripts/desktop_flow_smoke.py --json
+python3 scripts/provider_smoke.py --provider openai --scenario source-root --json
+```
+
+如果当前环境没有安装 `just`，就直接按上面这 5 步手动执行。
+
+如果你已经在 `desktop/` 目录里，也可以跑同名的局部入口：
+
+```bash
+npm run default-path-gate
+```
+
+这个 `desktop` 侧入口只负责后 3 步桌面 / smoke 验证；根目录的 `just default-path-gate` 仍然是默认推荐入口，因为它会先补上 `cargo fmt --check` 和 `cargo test`。
 
 `desktop_flow_smoke.py --json` 当前重点输出：
 
@@ -153,6 +172,12 @@ cd desktop && npm run test:logic
 默认不传 `--runner-command` 时，这条 smoke 会复用桌面真实默认 draft route：
 `python3 scripts/provider_runner.py --provider openai --use-default-args`。
 因此 `ai_status` 里的 provider / runner / route health 也属于这条回归入口要守住的 contract。
+
+`cd desktop && npm run check:all` 仍然保留，但它是更偏桌面开发的 convenience superset：
+
+- 会继续跑 `check` / `check:tauri` / `test:core`
+- 不等价于上面的默认路径回归门
+- 默认路径回归门仍以上面的 5 步顺序为准
 
 ## 工作区发现
 
