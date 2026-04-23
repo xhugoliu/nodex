@@ -2733,6 +2733,17 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "provenance: classified from history metadata; failed run run-failed",
             rendered,
         )
+        runs_section = rendered.split("[comparisons]\n", 1)[0]
+        self.assertNotIn("  error: runner crashed without structured stderr\n", runs_section)
+        self.assertIn(
+            "- metadata: failed\n"
+            "  command: python3 fail.py\n"
+            "  blocker: server_error\n"
+            "  summary: Runner hit a retry-exhausted upstream server error (HTTP 502).\n"
+            "  provenance: classified from history metadata; failed run run-failed\n"
+            "  hint: Retry compare later.\n",
+            runs_section,
+        )
         blocked_section = rendered.split("[blocked comparisons]\n", 1)[1]
         self.assertIn(
             "- success vs metadata: blocked\n"
@@ -2743,6 +2754,54 @@ class ProviderToolScriptsTests(unittest.TestCase):
             blocked_section,
         )
         self.assertEqual(rendered.count("hint: Retry compare later."), 2)
+
+    def test_runner_compare_text_report_keeps_stderr_error_detail(self) -> None:
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            runner_compare.print_text_report(
+                {
+                    "workspace_dir": "/tmp/nodex-compare",
+                    "scenario": "source-root",
+                    "node_id": "root",
+                    "successful_runs": 0,
+                    "failed_runs": 1,
+                    "runner_count": 1,
+                    "runs": [
+                        {
+                            "label": "stderr",
+                            "command": "python3 fail.py",
+                            "status": "failed",
+                            "error": "[auth] HTTP 401: invalid api key",
+                            "failure_kind": "auth_invalid",
+                            "failure_summary": "Provider rejected the configured API key.",
+                            "failure_hint": "Refresh the provider API key in the environment or `.env.local`, then rerun compare.",
+                            "failure_source": "stderr",
+                        }
+                    ],
+                    "comparisons": [],
+                    "blocked_comparisons": [],
+                    "comparison_readiness": {
+                        "status": "blocked",
+                        "comparable_pairs": 0,
+                        "blocked_pairs": 0,
+                    },
+                    "failure_metrics": {"counts": {"auth_invalid": 1}},
+                    "comparison_metrics": {},
+                }
+            )
+        rendered = buffer.getvalue()
+        runs_section = rendered.split("[comparisons]\n", 1)[0]
+        self.assertIn("  error: [auth] HTTP 401: invalid api key\n", runs_section)
+        self.assertIn(
+            "- stderr: failed\n"
+            "  command: python3 fail.py\n"
+            "  error: [auth] HTTP 401: invalid api key\n"
+            "  blocker: auth_invalid\n"
+            "  summary: Provider rejected the configured API key.\n"
+            "  provenance: classified from stderr\n"
+            "  hint: Refresh the provider API key in the environment or `.env.local`, then rerun compare.\n",
+            runs_section,
+        )
 
     def test_runner_compare_text_report_surfaces_blocked_provenance_in_partial_mode(
         self,

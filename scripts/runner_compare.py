@@ -711,7 +711,11 @@ def print_text_report(result: dict) -> None:
         print(f"- {item['label']}: {item['status']}")
         print(f"  command: {item['command']}")
         if item["status"] != "ok":
-            print(f"  error: {item['error']}")
+            if not (
+                item.get("failure_source") == "history_metadata"
+                and item.get("failure_summary")
+            ):
+                print(f"  error: {item['error']}")
             if item.get("failure_kind"):
                 print(f"  blocker: {item['failure_kind']}")
             if item.get("failure_summary"):
