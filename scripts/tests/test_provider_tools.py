@@ -2711,6 +2711,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                                     "label": "metadata",
                                     "kind": "server_error",
                                     "summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                                    "hint": "Retry compare later.",
                                     "failed_run_id": "run-failed",
                                     "failure_source": "history_metadata",
                                 }
@@ -2732,6 +2733,16 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "provenance: classified from history metadata; failed run run-failed",
             rendered,
         )
+        blocked_section = rendered.split("[blocked comparisons]\n", 1)[1]
+        self.assertIn(
+            "- success vs metadata: blocked\n"
+            "  blocker: metadata -> server_error\n"
+            "  summary: Runner hit a retry-exhausted upstream server error (HTTP 502).\n"
+            "  provenance: classified from history metadata; failed run run-failed\n"
+            "  hint: Retry compare later.\n",
+            blocked_section,
+        )
+        self.assertEqual(rendered.count("hint: Retry compare later."), 2)
 
     def test_runner_compare_text_report_surfaces_blocked_provenance_in_partial_mode(
         self,
@@ -2801,6 +2812,7 @@ class ProviderToolScriptsTests(unittest.TestCase):
                                     "label": "metadata",
                                     "kind": "server_error",
                                     "summary": "Runner hit a retry-exhausted upstream server error (HTTP 502).",
+                                    "hint": "Retry compare later.",
                                     "failed_run_id": "run-failed",
                                     "failure_source": "history_metadata",
                                 }
@@ -2823,6 +2835,16 @@ class ProviderToolScriptsTests(unittest.TestCase):
             "provenance: classified from history metadata; failed run run-failed",
             rendered,
         )
+        blocked_section = rendered.split("[blocked comparisons]\n", 1)[1]
+        self.assertIn(
+            "- success vs metadata: blocked\n"
+            "  blocker: metadata -> server_error\n"
+            "  summary: Runner hit a retry-exhausted upstream server error (HTTP 502).\n"
+            "  provenance: classified from history metadata; failed run run-failed\n"
+            "  hint: Retry compare later.\n",
+            blocked_section,
+        )
+        self.assertEqual(rendered.count("hint: Retry compare later."), 2)
 
     def test_runner_compare_can_compare_two_fake_runners(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

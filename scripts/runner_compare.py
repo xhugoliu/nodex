@@ -758,6 +758,8 @@ def print_text_report(result: dict) -> None:
                             "  provenance: "
                             f"{format_failure_provenance_text(blocker.get('failure_source'), blocker.get('failed_run_id'))}"
                         )
+                    if blocker.get("hint"):
+                        print(f"  hint: {blocker['hint']}")
         return
 
     print()
@@ -813,6 +815,8 @@ def print_text_report(result: dict) -> None:
                         "  provenance: "
                         f"{format_failure_provenance_text(blocker.get('failure_source'), blocker.get('failed_run_id'))}"
                     )
+                if blocker.get("hint"):
+                    print(f"  hint: {blocker['hint']}")
 
 
 def print_fixture_set_report(result: dict) -> None:

@@ -119,6 +119,7 @@ cargo run -- ai compare <left-run-id> <right-run-id>
 - 对失败 lane，额外保留最小 provenance：
   `failure_source` 会说明分类来自 `history_metadata` 还是 `stderr`；
   如果当前工作区历史里能定位到对应的 failed run，也会继续带出 `failed_run_id`，并在线路被 blocker 卡住时透传到 blocked-comparison payload / 文本报告里
+- 当 compare 被 blocker 卡住时，文本报告里的 `[blocked comparisons]` 会继续保留 blocker 的 `summary`、`provenance`，以及可用的恢复 `hint`
 
 如果想在本地缺少 OpenAI 依赖或凭据时继续做 preset compare，也可以显式用：
 
