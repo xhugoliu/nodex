@@ -468,14 +468,6 @@ export function AiDraftRouteSurface(props: {
           <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
             {statusLabel}
           </span>
-          {status?.provider ? (
-            <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-              {status.provider}
-            </span>
-          ) : null}
-          <span className="rounded-full bg-[color:var(--bg-warm)] px-2.5 py-1">
-            {status?.runner || props.t("nodeEditing.aiDraftUnknown")}
-          </span>
           <button className={ghostButtonClass} onClick={props.onRefresh} type="button">
             {props.t("nodeEditing.aiDraftRefresh")}
           </button>

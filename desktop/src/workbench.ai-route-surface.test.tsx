@@ -82,8 +82,8 @@ test("AiDraftRouteSurface keeps command hidden for healthy default route", () =>
 
   assert.doesNotMatch(html, /workbench\.defaultRoute/);
   assert.match(html, /nodeEditing\.aiDraftReady/);
-  assert.match(html, />openai</);
-  assert.match(html, />provider_runner\.py</);
+  assert.doesNotMatch(html, />openai</);
+  assert.doesNotMatch(html, />provider_runner\.py</);
   assert.match(html, /nodeEditing\.aiDraftRefresh/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftRouteMeta/);
   assert.doesNotMatch(html, /nodeEditing\.aiDraftSourceDefault/);

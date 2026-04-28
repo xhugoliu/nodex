@@ -3267,7 +3267,7 @@ test("App keeps source-detail handoff on the node-scoped Draft route surface wit
   renderedText = dom.container.textContent ?? "";
   assert.doesNotMatch(renderedText, /Default draft route/);
   assert.match(renderedText, /Route ready/);
-  assert.match(renderedText, /provider_runner\.py/);
+  assert.doesNotMatch(renderedText, /provider_runner\.py/);
   assert.match(renderedText, /Refresh route/);
   assert.match(renderedText, /Current focus/);
   assert.match(renderedText, /Node: Authentication/);
