@@ -860,10 +860,10 @@ test("WorkbenchSidePane Review keeps patch-history provenance visible for recove
   assert.doesNotMatch(html, /workbench\.reviewAffectedSourceCite/);
   assert.doesNotMatch(html, /workbench\.reviewAffectedSourceUncite/);
   assert.match(html, /workbench\.reviewHistoryOriginTitle/);
-  assert.match(
-    html,
-    /workbench\.reviewHistoryOriginBody \{&quot;runId&quot;:&quot;patch-2&quot;,&quot;origin&quot;:&quot;manual&quot;\}/,
-  );
+  assert.match(html, /workbench\.reviewHistoryOriginBody/);
+  assert.doesNotMatch(html, /patch-2/);
+  assert.doesNotMatch(html, /detail\.activityOrigin/);
+  assert.doesNotMatch(html, /reports\.sourcePatchRun/);
   assert.doesNotMatch(html, /workbench\.reviewAffectedNodesTitle/);
   assert.match(html, /workbench\.reviewAffectedNodeUpdate/);
   assert.match(
@@ -886,19 +886,20 @@ test("WorkbenchSidePane Review keeps AI draft provenance visible when the draft 
       explore_by: null,
       provider: "anthropic",
       model: "claude-sonnet",
-      patch_run_id: null,
+      patch_run_id: "patch-run-1",
     },
   });
 
-  assert.equal(
-    (html.match(/composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/g) ?? [])
-      .length,
-    1,
-  );
-  assert.match(html, /composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/);
+  assert.equal((html.match(/composer\.aiRunOriginTitle/g) ?? []).length, 1);
+  assert.match(html, /composer\.aiRunOriginTitle/);
+  assert.doesNotMatch(html, /run-1/);
   assert.match(html, /reports\.capability \{&quot;value&quot;:&quot;expand&quot;\}/);
-  assert.match(html, /reports\.provider \{&quot;value&quot;:&quot;anthropic&quot;\}/);
-  assert.match(html, /reports\.model \{&quot;value&quot;:&quot;claude-sonnet&quot;\}/);
+  assert.doesNotMatch(html, /reports\.provider/);
+  assert.doesNotMatch(html, /reports\.model/);
+  assert.doesNotMatch(html, /anthropic/);
+  assert.doesNotMatch(html, /claude-sonnet/);
+  assert.doesNotMatch(html, /composer\.aiRunOriginPatchRun/);
+  assert.doesNotMatch(html, /patch-run-1/);
 });
 
 test("WorkbenchSidePane Review does not promote AI provenance into the top summary for source-backed drafts", () => {
@@ -925,11 +926,8 @@ test("WorkbenchSidePane Review does not promote AI provenance into the top summa
     reviewDraft: null,
   });
 
-  assert.equal(
-    (html.match(/composer\.aiRunOriginTitle \{&quot;id&quot;:&quot;run-1&quot;\}/g) ?? [])
-      .length,
-    1,
-  );
+  assert.equal((html.match(/composer\.aiRunOriginTitle/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /run-1/);
   assert.match(html, /workbench\.reviewSourceFocusTitle/);
   assert.match(
     html,

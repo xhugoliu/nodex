@@ -5375,8 +5375,10 @@ test("App keeps source-backed Review explainability humanized when loading a his
   assert.equal((renderedText.match(/Loaded from history/g) ?? []).length, 2);
   assert.match(
     renderedText,
-    /This Review was re-opened from patch run patch-2 \(manual\)\. Inspect it before applying again\./,
+    /This Review was re-opened from history\. Inspect it before applying again\./,
   );
+  assert.doesNotMatch(renderedText, /patch run patch-2/);
+  assert.doesNotMatch(renderedText, /manual\)/);
   assert.doesNotMatch(renderedText, /Affected source context/);
   assert.equal((renderedText.match(/Will link source/g) ?? []).length, 2);
   assert.equal((renderedText.match(/Will link chunk/g) ?? []).length, 2);

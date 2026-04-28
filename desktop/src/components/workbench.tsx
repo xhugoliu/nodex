@@ -1305,10 +1305,7 @@ function ReviewSurface(props: {
               ) : null}
               {reviewOrigin.kind === "patch_history" ? (
                 <div className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
-                  {props.t("workbench.reviewHistoryOriginBody", {
-                    runId: reviewOrigin.run_id,
-                    origin: reviewOrigin.origin,
-                  })}
+                  {props.t("workbench.reviewHistoryOriginBody")}
                 </div>
               ) : null}
             </div>

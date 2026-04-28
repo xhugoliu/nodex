@@ -978,7 +978,7 @@ export function formatPatchDraftOriginTitle(
 ): string {
   switch (origin.kind) {
     case "ai_run":
-      return t("composer.aiRunOriginTitle", { id: origin.run_id });
+      return t("composer.aiRunOriginTitle");
     case "patch_history":
       return t("workbench.reviewHistoryOriginTitle");
     case "manual":
@@ -996,17 +996,9 @@ export function formatPatchDraftOriginMeta(
           origin.explore_by
             ? t("reports.exploreBy", { value: origin.explore_by })
             : t("reports.capability", { value: origin.capability }),
-          origin.provider ? t("reports.provider", { value: origin.provider }) : null,
-          origin.model ? t("reports.model", { value: origin.model }) : null,
-          origin.patch_run_id
-            ? t("composer.aiRunOriginPatchRun", { id: origin.patch_run_id })
-            : null,
         ]
       : origin.kind === "patch_history"
-        ? [
-            t("reports.sourcePatchRun", { id: origin.run_id }),
-            t("detail.activityOrigin", { value: origin.origin }),
-          ]
+        ? []
         : origin.action === "add_child"
           ? [t("workbench.reviewManualOriginAddChild")]
           : origin.action === "update_node"

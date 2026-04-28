@@ -156,7 +156,7 @@ const translations: Record<Locale, TranslationTree> = {
       reviewManualOriginUnciteChunk: "Manually drafted from evidence removal.",
       reviewHistoryOriginTitle: "Loaded from history",
       reviewHistoryOriginBody:
-        "This Review was re-opened from patch run {runId} ({origin}). Inspect it before applying again.",
+        "This Review was re-opened from history. Inspect it before applying again.",
       reviewBody: "Nothing is written yet. Read the rationale, inspect the change list, then apply when it looks right.",
       backToNode: "Back To Node",
       contextEmptyTitle: "Open A Node Context",
@@ -502,8 +502,7 @@ const translations: Record<Locale, TranslationTree> = {
       emptyBody:
         "Draft from node edits, source import preview, or patch history to keep the patch-first flow visible.",
       previewTitle: "Draft Preview",
-      aiRunOriginTitle: "Draft source: AI run {id}",
-      aiRunOriginPatchRun: "from patch run {id}",
+      aiRunOriginTitle: "Draft source: AI",
       currentDraftRunTitle: "Current Draft Run",
       currentDraftRunMeta: "The patch editor is currently tracking AI run {id}.",
       lifecycleTitle: "Draft Lifecycle",
@@ -812,7 +811,7 @@ const translations: Record<Locale, TranslationTree> = {
       reviewManualOriginUnciteChunk: "这份草案来自手工起草取消引用。",
       reviewHistoryOriginTitle: "来自历史记录",
       reviewHistoryOriginBody:
-        "这次 Review 是从 patch run {runId}（{origin}）重新载回来的，应用前请再检查一次。",
+        "这次 Review 是从历史记录重新载回来的，应用前请再检查一次。",
       reviewBody: "现在还没有真正写入。先看理由和变更列表，确认后再应用。",
       backToNode: "返回节点",
       contextEmptyTitle: "先打开节点上下文",
@@ -1147,8 +1146,7 @@ const translations: Record<Locale, TranslationTree> = {
       emptyBody:
         "可以先起草节点变更、预览资料导入，或从历史里载入 patch，让 patch-first 流程始终可见。",
       previewTitle: "草案预览",
-      aiRunOriginTitle: "草案来源：AI run {id}",
-      aiRunOriginPatchRun: "对应 patch run：{id}",
+      aiRunOriginTitle: "草案来源：AI",
       currentDraftRunTitle: "当前草案运行摘要",
       currentDraftRunMeta: "Patch 编辑器当前正在跟踪 AI run {id}。",
       lifecycleTitle: "草案生命周期",
